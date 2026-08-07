@@ -1,0 +1,2956 @@
+import { useState, useRef, useMemo, useCallback, Component } from 'react';
+import {
+  ShieldCheck, Wrench, Mail, Lock, Eye, EyeOff, KeyRound, Search, Camera,
+  ScanLine, BadgeCheck, CheckCircle2, AlertTriangle, X, ChevronDown,
+  ShoppingCart, Plus, Trash2, Save, Send, Archive, Settings, Building2,
+  Landmark, Briefcase, Phone, Percent, FileText, Zap, Truck, Clock,
+  Package, Boxes, Warehouse, CreditCard, Lock as LockIcon, ExternalLink,
+  ArrowLeft, BookOpen, FlaskConical, Droplets, CreditCard as CardIcon,
+  History, RotateCcw, Bell, Play, MapPin, ChevronRight, Sparkles, Car,
+  LogOut, PackageSearch, Store, Image as ImageIcon, Ban, SprayCan,
+  Globe, Server, Database, Shield, Activity, ClipboardList,
+} from 'lucide-react';
+import {
+  processFreeRegoLookup, processVinLookup, processPartsQuery,
+  persistJobProgress, COURIER_BASE_FEE, TAX_RATE, CONSUMABLES_MARKUP,
+  SOURCING_TIERS, getToolsForComponent, getConsumablesForComponent,
+  getDocsForComponent, TRADE_ACCOUNTS, MEMBERSHIP_TIERS, resolveTradeAccount,
+  compileCustomerInvoice, dispatchInvoicePaymentRequest,
+  settleInvoiceViaCustomerPortal, connectOpenBankingFeed, simulateInboundDeposit,
+  startBasiqBankFeedListener, triggerXeroAccountantSync, linkAtoSbr,
+  connectAccountingSoftware, inviteAccountant, streamInvoiceToLedger,
+  WORKSHOP_BUSINESS, createLiveCourierQuote, executeStripeSplitPayouts,
+  dispatchUberDirectDrivers, PLATFORM_LOGISTICS_MARKUP,
+  TRANS_TASMAN_FREIGHT_SURCHARGE, GLOBAL_DIRECT_FREIGHT_SURCHARGE,
+  dispatchConsolidatedFreight,
+} from './mockBackend.js';
+import { REGIONS, REGION_LIST, getEffectiveTaxRate, formatCurrency } from './regionConfig';
+import SellerConsole from './components/SellerConsole';
+
+// ─── Design Tokens ──────────────────────────────────────────────────────────
+const C = {
+  bg: '#070A12',
+  panel: '#101524',
+  panel2: '#0C111C',
+  border: '#1E2A42',
+  orange: '#FF5A00',
+  orangeSoft: '#FF7A30',
+  emerald: '#10B981',
+  text: '#E2E8F0',
+  textDim: '#64748B',
+  textDimmer: '#475569',
+  red: '#EF4444',
+  cyan: '#00E5FF',
+  gold: '#FFD700',
+};
+
+const uid = () => `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+const fmt = (n, region) => formatCurrency(n, region || REGIONS.AU);
+
+const REGO_REGIONS = [
+  { value: 'AU_VIC', label: 'AU — Victoria' }, { value: 'AU_NSW', label: 'AU — New South Wales' },
+  { value: 'AU_QLD', label: 'AU — Queensland' }, { value: 'AU_SA', label: 'AU — South Australia' },
+  { value: 'AU_WA', label: 'AU — Western Australia' }, { value: 'AU_TAS', label: 'AU — Tasmania' },
+  { value: 'AU_NT', label: 'AU — Northern Territory' }, { value: 'AU_ACT', label: 'AU — ACT' },
+  { value: 'NZ', label: 'New Zealand' }, { value: 'UK', label: 'United Kingdom' },
+  { value: 'US_CA', label: 'US — California' }, { value: 'US_NY', label: 'US — New York' },
+  { value: 'US_TX', label: 'US — Texas' },
+];
+
+const TIER_LABELS = { DIY: 'DIY Driver', MECHANIC: 'Mechanic Workshop', SELLER: 'Parts Seller' };
+
+// ─── Error Boundary ──────────────────────────────────────────────────────────
+export class AppErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch() {}
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center text-slate-200 px-4" style={{ background: C.bg }}>
+          <div className="max-w-md text-center space-y-4">
+            <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-2xl" style={{ background: `${C.orange}20`, ring: `1px solid ${C.orange}40` }}>
+              <AlertTriangle className="h-7 w-7" style={{ color: C.orange }} />
+            </div>
+            <h1 className="text-xl font-bold text-slate-50">Something went wrong</h1>
+            <p className="text-sm" style={{ color: C.textDim }}>An unexpected error occurred. Your data is safe — try reloading.</p>
+            <button onClick={() => window.location.reload()} className="rounded-lg px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>Reload Workshop</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── Safety Shield Modal ─────────────────────────────────────────────────────
+function SafetyShield({ onAccept }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const boxRef = useRef(null);
+  const canAccept = scrolled && checked;
+
+  const handleScroll = () => {
+    const el = boxRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 8) setScrolled(true);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border-2 shadow-2xl" style={{ background: C.bg, borderColor: `${C.orange}40` }}>
+        <div className="h-2" style={{ background: `repeating-linear-gradient(45deg, ${C.orange} 0 8px, ${C.bg} 8px 16px)` }} />
+        <div className="p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: `${C.orange}15` }}>
+              <ShieldCheck className="h-6 w-6" style={{ color: C.orange }} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-100">Critical Safety & Liability Agreement</h2>
+              <p className="text-xs" style={{ color: C.textDim }}>ForgedParts Pty Ltd — Read fully before entering the garage.</p>
+            </div>
+          </div>
+          <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-5 h-44 overflow-y-auto rounded-lg border p-4 text-sm leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
+            <p className="mb-3 font-semibold" style={{ color: C.orange }}>SAFETY WARNING — AUTOMOTIVE REPAIR INHERENT RISK</p>
+            <p className="mb-3">By entering the PartsForge Garage, you acknowledge that automotive repair carries inherent risk of serious injury or death. Torque specifications, fitting procedures and educational content provided are general reference only and must be verified against the official workshop manual for your specific vehicle, engine and model year.</p>
+            <p className="mb-3">ForgedParts Pty Ltd, its directors, employees and affiliates accept no liability for any property damage, personal injury, loss of income, consequential loss or death arising from the use of this application, its content, or parts sourced through its marketplace.</p>
+            <p className="mb-3">Parts sourced via the Fast Local Delivery, National Retail and Facebook Marketplace channels are sold by third-party vendors. PartsForge does not manufacture, warehouse or warrant these parts. All warranty claims must be directed to the original manufacturer or vendor.</p>
+            <p className="mb-3">Pro Workshop users performing repairs for paying customers do so under their own trade licence and insurance. The Job Card invoice calculator is an estimation tool only and does not constitute a tax invoice until issued by the registered business.</p>
+            <p className="mb-3">Vehicle registration lookups use publicly available data. Misuse of vehicle data for fraud, theft or unlawful identification is a criminal offence. All activity is logged.</p>
+            <p style={{ color: C.textDimmer }}>Scroll to the bottom of this box to unlock the acceptance checkbox, then tap "Accept & Enter Garage" to continue. If you do not agree, close this application.</p>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-xs">
+            {scrolled ? (
+              <span className="flex items-center gap-1" style={{ color: C.emerald }}><CheckCircle2 className="h-3.5 w-3.5" /> Terms read</span>
+            ) : (
+              <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Scroll to the bottom to continue</span>
+            )}
+          </div>
+          <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${scrolled ? '' : 'cursor-not-allowed opacity-50'}`} style={{ borderColor: scrolled ? `${C.orange}40` : C.border, background: scrolled ? `${C.orange}05` : C.panel2 }}>
+            <input type="checkbox" checked={checked} disabled={!scrolled} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-4 w-4" style={{ accentColor: C.orange }} />
+            <span className="text-sm text-slate-300">I have read and understood the safety warnings and liability terms. I accept all risk for any repair work I perform using PartsForge content or parts.</span>
+          </label>
+          <button onClick={onAccept} disabled={!canAccept} className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition ${canAccept ? 'text-slate-950' : 'cursor-not-allowed'}`} style={{ background: canAccept ? C.orange : C.border, color: canAccept ? '#000' : C.textDim }}>
+            <Wrench className="h-4 w-4" /> Enter PartsForge Hub
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Auth Gate ───────────────────────────────────────────────────────────────
+function AuthGate({ onAuthenticate, isAuthenticating }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [tier, setTier] = useState('DIY');
+  const [showPassword, setShowPassword] = useState(false);
+  const canSubmit = email.trim() && password.trim() && !isAuthenticating;
+  const handleSubmit = () => { if (canSubmit) onAuthenticate({ email: email.trim(), role: tier }); };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: C.bg }}>
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl" style={{ background: C.bg, borderColor: `${C.orange}30` }}>
+        <div className="h-2" style={{ background: `repeating-linear-gradient(45deg, ${C.orange} 0 8px, ${C.bg} 8px 16px)` }} />
+        <div className="p-6">
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl text-slate-950" style={{ background: C.orange }}>
+              <Wrench className="h-7 w-7" />
+            </div>
+            <h1 className="text-xl font-bold text-slate-50">PartsForge Secure Entry</h1>
+            <p className="text-xs" style={{ color: C.textDim }}>Authenticate to access the garage workspace</p>
+          </div>
+          <div className="mt-6 space-y-3">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border px-3 py-2.5 transition focus-within:border-current" style={{ borderColor: C.border, background: C.panel2 }}>
+                <Mail className="h-4 w-4 shrink-0" style={{ color: C.textDim }} />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="driver@partsforge.io" className="flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:opacity-40" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Password</label>
+              <div className="mt-1 flex items-center gap-2 rounded-lg border px-3 py-2.5 transition focus-within:border-current" style={{ borderColor: C.border, background: C.panel2 }}>
+                <Lock className="h-4 w-4 shrink-0" style={{ color: C.textDim }} />
+                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="••••••••" className="flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:opacity-40" />
+                <button onClick={() => setShowPassword(s => !s)} className="shrink-0 transition" style={{ color: C.textDim }}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
+              <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
+                <option value="DIY">DIY Driver Tier</option>
+                <option value="MECHANIC">Registered Mechanic Workshop</option>
+                <option value="SELLER">Verified Parts Seller</option>
+              </select>
+            </div>
+          </div>
+          <button onClick={handleSubmit} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
+            {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Verifying...</>) : (<><KeyRound className="h-4 w-4" /> Authenticate & Secure Entry</>)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Fixed Vehicle HUD (static header widget, locked position) ──────────────
+function FixedVehicleHUD({ vehicle, vehicles, onOpenFolder, onEdit }) {
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ rego: '', vin: '', make: '', model: '', engine: '' });
+
+  const startEdit = (v) => {
+    setEditing(v.id);
+    setEditForm({ rego: v.rego || '', vin: v.vin || '', make: v.make || '', model: v.model || '', engine: v.engine || '' });
+  };
+  const saveEdit = () => {
+    onEdit(editing, editForm);
+    setEditing(null);
+  };
+
+  return (
+    <>
+      <div className="sticky top-0 z-30 border-b" style={{ borderColor: C.border, background: `${C.bg}f5` }}>
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: vehicle ? `${C.orange}15` : C.panel2 }}>
+            <Car className="h-4.5 w-4.5" style={{ color: vehicle ? C.orange : C.textDimmer }} />
+          </div>
+          {vehicle ? (
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-slate-50">{vehicle.year ? `${vehicle.year} ` : ''}{vehicle.make} {vehicle.model}</div>
+              <div className="flex items-center gap-3 text-[10px]" style={{ color: C.textDim }}>
+                <span className="font-mono">{vehicle.rego || 'No Plate'}</span>
+                <span className="font-mono">VIN: {vehicle.vin ? vehicle.vin.slice(-6) : 'N/A'}</span>
+                <span className="truncate">{vehicle.engine || 'Engine data pending'}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1">
+              <div className="text-sm font-bold text-slate-300">No Active Vehicle Context</div>
+              <div className="text-[10px]" style={{ color: C.textDim }}>Run a rego or VIN lookup to load vehicle specs</div>
+            </div>
+          )}
+          {vehicle && (
+            <button onClick={(e) => { e.preventDefault(); startEdit(vehicle); }} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition" style={{ borderColor: C.border, background: C.panel, color: C.textDim }}>
+              <Settings className="h-3.5 w-3.5" /> Edit
+            </button>
+          )}
+          <button onClick={(e) => { e.preventDefault(); onOpenFolder(); }} className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition" style={{ borderColor: `${C.orange}40`, background: `${C.orange}08`, color: C.orange }}>
+            <Warehouse className="h-3.5 w-3.5" /> Garage Bay Folder
+            {vehicles.length > 0 && <span className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-slate-950" style={{ background: C.orange }}>{vehicles.length}</span>}
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditing(null)}>
+          <div className="w-full max-w-md rounded-2xl border p-5" style={{ background: C.bg, borderColor: C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-100">Edit Vehicle Profile</h3>
+              <button onClick={() => setEditing(null)} className="rounded p-1" style={{ color: C.textDim }}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <Field label="Plate ID" value={editForm.rego} onChange={(v) => setEditForm(f => ({ ...f, rego: v.toUpperCase() }))} mono />
+              <Field label="VIN" value={editForm.vin} onChange={(v) => setEditForm(f => ({ ...f, vin: v.toUpperCase() }))} mono />
+              <Field label="Make" value={editForm.make} onChange={(v) => setEditForm(f => ({ ...f, make: v }))} />
+              <Field label="Model" value={editForm.model} onChange={(v) => setEditForm(f => ({ ...f, model: v }))} />
+              <Field label="Engine" value={editForm.engine} onChange={(v) => setEditForm(f => ({ ...f, engine: v }))} />
+            </div>
+            <button onClick={saveEdit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold text-slate-950" style={{ background: C.orange }}>
+              <CheckCircle2 className="h-4 w-4" /> Save Changes
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Garage Bay Folder Modal (expanding overlay of saved vehicles) ───────────
+function GarageBayFolderModal({ open, vehicles, activeId, onSelect, onRemove, onClose, onEdit }) {
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ rego: '', vin: '', make: '', model: '', engine: '' });
+  if (!open) return null;
+
+  const startEdit = (v) => {
+    setEditing(v.id);
+    setEditForm({ rego: v.rego || '', vin: v.vin || '', make: v.make || '', model: v.model || '', engine: v.engine || '' });
+  };
+  const saveEdit = () => {
+    onEdit(editing, editForm);
+    setEditing(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[88] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl border p-5" style={{ background: C.bg, borderColor: C.border }} onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-slate-100"><Warehouse className="h-4 w-4" style={{ color: C.orange }} /> Garage Bay Folder — Saved Vehicle Profiles</h3>
+          <button onClick={onClose} className="rounded p-1" style={{ color: C.textDim }}><X className="h-5 w-5" /></button>
+        </div>
+        <div className="custom-scrollbar max-h-[60vh] overflow-y-auto space-y-2">
+          {vehicles.length === 0 ? <p className="p-6 text-center text-sm" style={{ color: C.textDim }}>No saved vehicles. Run a rego or VIN lookup and commit a vehicle to populate this folder.</p> : vehicles.map((v) => (
+            <div key={v.id} className={`flex items-center gap-3 rounded-lg border p-3 transition ${activeId === v.id ? '' : 'hover:border-current'}`} style={{ borderColor: activeId === v.id ? C.orange : C.border, background: activeId === v.id ? `${C.orange}08` : C.panel2 }}>
+              <button onClick={(e) => { e.preventDefault(); onSelect(v.id); onClose(); }} className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-80">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md" style={{ background: activeId === v.id ? C.orange : C.border, color: activeId === v.id ? '#000' : C.textDim }}>
+                  <Car className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-bold text-slate-100">{v.year ? `${v.year} ` : ''}{v.make} {v.model}</div>
+                  <div className="truncate font-mono text-[10px]" style={{ color: C.textDim }}>{v.rego || v.vin?.slice(-6) || 'No ID'}</div>
+                </div>
+              </button>
+              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(v); }} className="shrink-0 rounded p-1.5 transition hover:opacity-70" style={{ color: C.textDim }}><Settings className="h-3.5 w-3.5" /></button>
+              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(v.id); }} className="shrink-0 rounded p-1.5 transition" style={{ color: C.red }}><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-[91] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditing(null)}>
+          <div className="w-full max-w-md rounded-2xl border p-5" style={{ background: C.bg, borderColor: C.border }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-100">Edit Vehicle Profile</h3>
+              <button onClick={() => setEditing(null)} className="rounded p-1" style={{ color: C.textDim }}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <Field label="Plate ID" value={editForm.rego} onChange={(v) => setEditForm(f => ({ ...f, rego: v.toUpperCase() }))} mono />
+              <Field label="VIN" value={editForm.vin} onChange={(v) => setEditForm(f => ({ ...f, vin: v.toUpperCase() }))} mono />
+              <Field label="Make" value={editForm.make} onChange={(v) => setEditForm(f => ({ ...f, make: v }))} />
+              <Field label="Model" value={editForm.model} onChange={(v) => setEditForm(f => ({ ...f, model: v }))} />
+              <Field label="Engine" value={editForm.engine} onChange={(v) => setEditForm(f => ({ ...f, engine: v }))} />
+            </div>
+            <button onClick={saveEdit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold text-slate-950" style={{ background: C.orange }}>
+              <CheckCircle2 className="h-4 w-4" /> Save Changes
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, mono }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>{label}</label>
+      <input value={value} onChange={(e) => onChange(e.target.value)} className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-current ${mono ? 'font-mono' : ''}`} style={{ borderColor: C.border, background: C.panel2 }} />
+    </div>
+  );
+}
+
+// ─── Scanner Panel ───────────────────────────────────────────────────────────
+function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scanning }) {
+  const [plate, setPlate] = useState('');
+  const [vin, setVin] = useState('');
+  const [region, setRegion] = useState('AU_VIC');
+  const [mode, setMode] = useState('rego');
+  const submit = () => {
+    if (mode === 'vin') { if (vin.trim()) onVin(vin.trim(), region); }
+    else { if (plate.trim()) onRego(plate.trim(), region); }
+  };
+  const val = mode === 'vin' ? vin : plate;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+        <ScanLine className="h-3.5 w-3.5" style={{ color: C.orange }} /> Vehicle Identification
+      </div>
+      <div className="mt-3 flex gap-1 rounded-lg border p-1" style={{ borderColor: C.border, background: C.bg }}>
+        <button onClick={(e) => { e.preventDefault(); setMode('rego'); }} className="flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition" style={{ background: mode === 'rego' ? C.orange : 'transparent', color: mode === 'rego' ? '#000' : C.textDim }}>Rego Plate</button>
+        <button onClick={(e) => { e.preventDefault(); setMode('vin'); }} className="flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition" style={{ background: mode === 'vin' ? C.orange : 'transparent', color: mode === 'vin' ? '#000' : C.textDim }}>17-Char VIN</button>
+      </div>
+      <div className="mt-3">
+        <label className="text-xs" style={{ color: C.textDim }}>Registration Region</label>
+        <select value={region} onChange={(e) => setRegion(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }}>
+          {REGO_REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+      </div>
+      <div className="mt-3">
+        <label className="text-xs" style={{ color: C.textDim }}>{mode === 'vin' ? 'VIN (17 chars)' : 'Rego Plate'}</label>
+        <div className="mt-1 flex gap-2">
+          <input value={val} onChange={(e) => mode === 'vin' ? setVin(e.target.value.toUpperCase()) : setPlate(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder={mode === 'vin' ? 'AHT0HILX401234567' : '1XX2YY'} maxLength={mode === 'vin' ? 17 : undefined} className="flex-1 rounded-lg border px-3 py-2 font-mono text-sm uppercase tracking-widest text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+          <button onClick={(e) => { e.preventDefault(); submit(); }} disabled={loading} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-slate-950 transition" style={{ background: C.orange }}>
+            {loading ? <Sparkles className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Lookup
+          </button>
+        </div>
+      </div>
+      <button onClick={(e) => { e.preventDefault(); onPhoto(); }} disabled={scanning} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium text-slate-300 transition" style={{ borderColor: C.border, background: C.panel2 }}>
+        {scanning ? (<><ScanLine className="h-4 w-4 animate-pulse" style={{ color: C.orange }} /> Analyzing photo...</>) : (<><Camera className="h-4 w-4" /> Photo ID Scan</>)}
+      </button>
+      {vehicle && !scanning && (
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
+          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.emerald }}><BadgeCheck className="h-4 w-4" /> Vehicle Matched</div>
+          <div className="mt-1.5 text-sm font-bold text-slate-100">{vehicle.year} {vehicle.make} {vehicle.model}</div>
+          <div className="mt-0.5 text-xs" style={{ color: C.textDim }}>{vehicle.engine}</div>
+          <div className="mt-1 font-mono text-xs" style={{ color: C.textDimmer }}>VIN: {vehicle.vin}</div>
+          <button onClick={(e) => { e.preventDefault(); onCommit(); }} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>
+            <Plus className="h-4 w-4" /> Commit and Add Vehicle to Garage Bay Folder
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Parts Search ────────────────────────────────────────────────────────────
+function PartsSearch({ onSearch, loading }) {
+  const [query, setQuery] = useState('');
+  const submit = () => { if (query.trim()) onSearch(query.trim()); };
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+        <Search className="h-3.5 w-3.5" style={{ color: C.orange }} /> Parts Search
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="brake pads, oil filter, spark plugs, air filter..." className="flex-1 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+        <button onClick={submit} disabled={loading} className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-slate-950 transition" style={{ background: C.orange }}>
+          {loading ? <Sparkles className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Parts Results ───────────────────────────────────────────────────────────
+function PartsResults({ results, role, onAdd, onAddConsumable, cartIds }) {
+  const tiers = ['local', 'national', 'trans_tasman', 'global_direct', 'facebook'];
+  if (!results) return null;
+  const inCart = (id) => (cartIds || []).includes(id);
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+        <Package className="h-3.5 w-3.5" style={{ color: C.orange }} /> Sourcing Catalogue
+      </div>
+      <div className="mt-3 space-y-3">
+        {tiers.map((tier) => {
+          const items = results[tier] || [];
+          if (!items.length) return null;
+          const tierInfo = SOURCING_TIERS[tier];
+          const label = tierInfo ? tierInfo.label : tier === 'facebook' ? 'Facebook Marketplace' : tier;
+          return (
+            <div key={tier} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.cyan }}>{label}</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {items.map((item) => {
+                  const price = role === 'pro' ? (item.trade ?? item.price) : (item.retail ?? item.price);
+                  return (
+                    <div key={item.id} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.bg }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-100">{item.title}</h4>
+                          <p className="text-[10px]" style={{ color: C.textDim }}>{item.brand || 'Private'} · {item.shop || item.loc}</p>
+                          {item.distanceKm != null && <p className="mt-0.5 text-[10px]" style={{ color: C.textDimmer }}>{item.distanceKm} km away</p>}
+                        </div>
+                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price)}</span>
+                      </div>
+                      <button onClick={() => onAdd(item, tier)} disabled={inCart(item.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition" style={{ background: inCart(item.id) ? `${C.emerald}10` : `${C.orange}10`, color: inCart(item.id) ? C.emerald : C.orange }}>
+                        {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> Add to Cart</>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {(results.tools?.length > 0 || results.consumables?.length > 0 || results.docs?.length > 0) && (
+        <div className="mt-4 space-y-2">
+          {results.docs?.length > 0 && (
+            <details className="rounded-lg border p-3" style={{ borderColor: `${C.cyan}20`, background: C.panel2 }}>
+              <summary className="cursor-pointer text-xs font-bold" style={{ color: C.cyan }}>Workshop Documentation ({results.docs.length})</summary>
+              <div className="mt-2 space-y-2">
+                {results.docs.map(doc => (
+                  <div key={doc.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                    <h4 className="text-xs font-bold text-slate-100">{doc.title}</h4>
+                    <p className="mt-1 text-[11px] leading-relaxed" style={{ color: C.textDim }}>{doc.summary}</p>
+                    {doc.torqueSpecs?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {doc.torqueSpecs.map((s, i) => <span key={i} className="rounded px-2 py-0.5 font-mono text-[10px]" style={{ background: `${C.orange}10`, color: C.orange }}>{s}</span>)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {results.video && (
+                  <a href={`https://www.youtube.com/watch?v=${results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
+                    <ExternalLink className="h-3.5 w-3.5" /> {results.videoTitle || 'Watch Repair Video'}
+                  </a>
+                )}
+              </div>
+            </details>
+          )}
+          {results.tools?.length > 0 && (
+            <details className="rounded-lg border p-3" style={{ borderColor: `${C.orange}20`, background: C.panel2 }}>
+              <summary className="cursor-pointer text-xs font-bold" style={{ color: C.orange }}>Required Tools ({results.tools.length})</summary>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {results.tools.map(tool => {
+                  const price = role === 'pro' ? tool.trade : tool.retail;
+                  return (
+                    <div key={tool.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div><h4 className="text-xs font-bold text-slate-100">{tool.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{tool.brand} · {tool.shop}</p></div>
+                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price)}</span>
+                      </div>
+                      <button onClick={() => onAdd(tool, 'local')} disabled={inCart(tool.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition" style={{ background: inCart(tool.id) ? `${C.emerald}10` : `${C.orange}10`, color: inCart(tool.id) ? C.emerald : C.orange }}>
+                        {inCart(tool.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> Purchase</>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+          {results.consumables?.length > 0 && (
+            <details className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}20`, background: C.panel2 }}>
+              <summary className="cursor-pointer text-xs font-bold" style={{ color: C.emerald }}>Lubricants & Consumables ({results.consumables.length})</summary>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {results.consumables.map(con => {
+                  const price = role === 'pro' ? con.trade : con.retail;
+                  return (
+                    <div key={con.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div><h4 className="text-xs font-bold text-slate-100">{con.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{con.brand} · {con.shop}</p></div>
+                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price)}</span>
+                      </div>
+                      <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.emerald}10`, color: C.emerald }}>
+                        {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> Added</> : role === 'diy' ? <><ShoppingCart className="h-3 w-3" /> ADD TO PURCHASE BASKET</> : <><FlaskConical className="h-3 w-3" /> Add to Job Card</>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Per-item shipping surcharge calculator ──────────────────────────────────
+function itemShipping(item, region) {
+  const tier = item.tier || 'local';
+  const info = SOURCING_TIERS[tier];
+  if (info && info.freightSurcharge > 0) return info.freightSurcharge;
+  if (tier === 'facebook') return COURIER_BASE_FEE;
+  // Region-aware courier pricing: simulate per-item distance-based delivery
+  const r = region || REGIONS.AU;
+  const networks = r.courierNetworks || [];
+  if (networks.length === 0) return 0;
+  // Deterministic pseudo-distance from item id hash (5-35km range)
+  const hash = String(item.id || item.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const distanceKm = 5 + (hash % 30);
+  // Pick optimal network: shortest ETA if within range, else fallback to first
+  const inRange = networks.filter(n => distanceKm <= n.maxKm);
+  const network = (inRange.length > 0 ? inRange : networks)[0];
+  const fee = network.baseFee + (distanceKm * network.perKmRate) + network.bookingFee;
+  return +fee.toFixed(2);
+}
+
+function getOptimalCourier(item, region) {
+  const r = region || REGIONS.AU;
+  const networks = r.courierNetworks || [];
+  if (networks.length === 0) return null;
+  const hash = String(item.id || item.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const distanceKm = 5 + (hash % 30);
+  const inRange = networks.filter(n => distanceKm <= n.maxKm);
+  const network = (inRange.length > 0 ? inRange : networks)[0];
+  return { network, distanceKm, fee: +(network.baseFee + distanceKm * network.perKmRate + network.bookingFee).toFixed(2) };
+}
+
+function calcConsolidatedFreight(cart, region) {
+  const r = region || REGIONS.AU;
+  const hub = r.consolidationHub;
+  if (!hub || cart.length === 0) return { fee: 0, hubKm: 0, hubName: '', manifestId: '' };
+  // Simulated workshop distance from hub (deterministic per session)
+  const seed = cart.reduce((a, c) => a + (c.id || '').length, 0);
+  const hubKm = +(8 + (seed % 22)).toFixed(1);
+  // Weighted single-courier fee: hub handling fee + distance-based rate (bulk discount vs individual)
+  const bulkPerKm = Math.min(...(r.courierNetworks || [{ perKmRate: 1.0 }]).map(n => n.perKmRate)) * 0.7;
+  const parcelWeight = Math.min(cart.length, 8);
+  const fee = +(hub.handlingFee + hubKm * bulkPerKm + parcelWeight * 1.5).toFixed(2);
+  const manifestId = `MANIFEST-PREVIEW-${Date.now().toString(36).toUpperCase()}`;
+  return { fee, hubKm, hubName: hub.name, hubCity: hub.city, manifestId };
+}
+
+// ─── Cart Drawer (fixed-height scroll, parts-only, per-item shipping) ──────────
+function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, role, region, usStateCode, consolidationEnabled, onToggleConsolidation }) {
+  const [processing, setProcessing] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
+  const [saveCard, setSaveCard] = useState(false);
+  const r = region || REGIONS.AU;
+  if (!open) return null;
+  const f = (n) => fmt(n, r);
+  const partsTotal = cart.reduce((s, c) => s + c.unitPrice * c.qty, 0);
+  const individualShippingTotal = cart.reduce((s, c) => s + itemShipping(c, r) * c.qty, 0);
+  const consolidated = calcConsolidatedFreight(cart, r);
+  const shippingTotal = consolidationEnabled ? consolidated.fee : individualShippingTotal;
+  const subtotal = partsTotal + shippingTotal;
+  const taxRate = r.taxIsFlat ? r.taxRate : getEffectiveTaxRate(r, usStateCode);
+  const tax = subtotal * taxRate;
+  const grand = subtotal + tax;
+
+  // Aggregate courier dispatch legs
+  const courierLegs = cart.length > 0 ? cart.map(item => {
+    const oc = getOptimalCourier(item, r);
+    return { item, ...oc };
+  }) : [];
+  const activeCouriers = [...new Set(courierLegs.map(l => l.network?.name).filter(Boolean))];
+  const distinctSellers = [...new Set(cart.map(c => c.shop || c.loc || c.seller || 'Unknown'))];
+
+  const handlePay = () => {
+    if (!selectedPaymentMethod) return;
+    setProcessing(true);
+    try {
+      onCheckout();
+    } finally {
+      setProcessing(false);
+      setSelectedPaymentMethod(null);
+      setCardNumber('');
+      setCardExpiry('');
+      setCardCvc('');
+      setSaveCard(false);
+    }
+  };
+
+  const paymentMethods = [
+    { id: 'applepay', label: 'Apple Pay', sub: 'Device Vault Enclave', icon: '🍏' },
+    { id: 'googlepay', label: 'Google Pay', sub: 'Ledger Gateway Stream', icon: '💳' },
+    { id: 'paypal', label: 'PayPal Express', sub: 'Web Token Wrapper Hook', icon: '🅿️' },
+    { id: 'afterpay', label: 'Afterpay Tiers', sub: 'Flexible Short-Term Settlement Splits', icon: '⚡' },
+    { id: 'zip', label: 'Zip Pay Hub', sub: 'Flexible Trade Term Contract Windows', icon: '🅿️' },
+    { id: 'card', label: 'Credit / Debit Card', sub: 'Explicit Input Fields', icon: '💳' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[80] flex justify-end" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+      <div className="flex flex-col h-screen fixed top-0 right-0 max-w-md w-full bg-[#101524] z-50 border-l border-slate-800" onClick={(e) => e.stopPropagation()}>
+
+        {/* ── ZONE A: FIXED TOP BAR ── */}
+        <div className="flex items-center justify-between border-b border-slate-800 p-4 shrink-0">
+          <button onClick={onClose} className="flex items-center gap-1.5 text-xs font-bold transition hover:opacity-80" style={{ color: C.orange }}>
+            <ArrowLeft className="h-4 w-4" /> Return to Shopping
+          </button>
+          <div className="flex items-center gap-2.5">
+            <span className="flex items-center gap-1.5 rounded-full border border-slate-700 px-2.5 py-1 text-[10px] font-bold" style={{ color: C.text }}>
+              <ShoppingCart className="h-3 w-3" style={{ color: C.orange }} />
+              {cart.length} {cart.length === 1 ? 'item' : 'items'}
+            </span>
+            <button onClick={onClose} className="rounded p-1 transition hover:bg-slate-800" style={{ color: C.textDim }}><X className="h-5 w-5" /></button>
+          </div>
+        </div>
+
+        {/* ── ZONE B: CENTRAL SCROLLABLE BODY FRAME ── */}
+        <div className="scrollbar-thin flex-1 overflow-y-auto px-4 py-2 space-y-4 max-h-[calc(100vh-180px)]">
+          {/* Multi-Supplier Freight Consolidation Toggle */}
+          {cart.length > 0 && (
+            <div className="rounded-xl border p-3" style={{ borderColor: consolidationEnabled ? `${C.orange}50` : C.border, background: consolidationEnabled ? `${C.orange}08` : C.panel }}>
+              <button onClick={onToggleConsolidation} className="flex w-full items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: consolidationEnabled ? C.orange : C.border }}>
+                  <Zap className="h-4 w-4" style={{ color: consolidationEnabled ? '#fff' : C.textDim }} />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="text-xs font-bold text-slate-100">ENABLE PARTSFORGE MULTI-SUPPLIER FREIGHT CONSOLIDATION</div>
+                  <div className="text-[9px]" style={{ color: C.textDim }}>
+                    {consolidationEnabled
+                      ? `Active · Single courier via ${consolidated.hubName} (${consolidated.hubCity})`
+                      : 'Individual dispatch per item · toggle to batch into one delivery'}
+                  </div>
+                </div>
+                <div className="relative shrink-0">
+                  <div className="h-6 w-11 rounded-full transition-colors" style={{ background: consolidationEnabled ? C.orange : C.border }}>
+                    <div className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform" style={{ transform: consolidationEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
+                  </div>
+                </div>
+              </button>
+              {consolidationEnabled && (
+                <div className="mt-2.5 space-y-1.5 rounded-lg border p-2.5 text-[9px]" style={{ borderColor: `${C.orange}25`, background: `${C.orange}04` }}>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex h-5 w-5 items-center justify-center rounded" style={{ background: `${C.orange}15` }}><Package className="h-2.5 w-2.5" style={{ color: C.orange }} /></div>
+                    <span className="font-bold" style={{ color: C.text }}>TIER A · SELLERS → HUB</span>
+                    <span className="ml-auto" style={{ color: C.textDim }}>{distinctSellers.length} sellers · {cart.length} parcels</span>
+                  </div>
+                  <div className="pl-6 text-[8px]" style={{ color: C.textDim }}>
+                    {distinctSellers.slice(0, 3).map((s, i) => <div key={i}>· {s} → {consolidated.hubName}</div>)}
+                    {distinctSellers.length > 3 && <div>· +{distinctSellers.length - 3} more sellers...</div>}
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <div className="flex h-5 w-5 items-center justify-center rounded" style={{ background: `${C.emerald}15` }}><Truck className="h-2.5 w-2.5" style={{ color: C.emerald }} /></div>
+                    <span className="font-bold" style={{ color: C.text }}>TIER B · HUB → WORKSHOP</span>
+                    <span className="ml-auto" style={{ color: C.textDim }}>{consolidated.hubKm}km · 1 driver</span>
+                  </div>
+                  <div className="pl-6 text-[8px]" style={{ color: C.textDim }}>
+                    Manifest: <span className="font-mono text-slate-300">{consolidated.manifestId}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {cart.length === 0 ? <p className="py-8 text-center text-sm" style={{ color: C.textDim }}>Cart is empty — add parts or tools from the catalogue.</p> : (
+            <div className="space-y-2">
+              {cart.map((item) => {
+                const ship = itemShipping(item, r) * item.qty;
+                const oc = getOptimalCourier(item, r);
+                return (
+                  <div key={item.id} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel }}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="truncate text-xs font-bold text-slate-100">{item.brand ? `${item.brand} ` : ''}{item.title}</h4>
+                        <p className="text-[10px]" style={{ color: C.textDim }}>{item.shop || item.loc}</p>
+                      </div>
+                      <button onClick={() => onRemove(item.id)} className="shrink-0 rounded p-1 transition" style={{ color: C.red }}><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => onDec(item.id)} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>−</button>
+                        <span className="font-mono text-sm text-slate-100">{item.qty}</span>
+                        <button onClick={() => onInc(item.id)} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>+</button>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-sm" style={{ color: C.emerald }}>{f(item.unitPrice * item.qty)}</div>
+                        {!consolidationEnabled && ship > 0 && <div className="font-mono text-[10px]" style={{ color: C.textDim }}>+{f(ship)} freight</div>}
+                      </div>
+                    </div>
+                    {!consolidationEnabled && oc && oc.network && (
+                      <div className="mt-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px]" style={{ borderColor: `${C.orange}25`, background: `${C.orange}06` }}>
+                        <Truck className="h-2.5 w-2.5 shrink-0" style={{ color: C.orange }} />
+                        <span className="font-bold" style={{ color: C.orange }}>{oc.network.name}</span>
+                        <span style={{ color: C.textDim }}>· {oc.distanceKm}km · ETA {Math.max(oc.network.etaMinutes, Math.round(oc.distanceKm * 2.5) + oc.network.etaMinutes)}min</span>
+                        <span className="ml-auto font-mono font-bold" style={{ color: C.emerald }}>{f(oc.fee * item.qty)}</span>
+                      </div>
+                    )}
+                    {consolidationEnabled && (
+                      <div className="mt-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px]" style={{ borderColor: `${C.emerald}25`, background: `${C.emerald}06` }}>
+                        <Package className="h-2.5 w-2.5 shrink-0" style={{ color: C.emerald }} />
+                        <span className="font-bold" style={{ color: C.emerald }}>Consolidated to Hub</span>
+                        <span style={{ color: C.textDim }}>· Tier A inbound to {consolidated.hubCity}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Global Freight Orchestration Tracking Card */}
+          {cart.length > 0 && !consolidationEnabled && (
+            <div className="rounded-xl border p-3" style={{ borderColor: `${C.orange}30`, background: `${C.orange}04` }}>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${C.orange}15` }}>
+                  <Truck className="h-3.5 w-3.5" style={{ color: C.orange }} />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-100">Global Freight Orchestration</div>
+                  <div className="text-[9px]" style={{ color: C.textDim }}>Region: {r.label} · {courierLegs.length} dispatch legs</div>
+                </div>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {r.courierNetworks?.map(net => {
+                  const legCount = courierLegs.filter(l => l.network?.id === net.id).length;
+                  const isActive = activeCouriers.includes(net.name);
+                  return (
+                    <div key={net.id} className="flex items-center gap-2 rounded-lg border px-2.5 py-2 text-[10px]" style={{ borderColor: isActive ? `${C.orange}40` : C.border, background: isActive ? `${C.orange}06` : C.panel2, opacity: isActive ? 1 : 0.45 }}>
+                      <div className="flex h-5 w-5 items-center justify-center rounded" style={{ background: isActive ? `${C.orange}15` : C.border }}>
+                        <Truck className="h-2.5 w-2.5" style={{ color: isActive ? C.orange : C.textDim }} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold" style={{ color: isActive ? C.text : C.textDim }}>{net.name}</div>
+                        <div className="truncate text-[8px]" style={{ color: C.textDimmer }}>{net.api} · {net.tagline}</div>
+                      </div>
+                      {isActive ? (
+                        <span className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold" style={{ background: `${C.emerald}15`, color: C.emerald }}>
+                          <Activity className="h-2 w-2" /> {legCount} leg{legCount > 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold" style={{ background: C.border, color: C.textDim }}>STANDBY</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex items-center gap-1.5 text-[9px]" style={{ color: C.textDim }}>
+                <Zap className="h-2.5 w-2.5" style={{ color: C.orange }} />
+                <span>Auto-routing via optimal courier · {activeCouriers.length} active network{activeCouriers.length !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Consolidation Hub Node Card */}
+          {cart.length > 0 && consolidationEnabled && (
+            <div className="rounded-xl border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}04` }}>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${C.emerald}15` }}>
+                  <Package className="h-3.5 w-3.5" style={{ color: C.emerald }} />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-100">Consolidation Hub Node</div>
+                  <div className="text-[9px]" style={{ color: C.textDim }}>{consolidated.hubName} · {consolidated.hubCity}</div>
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[9px]">
+                <div className="rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel }}>
+                  <div style={{ color: C.textDim }}>Hub Distance</div>
+                  <div className="font-mono font-bold text-slate-100">{consolidated.hubKm} km</div>
+                </div>
+                <div className="rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel }}>
+                  <div style={{ color: C.textDim }}>Parcels Aggregated</div>
+                  <div className="font-mono font-bold text-slate-100">{cart.length} items</div>
+                </div>
+                <div className="rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel }}>
+                  <div style={{ color: C.textDim }}>Sellers Inbound</div>
+                  <div className="font-mono font-bold text-slate-100">{distinctSellers.length}</div>
+                </div>
+                <div className="rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel }}>
+                  <div style={{ color: C.textDim }}>Manifest ID</div>
+                  <div className="truncate font-mono font-bold text-slate-100">{consolidated.manifestId.slice(-12)}</div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center gap-1.5 text-[9px]" style={{ color: C.textDim }}>
+                <Package className="h-2.5 w-2.5" style={{ color: C.emerald }} />
+                <span>Single-courier consolidated fee replaces {cart.length} individual dispatch surcharges</span>
+              </div>
+            </div>
+          )}
+
+          {/* ── Mandatory Payment Method Selection Group (inside scroll zone) ── */}
+          <div className="rounded-xl border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+            <div className="mb-2 flex items-center gap-1.5">
+              <LockIcon className="h-3.5 w-3.5" style={{ color: selectedPaymentMethod ? C.emerald : C.orange }} />
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: selectedPaymentMethod ? C.emerald : C.textDim }}>
+                {selectedPaymentMethod ? 'Payment Method Locked' : 'Select Secure Payment Method'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {paymentMethods.map(pm => {
+                const active = selectedPaymentMethod === pm.id;
+                return (
+                  <button
+                    key={pm.id}
+                    onClick={() => setSelectedPaymentMethod(pm.id)}
+                    className="flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition"
+                    style={{
+                      borderColor: active ? C.emerald : C.border,
+                      background: active ? `${C.emerald}10` : C.bg,
+                      color: active ? C.emerald : C.text,
+                    }}
+                  >
+                    <span className="text-base leading-none">{pm.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[10px] font-bold">{pm.label}</div>
+                      <div className="truncate text-[8px]" style={{ color: active ? `${C.emerald}99` : C.textDimmer }}>{pm.sub}</div>
+                    </div>
+                    {active && <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: C.emerald }} />}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedPaymentMethod === 'card' && (
+              <div className="mt-2.5 space-y-2 rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.bg }}>
+                <div>
+                  <label className="text-[9px] font-bold uppercase" style={{ color: C.textDim }}>Card Number</label>
+                  <input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} maxLength={19} placeholder="4242 4242 4242 4242" className="mt-1 w-full rounded-md border px-2.5 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] font-bold uppercase" style={{ color: C.textDim }}>Expiry</label>
+                    <input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} maxLength={5} placeholder="MM/YY" className="mt-1 w-full rounded-md border px-2.5 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold uppercase" style={{ color: C.textDim }}>CVC</label>
+                    <input value={cardCvc} onChange={(e) => setCardCvc(e.target.value)} maxLength={4} placeholder="123" className="mt-1 w-full rounded-md border px-2.5 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                  </div>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-[9px]" style={{ color: C.textDim }}>
+                  <input type="checkbox" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)} className="h-3 w-3" style={{ accentColor: C.orange }} />
+                  Save card details for faster future checkouts
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── ZONE C: FIXED BOTTOM EXECUTION BLOCK ── */}
+        <div className="p-4 border-t border-slate-800 bg-[#101524] sticky bottom-0 shrink-0">
+          <div className="space-y-1.5 text-xs">
+            <Row label="Parts & Tools" value={f(partsTotal)} />
+            {consolidationEnabled ? (
+              <Row label="Consolidated Freight (single courier)" value={f(shippingTotal)} />
+            ) : (
+              <Row label="Courier Delivery (itemized)" value={f(shippingTotal)} />
+            )}
+            <Row label={`${r.taxLabel} (${(taxRate * 100).toFixed(2)}%)`} value={f(tax)} />
+            <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: C.border }}>
+              <span className="text-sm font-bold text-slate-100">Total</span>
+              <span className="font-mono text-lg font-bold" style={{ color: C.emerald }}>{f(grand)}</span>
+            </div>
+          </div>
+          <button
+            onClick={handlePay}
+            disabled={cart.length === 0 || processing || !selectedPaymentMethod}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed"
+            style={{
+              background: selectedPaymentMethod && cart.length > 0 ? C.emerald : C.border,
+              color: selectedPaymentMethod && cart.length > 0 ? '#000' : C.textDim,
+              animation: selectedPaymentMethod && !processing && cart.length > 0 ? 'pulse-emerald 2s ease-in-out infinite' : 'none',
+            }}
+          >
+            {processing ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Processing...</>) : (<><CreditCard className="h-4 w-4" /> CONFIRM AND EXECUTE PURCHASE TRANSACTION</>)}
+          </button>
+          {cart.length > 0 && !selectedPaymentMethod && (
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold" style={{ color: C.orange }}>
+              <AlertTriangle className="h-3 w-3" /> SELECT A SECURE PAYMENT METHOD ABOVE TO INITIALISE FREIGHT DISPATCH
+            </div>
+          )}
+          {selectedPaymentMethod && cart.length > 0 && (
+            <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold" style={{ color: C.emerald }}>
+              <CheckCircle2 className="h-3 w-3" /> Payment method locked — ready to dispatch freight
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return <div className="flex items-center justify-between"><span style={{ color: C.textDim }}>{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
+}
+
+// ─── DIY Driver History Vault (permanent purchased items ledger) ────────────
+function HistoryVault({ vault, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  const fmtDate = (iso) => {
+    if (!iso) return '--';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString(r.locale || 'en-AU', { year: 'numeric', month: 'short', day: '2-digit' }) + ' · ' + d.toLocaleTimeString(r.locale || 'en-AU', { hour: '2-digit', minute: '2-digit' });
+    } catch { return '--'; }
+  };
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>
+          <History className="h-4 w-4" style={{ color: C.orange }} /> PERSONAL HARDWARE SOURCING HISTORY & TRACKING VAULT
+        </div>
+        <span className="text-[10px] font-mono" style={{ color: C.textDim }}>{vault.length} item{vault.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="custom-scrollbar mt-3 overflow-y-auto rounded-lg border" style={{ borderColor: C.border, background: C.panel2, maxHeight: '420px' }}>
+        {vault.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 p-8 text-center">
+            <Warehouse className="h-8 w-8" style={{ color: C.textDimmer }} />
+            <p className="text-xs" style={{ color: C.textDim }}>No purchased items yet. Complete a cart checkout to stock your history vault.</p>
+          </div>
+        ) : (
+          <div className="space-y-2 p-2">
+            {vault.map((v) => (
+              <div key={v.vaultId} className="rounded-lg border p-3 transition hover:border-current" style={{ borderColor: C.border, background: C.bg }}>
+                <div className="flex items-start gap-3">
+                  {/* A. Product image */}
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border" style={{ borderColor: C.border, background: C.panel2 }}>
+                    {v.image ? (
+                      <img src={v.image} alt={v.title} className="h-full w-full rounded-lg object-cover" />
+                    ) : (
+                      <ImageIcon className="h-6 w-6" style={{ color: C.textDimmer }} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {/* A. Component name + SKU */}
+                    <h4 className="truncate text-xs font-bold text-slate-100">{v.brand ? `${v.brand} ` : ''}{v.title}</h4>
+                    <div className="mt-0.5 text-[10px] font-mono" style={{ color: C.textDim }}>SKU: {v.sku || v.id || '--'}</div>
+
+                    {/* B. Transaction blueprints */}
+                    <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+                      <div style={{ color: C.textDim }}>
+                        Purchased: <span className="text-slate-300">{fmtDate(v.purchasedAt)}</span>
+                      </div>
+                      <div style={{ color: C.textDim }}>
+                        Unit Price: <span className="font-mono" style={{ color: C.emerald }}>{f(v.unitPrice || 0)}</span>
+                      </div>
+                      <div className="col-span-2" style={{ color: C.textDim }}>
+                        Sourced from: <span className="text-slate-300">{v.seller || v.shop || v.loc || '--'}</span>
+                      </div>
+                    </div>
+
+                    {/* C. Logistics transit hub state */}
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[9px] font-bold uppercase tracking-wider" style={{ background: `${C.emerald}15`, color: C.emerald, border: `1px solid ${C.emerald}30` }}>
+                        <CheckCircle2 className="h-3 w-3" /> {v.status || 'DELIVERED TO GARAGE VAULT'}
+                      </span>
+                      <span className="font-mono text-[9px]" style={{ color: C.textDim }}>{v.consignmentNote || '--'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Vault Panel (inventory folders with per-folder search + Mount-to-Job-Card) ─
+function VaultPanel({ vault, onMount, bayOptions, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  const [folderSearch, setFolderSearch] = useState({});
+  const [mountOpen, setMountOpen] = useState(null);
+  const [selectedBay, setSelectedBay] = useState({});
+
+  const folderDefs = [
+    { key: 'lubricant', label: 'Lubricants & Fluids', icon: <FlaskConical className="h-3.5 w-3.5" />, accent: C.orange },
+    { key: 'consumable', label: 'Consumables & Cleaners', icon: <SprayCan className="h-3.5 w-3.5" />, accent: C.cyan },
+    { key: 'accessory', label: 'Workshop Accessories', icon: <Wrench className="h-3.5 w-3.5" />, accent: C.emerald },
+    { key: 'tool', label: 'Specialty Tools', icon: <Wrench className="h-3.5 w-3.5" />, accent: C.orange },
+    { key: 'part', label: 'Sourced Parts', icon: <Package className="h-3.5 w-3.5" />, accent: C.emerald },
+  ];
+
+  const getFolderItems = (folderKey) => vault.filter(v => (v.source || v.category || 'part') === folderKey || (folderKey === 'part' && !v.source));
+  const getSearch = (key) => folderSearch[key] || '';
+  const filtered = (key) => {
+    const q = getSearch(key).trim().toLowerCase();
+    if (!q) return getFolderItems(key);
+    return getFolderItems(key).filter(v =>
+      (v.title || '').toLowerCase().includes(q) ||
+      (v.sku || v.id || '').toLowerCase().includes(q) ||
+      (v.brand || '').toLowerCase().includes(q)
+    );
+  };
+
+  const doMount = (item) => {
+    const bayId = selectedBay[item.vaultId];
+    if (!bayId) return;
+    onMount(item, bayId);
+    setMountOpen(null);
+    setSelectedBay(prev => { const n = { ...prev }; delete n[item.vaultId]; return n; });
+  };
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+        <Warehouse className="h-3.5 w-3.5" style={{ color: C.orange }} /> Inventory Vault — Delivered Stock Folders
+      </div>
+      {vault.length === 0 ? (
+        <p className="mt-3 p-4 text-center text-xs" style={{ color: C.textDim }}>No delivered stock in the vault. Complete a cart checkout to stock it.</p>
+      ) : (
+        <div className="custom-scrollbar mt-3 max-h-[500px] overflow-y-auto space-y-3">
+          {folderDefs.map(folder => {
+            const items = filtered(folder.key);
+            if (items.length === 0) return null;
+            return (
+              <div key={folder.key} className="rounded-lg border" style={{ borderColor: C.border, background: C.panel2 }}>
+                <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: C.border }}>
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: folder.accent }}>
+                    {folder.icon} {folder.label}
+                    <span className="text-[10px] font-normal" style={{ color: C.textDim }}>({items.length})</span>
+                  </div>
+                </div>
+                {/* Per-folder search bar */}
+                <div className="px-2 pt-2">
+                  <div className="flex items-center gap-1.5 rounded-md border px-2 py-1.5" style={{ borderColor: C.border, background: C.bg }}>
+                    <Search className="h-3 w-3 shrink-0" style={{ color: C.textDim }} />
+                    <input value={getSearch(folder.key)} onChange={(e) => setFolderSearch(prev => ({ ...prev, [folder.key]: e.target.value }))} placeholder={`Search SKU in ${folder.label}...`} className="flex-1 bg-transparent text-[11px] text-slate-100 outline-none placeholder:opacity-40" />
+                  </div>
+                </div>
+                <div className="space-y-1.5 p-2">
+                  {items.map(v => (
+                    <div key={v.vaultId} className="rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.bg }}>
+                      <div className="flex items-start gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border" style={{ borderColor: C.border, background: C.panel2 }}>
+                          <ImageIcon className="h-4 w-4" style={{ color: C.textDimmer }} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="truncate text-[11px] font-bold text-slate-100">{v.brand ? `${v.brand} ` : ''}{v.title}</h4>
+                          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+                            <span style={{ color: C.textDim }}>SKU: <span className="font-mono text-slate-300">{v.sku || v.id || '--'}</span></span>
+                            <span style={{ color: C.textDim }}>Con Note: <span className="font-mono text-slate-300">{v.consignmentNote || '--'}</span></span>
+                          </div>
+                          <div className="mt-1.5 flex items-center justify-between">
+                            <span className="font-mono text-xs" style={{ color: C.emerald }}>{f(v.unitPrice || 0)}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={(e) => { e.preventDefault(); setMountOpen(mountOpen === v.vaultId ? null : v.vaultId); }} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-bold transition" style={{ background: `${C.orange}15`, color: C.orange }}>
+                                <ClipboardList className="h-3 w-3" /> Mount to Job Card
+                              </button>
+                            </div>
+                          </div>
+                          {mountOpen === v.vaultId && (
+                            <div className="mt-2 flex items-center gap-2 rounded-md border p-2" style={{ borderColor: `${C.orange}30`, background: `${C.orange}05` }}>
+                              <select value={selectedBay[v.vaultId] || ''} onChange={(e) => setSelectedBay(prev => ({ ...prev, [v.vaultId]: e.target.value }))} className="flex-1 rounded-md border px-2 py-1.5 text-[11px] text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel }}>
+                                <option value="">Select Target Bay ID...</option>
+                                {bayOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+                              </select>
+                              <button onClick={(e) => { e.preventDefault(); doMount(v); }} disabled={!selectedBay[v.vaultId]} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-extrabold text-slate-950 transition disabled:opacity-40" style={{ background: C.orange }}>
+                                <Zap className="h-3 w-3" /> Mount
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Allocation Matrix Modal (detailed cards) ────────────────────────────────
+function AllocationMatrixModal({ open, onClose, vault, onBatchAllocate, bayOptions, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  const [selected, setSelected] = useState(new Set());
+  const [targetBay, setTargetBay] = useState('');
+  if (!open) return null;
+
+  const toggle = (vaultId) => setSelected(prev => { const n = new Set(prev); n.has(vaultId) ? n.delete(vaultId) : n.add(vaultId); return n; });
+  const allSelected = vault.length > 0 && vault.every(v => selected.has(v.vaultId));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(vault.map(v => v.vaultId)));
+
+  const handleBatch = () => {
+    if (selected.size === 0 || !targetBay) return;
+    onBatchAllocate(Array.from(selected), targetBay);
+    setSelected(new Set());
+    setTargetBay('');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl border p-5" style={{ background: C.bg, borderColor: C.border }} onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-slate-100"><Archive className="h-4 w-4" style={{ color: C.orange }} /> Open Delivered Stock Allocation Matrix</h3>
+          <button onClick={onClose} className="rounded p-1" style={{ color: C.textDim }}><X className="h-5 w-5" /></button>
+        </div>
+
+        {/* Batch controls */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel }}>
+          <button onClick={toggleAll} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition" style={{ borderColor: C.border, color: C.text }}>
+            <input type="checkbox" checked={allSelected} readOnly className="h-3 w-3" style={{ accentColor: C.orange }} /> Select All
+          </button>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Dest Bay:</label>
+            <select value={targetBay} onChange={(e) => setTargetBay(e.target.value)} className="rounded-lg border px-2.5 py-1.5 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
+              <option value="">Select bay...</option>
+              {bayOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+          </div>
+          <button onClick={handleBatch} disabled={selected.size === 0 || !targetBay} className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold text-slate-950 transition disabled:opacity-40" style={{ background: C.orange }}>
+            <Zap className="h-3.5 w-3.5" /> Allocate Selected Assets{selected.size > 0 ? ` (${selected.size})` : ''}
+          </button>
+        </div>
+
+        <div className="custom-scrollbar max-h-[55vh] overflow-y-auto rounded-lg border space-y-2 p-2" style={{ borderColor: C.border, background: C.panel }}>
+          {vault.length === 0 ? <p className="p-6 text-center text-sm" style={{ color: C.textDim }}>No delivered stock available. Complete a cart checkout to stock the vault.</p> : vault.map((v) => {
+            const isSel = selected.has(v.vaultId);
+            return (
+              <div key={v.vaultId} className="flex items-start gap-2 rounded-lg border p-3 transition" style={{ borderColor: isSel ? `${C.orange}60` : C.border, background: isSel ? `${C.orange}08` : C.bg }}>
+                <input type="checkbox" checked={isSel} onChange={() => toggle(v.vaultId)} className="mt-1 h-4 w-4 shrink-0" style={{ accentColor: C.orange }} />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border" style={{ borderColor: C.border, background: C.panel2 }}>
+                  <ImageIcon className="h-5 w-5" style={{ color: C.textDimmer }} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-xs font-bold text-slate-100">{v.brand ? `${v.brand} ` : ''}{v.title}</h4>
+                  <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
+                    <div style={{ color: C.textDim }}>Con Note: <span className="font-mono text-slate-300">{v.consignmentNote || '--'}</span></div>
+                    <div style={{ color: C.textDim }}>SKU: <span className="font-mono text-slate-300">{v.sku || v.id || '--'}</span></div>
+                    <div style={{ color: C.textDim }}>Source: <span className="text-slate-300">{v.seller || v.shop || '--'}</span></div>
+                    <div style={{ color: C.textDim }}>Fitment: <span className="text-slate-300">{v.fitment || 'Universal'}</span></div>
+                  </div>
+                  <div className="mt-1.5">
+                    <span className="font-mono text-xs" style={{ color: C.emerald }}>{f(v.unitPrice || 0)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Store Catalogs (Lubricants, Consumables, Accessories) ─────────────────
+const LUBRICANTS_CATALOG = [
+  { id: 'lub1', title: '5W-30 Full Synthetic Engine Oil 5L', brand: 'Castrol Edge', retail: 65.00, trade: 52.00, shop: 'Repco South Morang', stock: 8, category: 'oil' },
+  { id: 'lub2', title: '10W-40 Semi Synthetic Engine Oil 5L', brand: 'Valvoline', retail: 45.00, trade: 36.00, shop: 'Supercheap Auto Epping', stock: 12, category: 'oil' },
+  { id: 'lub3', title: '75W-85 GL-4 Gear Oil 1L', brand: 'Castrol', retail: 28.00, trade: 22.00, shop: 'Repco South Morang', stock: 10, category: 'gear_oil' },
+  { id: 'lub4', title: 'ATF Dexron VI Automatic Transmission Fluid 4L', brand: 'Penrite', retail: 52.00, trade: 42.00, shop: 'Automotive Superstore', stock: 6, category: 'atf' },
+  { id: 'lub5', title: 'DOT 4 Brake Fluid 1L', brand: 'Castrol', retail: 28.00, trade: 22.00, shop: 'Supercheap Auto Epping', stock: 10, category: 'brake_fluid' },
+  { id: 'lub6', title: '5W-20 Full Synthetic Engine Oil 5L', brand: 'Mobil 1', retail: 72.00, trade: 58.00, shop: 'Sparesbox Sydney', stock: 7, category: 'oil' },
+];
+
+const CONSUMABLES_CATALOG_FLAT = [
+  { id: 'con1', title: 'Brake Cleaner Spray 400ml (Case of 12)', brand: 'Wurth', retail: 72.00, trade: 58.00, shop: 'Repco South Morang', stock: 6, category: 'cleaner' },
+  { id: 'con2', title: 'Coolant Concentrate 1L (Red)', brand: 'Toyota', retail: 35.00, trade: 28.00, shop: 'Supercheap Auto Epping', stock: 9, category: 'coolant' },
+  { id: 'con3', title: 'Workshop Towel Rolls (Blue 2-Ply, 6 pack)', brand: 'WypAll', retail: 42.00, trade: 33.00, shop: 'Repco South Morang', stock: 8, category: 'towels' },
+  { id: 'con4', title: 'Degreaser Spray 500ml', brand: 'Meguiars', retail: 18.00, trade: 14.00, shop: 'Supercheap Auto Epping', stock: 15, category: 'degreaser' },
+  { id: 'con5', title: 'Compressed Air Duster 300ml', brand: 'Wurth', retail: 15.00, trade: 11.00, shop: 'Supercheap Auto Epping', stock: 8, category: 'cleaner' },
+  { id: 'con6', title: 'Nitrile Gloves Box (100pc)', brand: 'Mechanix', retail: 24.00, trade: 18.00, shop: 'Automotive Superstore', stock: 15, category: 'gloves' },
+];
+
+const ACCESSORIES_CATALOG = [
+  { id: 'acc1', title: 'Oil Drain Pan 8L', brand: 'Toptul', retail: 22.00, trade: 17.00, shop: 'Supercheap Auto Epping', stock: 5, category: 'drain_pan' },
+  { id: 'acc2', title: 'Oil Filter Wrench (76mm 14-flute)', brand: 'Toptul', retail: 15.00, trade: 11.00, shop: 'Supercheap Auto Epping', stock: 12, category: 'filter_wrench' },
+  { id: 'acc3', title: '14mm Flare Nut Wrench', brand: 'GearWrench', retail: 28.00, trade: 22.00, shop: 'Supercheap Auto Epping', stock: 5, category: 'wrench' },
+  { id: 'acc4', title: 'Torque Wrench 3/8" Drive (5-25 Nm)', brand: 'Toptul', retail: 89.00, trade: 71.00, shop: 'Automotive Superstore', stock: 4, category: 'torque_wrench' },
+  { id: 'acc5', title: 'C-Clamp Brake Piston Compressor', brand: 'Permatex', retail: 18.00, trade: 14.00, shop: 'Automotive Superstore', stock: 8, category: 'compressor' },
+  { id: 'acc6', title: 'Piston Retracting Tool (Caliper)', brand: 'Lisle', retail: 45.00, trade: 36.00, shop: 'Repco South Morang', stock: 3, category: 'piston_tool' },
+];
+
+const SPECIALTY_TOOLS_CATALOG = [
+  { id: 'tool1', title: 'OBD2 Diagnostic Scanner (Bluetooth)', brand: 'ANCEL', retail: 89.00, trade: 71.00, shop: 'Automotive Superstore', stock: 5, category: 'diagnostic', aisle: 'A-12', eta: '2-3 days' },
+  { id: 'tool2', title: 'Hydraulic Engine Hoist 2T', brand: 'Toptul', retail: 189.00, trade: 152.00, shop: 'Repco South Morang', stock: 3, category: 'heavy', aisle: 'C-04', eta: '1-2 days' },
+  { id: 'tool3', title: 'Axle Stands Pair 3T', brand: 'Toptul', retail: 65.00, trade: 52.00, shop: 'Supercheap Auto Epping', stock: 8, category: 'heavy', aisle: 'C-06', eta: 'Same day' },
+  { id: 'tool4', title: 'Timing Belt Kit Tool Set', brand: 'GearWrench', retail: 145.00, trade: 116.00, shop: 'Automotive Superstore', stock: 4, category: 'specialty', aisle: 'B-08', eta: '2-3 days' },
+  { id: 'tool5', title: 'Brake Bleeder Vacuum Kit', brand: 'Mityvac', retail: 78.00, trade: 62.00, shop: 'Repco South Morang', stock: 6, category: 'specialty', aisle: 'B-03', eta: '1-2 days' },
+  { id: 'tool6', title: 'Compression Tester Kit', brand: 'Toptul', retail: 95.00, trade: 76.00, shop: 'Automotive Superstore', stock: 3, category: 'diagnostic', aisle: 'A-14', eta: '2-3 days' },
+];
+
+// ─── Store Catalog Button (primary action button) ─────────────────────────────
+function StoreCatalogButton({ label, icon, accent, count, onClick }) {
+  return (
+    <button onClick={(e) => { e.preventDefault(); onClick(); }} className="flex items-center gap-2.5 rounded-xl border px-4 py-3 text-left transition hover:opacity-90" style={{ borderColor: `${accent}40`, background: `${accent}08`, color: C.text }}>
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${accent}15`, color: accent }}>{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-bold uppercase tracking-wider" style={{ color: accent }}>{label}</div>
+        <div className="text-[10px]" style={{ color: C.textDim }}>{count} items in catalog</div>
+      </div>
+      <ChevronRight className="h-4 w-4 shrink-0" style={{ color: accent }} />
+    </button>
+  );
+}
+
+// ─── Store Catalog Window (full-screen immersive catalog) ─────────────────────
+function StoreCatalogWindow({ label, icon, items, role, onAddToCart, accent, region, onClose }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+  const [quantities, setQuantities] = useState({});
+  const scrollRef = useRef(null);
+  const scrollPos = useRef(0);
+
+  const doSearch = (e) => {
+    e.preventDefault();
+    if (!search.trim()) return;
+    setSearching(true);
+    setTimeout(() => {
+      const q = search.trim().toLowerCase();
+      const extra = items.filter(it =>
+        it.title.toLowerCase().includes(q) ||
+        (it.brand || '').toLowerCase().includes(q) ||
+        (it.category || '').toLowerCase().includes(q)
+      );
+      setSearchResults(extra);
+      setSearching(false);
+    }, 600);
+  };
+
+  const displayItems = searchResults || items;
+
+  const openDetail = (item) => {
+    if (scrollRef.current) scrollPos.current = scrollRef.current.scrollTop;
+    setDetailItem(item);
+  };
+  const closeDetail = () => {
+    setDetailItem(null);
+    setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollPos.current; }, 0);
+  };
+
+  const getQty = (id) => quantities[id] || 1;
+  const setQty = (id, val) => setQuantities(prev => ({ ...prev, [id]: Math.max(1, val) }));
+
+  return (
+    <div className="fixed inset-0 z-[85] overflow-y-auto" style={{ background: C.bg }}>
+      {/* Header */}
+      <div className="sticky top-0 z-10 border-b" style={{ borderColor: C.border, background: `${C.bg}f0` }}>
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span style={{ color: accent }}>{icon}</span>
+            <span className="text-sm font-bold uppercase tracking-wider" style={{ color: accent }}>{label}</span>
+            <span className="text-[10px]" style={{ color: C.textDim }}>{displayItems.length} products</span>
+          </div>
+          <button onClick={(e) => { e.preventDefault(); onClose(); }} className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition" style={{ borderColor: C.border, color: C.text }}>
+            <X className="h-3.5 w-3.5" /> Close Catalog
+          </button>
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="mx-auto max-w-5xl px-4 py-4 space-y-4">
+        {/* Live Web Scraper Search Bar */}
+        <form onSubmit={doSearch} className="flex gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5" style={{ borderColor: C.border, background: C.panel }}>
+            <Globe className="h-4 w-4 shrink-0" style={{ color: C.textDim }} />
+            <input value={search} onChange={(e) => setSearch(e.target.value.toUpperCase())} placeholder="LIVE WEB SCRAPER: SEARCH AUTOMOTIVE INDEX NETWORKS..." className="flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:opacity-40" />
+          </div>
+          <button type="submit" disabled={searching} className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold text-slate-950 transition" style={{ background: accent }}>
+            {searching ? <Sparkles className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Crawl
+          </button>
+        </form>
+        {searching && (
+          <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: `${accent}30`, background: `${accent}05`, color: C.textDim }}>
+            <Activity className="h-3 w-3 animate-pulse" style={{ color: accent }} /> Querying automotive index networks for matching products...
+          </div>
+        )}
+        {searchResults && !searching && (
+          <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-[10px]" style={{ borderColor: `${accent}30`, background: `${accent}05`, color: C.textDim }}>
+            <span>Web scraper returned {searchResults.length} matching product(s)</span>
+            <button onClick={(e) => { e.preventDefault(); setSearchResults(null); setSearch(''); }} className="font-bold" style={{ color: accent }}>Clear search</button>
+          </div>
+        )}
+
+        {/* Item Detail Overlay */}
+        {detailItem ? (
+          <div className="rounded-2xl border p-5" style={{ borderColor: `${accent}40`, background: C.panel }}>
+            <button onClick={(e) => { e.preventDefault(); closeDetail(); }} className="mb-4 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition" style={{ borderColor: C.border, color: C.text }}>
+              <ArrowLeft className="h-3.5 w-3.5" /> Return to Shopping
+            </button>
+            <div className="flex items-start gap-4">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: C.border, background: C.panel2 }}>
+                <ImageIcon className="h-10 w-10" style={{ color: C.textDimmer }} />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <h3 className="text-lg font-bold text-slate-50">{detailItem.brand ? `${detailItem.brand} ` : ''}{detailItem.title}</h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <div style={{ color: C.textDim }}>Trade List Price: <span className="font-mono font-bold" style={{ color: C.emerald }}>{f(role === 'pro' ? (detailItem.trade ?? detailItem.retail) : (detailItem.retail ?? detailItem.trade))}</span></div>
+                  <div style={{ color: C.textDim }}>Storage Drawer: <span className="font-mono text-slate-300">{detailItem.aisle || 'N/A'}</span></div>
+                  <div style={{ color: C.textDim }}>Stock Level: <span className="text-slate-300">{detailItem.stock} units</span></div>
+                  <div style={{ color: C.textDim }}>Delivery ETA: <span className="text-slate-300">{detailItem.eta || '1-3 days'}</span></div>
+                  <div style={{ color: C.textDim }}>Category: <span className="text-slate-300">{detailItem.category || 'general'}</span></div>
+                  <div style={{ color: C.textDim }}>Supplier: <span className="text-slate-300">{detailItem.shop || 'N/A'}</span></div>
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <button onClick={(e) => { e.preventDefault(); setQty(detailItem.id, getQty(detailItem.id) - 1); }} className="flex h-7 w-7 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>−</button>
+                    <span className="font-mono text-sm text-slate-100">{getQty(detailItem.id)}</span>
+                    <button onClick={(e) => { e.preventDefault(); setQty(detailItem.id, getQty(detailItem.id) + 1); }} className="flex h-7 w-7 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>+</button>
+                  </div>
+                  <button onClick={(e) => { e.preventDefault(); onAddToCart(detailItem, getQty(detailItem.id)); }} className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>
+                    <ShoppingCart className="h-4 w-4" /> ADD TO WORKSHOP SHOPPING CART
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Catalog Spreadsheet Grid */
+          <div className="space-y-2">
+            {displayItems.map((item) => {
+              const price = role === 'pro' ? (item.trade ?? item.retail) : (item.retail ?? item.trade);
+              return (
+                <div key={item.id} className="flex items-center gap-3 rounded-xl border p-3 transition hover:border-current" style={{ borderColor: C.border, background: C.panel }}>
+                  {/* Product Picture framework */}
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border cursor-pointer" style={{ borderColor: C.border, background: C.panel2 }} onClick={(e) => { e.preventDefault(); openDetail(item); }}>
+                    <ImageIcon className="h-7 w-7" style={{ color: C.textDimmer }} />
+                  </div>
+                  {/* Product info */}
+                  <div className="min-w-0 flex-1 cursor-pointer" onClick={(e) => { e.preventDefault(); openDetail(item); }}>
+                    <h4 className="truncate text-xs font-bold text-slate-100">{item.brand ? `${item.brand} ` : ''}{item.title}</h4>
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]" style={{ color: C.textDim }}>
+                      <span>Supplier: {item.shop || 'N/A'}</span>
+                      <span>Storage: <span className="font-mono text-slate-300">{item.aisle || 'N/A'}</span></span>
+                      <span>ETA: {item.eta || '1-3 days'}</span>
+                      <span>Stock: {item.stock}</span>
+                    </div>
+                  </div>
+                  {/* Trade List Price */}
+                  <span className="font-mono text-sm font-bold" style={{ color: C.emerald, minWidth: '70px', textAlign: 'right' }}>{f(price)}</span>
+                  {/* Quantity counter */}
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={(e) => { e.preventDefault(); setQty(item.id, getQty(item.id) - 1); }} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>−</button>
+                    <span className="font-mono text-xs text-slate-100">{getQty(item.id)}</span>
+                    <button onClick={(e) => { e.preventDefault(); setQty(item.id, getQty(item.id) + 1); }} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>+</button>
+                  </div>
+                  {/* Add to cart */}
+                  <button onClick={(e) => { e.preventDefault(); onAddToCart(item, getQty(item.id)); }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-[10px] font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>
+                    <ShoppingCart className="h-3 w-3" /> ADD TO CART
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Store Dropdown (collapsible, with PURCHASE buttons) ─────────────────────
+function StoreDropdown({ label, icon, items, role, onPurchase, accent, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  const [open, setOpen] = useState(false);
+  const isDiy = role === 'diy';
+  return (
+    <div className="rounded-lg border" style={{ borderColor: C.border, background: C.panel2 }}>
+      <button onClick={(e) => { e.preventDefault(); setOpen(o => !o); }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition" style={{ color: C.text }}>
+        <span style={{ color: accent }}>{icon}</span>
+        <span className="flex-1 text-xs font-bold uppercase tracking-wider">{label}</span>
+        <span className="text-[10px]" style={{ color: C.textDim }}>{items.length} items</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition ${open ? 'rotate-180' : ''}`} style={{ color: C.textDim }} />
+      </button>
+      {open && (
+        <div className="custom-scrollbar max-h-56 overflow-y-auto border-t p-2 space-y-1.5" style={{ borderColor: C.border }}>
+          {items.map((item) => {
+            const price = role === 'pro' ? (item.trade ?? item.retail) : (item.retail ?? item.trade);
+            return (
+              <div key={item.id} className="flex items-center gap-2 rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[11px] font-bold text-slate-100">{item.brand ? `${item.brand} ` : ''}{item.title}</div>
+                  <div className="text-[9px]" style={{ color: C.textDim }}>{item.shop} · Stock: {item.stock}</div>
+                </div>
+                <span className="font-mono text-[11px]" style={{ color: C.emerald }}>{f(price)}</span>
+                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPurchase(item); }} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-[10px] font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>
+                  {isDiy ? <><ShoppingCart className="h-3 w-3" /> ADD TO PURCHASE BASKET</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Job Card (with editable consumables + dual-state buttons) ────────────────
+function JobCard({
+  cart, role, laborHours, setLaborHours, laborRate, setLaborRate, taxOn, setTaxOn,
+  diagnostic, setDiagnostic, onInc, onDec, onRemove, onUpdateItem,
+  consumables, onUpdateConsumable, onRemoveConsumable,
+  custName, setCustName, custPhone, setCustPhone, custEmail, setCustEmail,
+  vehicle, onSaveProgress, onCompileInvoice, onOpenAllocation, storeDropdowns,
+  region, effectiveTaxRate,
+}) {
+  const r = region || REGIONS.AU;
+  const taxRate = effectiveTaxRate || r.taxRate;
+  const f = (n) => fmt(n, r);
+  const partsTotal = cart.reduce((s, c) => s + c.unitPrice * c.qty, 0);
+  const consTotal = consumables.reduce((s, c) => s + (c.unitPrice || 0) * (c.qty || 1), 0);
+  const laborTotal = (laborHours || 0) * (laborRate || 0);
+  const subtotal = partsTotal + consTotal + laborTotal;
+  const tax = taxOn ? subtotal * taxRate : 0;
+  const grand = subtotal + tax;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+        <FileText className="h-3.5 w-3.5" style={{ color: C.orange }} /> Active Job Card
+      </div>
+
+      {/* Allocation Matrix button */}
+      <button onClick={onOpenAllocation} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-bold transition" style={{ borderColor: `${C.orange}40`, background: `${C.orange}08`, color: C.orange }}>
+        <Archive className="h-4 w-4" /> Open Delivered Stock Allocation Matrix
+      </button>
+
+      {/* Customer fields */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <Field label="Customer Name" value={custName} onChange={setCustName} />
+        <Field label="Phone" value={custPhone} onChange={setCustPhone} />
+        <Field label="Email" value={custEmail} onChange={setCustEmail} />
+      </div>
+
+      {/* Parts list */}
+      <div className="mt-4">
+        <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>Parts & Hardware</h4>
+        <div className="mt-2 space-y-2">
+          {cart.length === 0 && <p className="text-xs" style={{ color: C.textDimmer }}>No parts added.</p>}
+          {cart.map((item) => (
+            <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-bold text-slate-100">{item.brand ? `${item.brand} ` : ''}{item.title}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>{item.shop || item.loc}</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => onDec(item.id)} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>−</button>
+                <span className="font-mono text-xs text-slate-100">{item.qty}</span>
+                <button onClick={() => onInc(item.id)} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>+</button>
+              </div>
+              <input type="number" value={item.unitPrice} onChange={(e) => onUpdateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)} className="w-20 rounded border px-2 py-1 text-right font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+              <span className="font-mono text-xs" style={{ color: C.emerald, minWidth: '60px', textAlign: 'right' }}>{f(item.unitPrice * item.qty)}</span>
+              <button onClick={() => onRemove(item.id)} className="rounded p-1 transition" style={{ color: C.red }}><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Professional Store Dropdowns (Lubricants, Consumables, Accessories) */}
+      {storeDropdowns && (
+        <div className="mt-4">
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}><Store className="h-3 w-3 inline mr-1" /> Workshop Store Registries</h4>
+          {storeDropdowns}
+        </div>
+      )}
+
+      {/* Consumables (inline editable + Add Consumable Asset button) */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between">
+          <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}><FlaskConical className="h-3 w-3" /> Consumables & Fluids</h4>
+        </div>
+        <div className="mt-2 space-y-2">
+          {consumables.length === 0 && <p className="text-xs" style={{ color: C.textDimmer }}>No consumables added. Click "Add Consumable Asset" to pull from your store or the marketplace.</p>}
+          {consumables.map((con) => (
+            <div key={con.id} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.panel2 }}>
+              {con.source === 'internal' && <Store className="h-3.5 w-3.5 shrink-0" style={{ color: C.cyan }} />}
+              {con.source === 'outsourced' && <PackageSearch className="h-3.5 w-3.5 shrink-0" style={{ color: C.orange }} />}
+              <input type="text" value={con.title} onChange={(e) => onUpdateConsumable(con.id, 'title', e.target.value)} className="min-w-0 flex-1 rounded border px-2 py-1 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+              <input type="number" value={con.unitPrice} onChange={(e) => onUpdateConsumable(con.id, 'unitPrice', parseFloat(e.target.value) || 0)} className="w-20 rounded border px-2 py-1 text-right font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+              <span className="font-mono text-xs" style={{ color: C.emerald, minWidth: '60px', textAlign: 'right' }}>{f((con.unitPrice || 0) * (con.qty || 1))}</span>
+              <button onClick={() => onRemoveConsumable(con.id)} className="rounded p-1 transition" style={{ color: C.red }}><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Labor & tax */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Labor Hours</label>
+          <input type="number" value={laborHours} onChange={(e) => setLaborHours(parseFloat(e.target.value) || 0)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Labor Rate</label>
+          <input type="number" value={laborRate} onChange={(e) => setLaborRate(parseFloat(e.target.value) || 0)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>{r.taxLabel}</label>
+          <button onClick={() => setTaxOn(!taxOn)} className="mt-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition" style={{ borderColor: C.border, background: C.bg, color: taxOn ? C.emerald : C.textDim }}>
+            {taxOn ? `On (${(taxRate * 100).toFixed(2)}%)` : 'Off'}
+            <div className="h-4 w-8 rounded-full p-0.5 transition" style={{ background: taxOn ? C.emerald : C.border }}>
+              <div className="h-3 w-3 rounded-full bg-white transition" style={{ marginLeft: taxOn ? '16px' : '0' }} />
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Diagnostic notes */}
+      <div className="mt-3">
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Diagnostic Notes</label>
+        <textarea value={diagnostic} onChange={(e) => setDiagnostic(e.target.value)} rows={2} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+      </div>
+
+      {/* Totals */}
+      <div className="mt-4 space-y-1.5 rounded-lg border p-3 text-xs" style={{ borderColor: C.border, background: C.panel2 }}>
+        <Row label="Parts" value={f(partsTotal)} />
+        <Row label="Consumables" value={f(consTotal)} />
+        <Row label="Labor" value={f(laborTotal)} />
+        {taxOn && <Row label={`${r.taxLabel} (${(taxRate * 100).toFixed(2)}%)`} value={f(tax)} />}
+        <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: C.border }}>
+          <span className="text-sm font-bold text-slate-100">Grand Total</span>
+          <span className="font-mono text-lg font-bold" style={{ color: C.emerald }}>{f(grand)}</span>
+        </div>
+      </div>
+
+      {/* Dual-state action buttons */}
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <button onClick={onSaveProgress} className="flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: C.panel2, border: `1px solid ${C.emerald}40`, color: C.emerald }}>
+          <Save className="h-4 w-4" /> Save Job Progress
+        </button>
+        <button onClick={onCompileInvoice} className="flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold text-slate-950 transition" style={{ background: C.orange }}>
+          <Send className="h-4 w-4" /> Compile & Send Customer Invoice
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── On the Hoist Repository ─────────────────────────────────────────────────
+function OnTheHoistRepository({ savedJobs, onResume, onDelete, bayOptions }) {
+  const [baySelect, setBaySelect] = useState({});
+  if (!savedJobs || savedJobs.length === 0) return null;
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: `${C.cyan}30` }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.cyan }}>
+        <History className="h-3.5 w-3.5" /> On the Hoist — In-Progress Jobs
+      </div>
+      <div className="mt-3 space-y-2">
+        {savedJobs.map((job, idx) => {
+          const jid = job.jobId || job.id;
+          return (
+            <div key={jid} className="rounded-lg border p-3 transition" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold" style={{ background: `${C.cyan}15`, color: C.cyan }}>{idx + 1}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-bold text-slate-100">{job.custName || 'Unknown Customer'} — {job.vehicle?.make} {job.vehicle?.model}</div>
+                  <div className="truncate text-[10px]" style={{ color: C.textDim }}>{jid} · {job.cart?.length || 0} parts · {job.consumables?.length || 0} consumables · Saved {new Date(job.savedAt).toLocaleDateString()}</div>
+                </div>
+                <button onClick={() => onDelete(jid)} className="rounded p-1.5 transition" style={{ color: C.red }} title="Delete from Hoist"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <select value={baySelect[jid] || ''} onChange={(e) => setBaySelect(prev => ({ ...prev, [jid]: e.target.value }))} className="flex-1 rounded-md border px-2 py-1.5 text-[11px] text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel }}>
+                  <option value="">Select Target Bay ID of Choice...</option>
+                  {bayOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+                </select>
+                <button onClick={() => onResume(job, baySelect[jid] || null)} disabled={!baySelect[jid]} className="flex items-center gap-1 rounded-md px-3 py-1.5 text-[10px] font-bold text-slate-950 transition disabled:opacity-40" style={{ background: C.cyan }}>
+                  <ChevronRight className="h-3 w-3" /> Load into Bay
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Live Bank Feed + Accounting Ledger Panel ────────────────────────────────
+function BankFeedPanel({ bankFeedEntries, ledgerEntries, region }) {
+  const [tab, setTab] = useState('bank');
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.emerald }}>
+          <ShieldCheck className="h-3.5 w-3.5" /> Live Bank Feed & Accounting Ledger
+        </div>
+        <div className="flex gap-1 rounded-lg border p-0.5" style={{ borderColor: C.border, background: C.panel2 }}>
+          <button onClick={() => setTab('bank')} className="rounded px-2 py-1 text-[10px] font-bold transition" style={{ background: tab === 'bank' ? C.emerald : 'transparent', color: tab === 'bank' ? '#000' : C.textDim }}>Bank Feed</button>
+          <button onClick={() => setTab('ledger')} className="rounded px-2 py-1 text-[10px] font-bold transition" style={{ background: tab === 'ledger' ? C.cyan : 'transparent', color: tab === 'ledger' ? '#000' : C.textDim }}>Ledger</button>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px]" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}08`, color: C.textDim }}>
+        <Zap className="h-3 w-3 shrink-0" style={{ color: C.emerald }} />
+        <span className="truncate">Routing via <span className="font-bold" style={{ color: C.emerald }}>{r.bankProvider.label}</span></span>
+      </div>
+      <div className="custom-scrollbar mt-3 max-h-56 overflow-y-auto space-y-1.5">
+        {tab === 'bank' ? (
+          bankFeedEntries.length === 0 ? <p className="text-center text-xs" style={{ color: C.textDimmer }}>No bank feed transactions yet. Purchases will appear here automatically.</p> :
+          bankFeedEntries.map(e => (
+            <div key={e.id} className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-bold text-slate-100">{e.description}</div>
+                <div className="text-[9px]" style={{ color: C.textDim }}>{e.channel} · {new Date(e.timestamp).toLocaleTimeString()}</div>
+              </div>
+              <span className="font-mono text-xs font-bold" style={{ color: C.emerald }}>{f(e.amount)}</span>
+              <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold" style={{ background: `${C.emerald}15`, color: C.emerald }}>{e.status}</span>
+            </div>
+          ))
+        ) : (
+          ledgerEntries.length === 0 ? <p className="text-center text-xs" style={{ color: C.textDimmer }}>No ledger entries yet. Purchases will mirror here automatically.</p> :
+          ledgerEntries.map(e => (
+            <div key={e.id} className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-bold text-slate-100">{e.description}</div>
+                <div className="text-[9px]" style={{ color: C.textDim }}>{e.ledgerId} · {e.accountCode} · {new Date(e.timestamp).toLocaleTimeString()}</div>
+              </div>
+              <span className="font-mono text-xs font-bold" style={{ color: C.cyan }}>{f(e.amount)}</span>
+              <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold" style={{ background: `${C.cyan}15`, color: C.cyan }}>{e.status}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Unpaid Invoices Directory (with delete locks) ───────────────────────────
+function UnpaidInvoicesDirectory({ invoices, onSettle, onVerifyBank, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+        <FileText className="h-3.5 w-3.5" style={{ color: C.orange }} /> Unpaid Invoices Directory
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px]" style={{ borderColor: `${C.red}30`, background: `${C.red}08`, color: C.textDim }}>
+        <Lock className="h-3 w-3 shrink-0" style={{ color: C.red }} /> Deletion locked — invoices can only be removed after payment clearance or accounting export.
+      </div>
+      <div className="custom-scrollbar mt-3 max-h-72 overflow-y-auto space-y-2">
+        {invoices.length === 0 ? <p className="text-center text-xs" style={{ color: C.textDimmer }}>No unpaid invoices.</p> : invoices.map((inv) => (
+          <div key={inv.invoiceNo} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-mono text-xs font-bold text-slate-100">{inv.invoiceNo}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>{inv.customer} · {inv.vehicle}</div>
+              </div>
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>UNPAID</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="font-mono text-sm font-bold" style={{ color: C.emerald }}>{f(inv.grandTotal)}</span>
+              <div className="flex gap-2">
+                <button onClick={() => onVerifyBank(inv)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition" style={{ background: `${C.cyan}10`, color: C.cyan }}>
+                  <ShieldCheck className="h-3 w-3" /> Verify Bank Feed
+                </button>
+                <button onClick={() => onSettle(inv)} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition" style={{ background: `${C.emerald}10`, color: C.emerald }}>
+                  <CreditCard className="h-3 w-3" /> Settle
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Account Settings Dropdown ───────────────────────────────────────────────
+function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, paidInvoices, onLinkAto, onConnectLedger, onInviteAccountant, onConnectBankFeed, bankFeedStatus, onExportToAccounting, onEmailAccountant, regionCode }) {
+  const [open, setOpen] = useState(false);
+  const [subFolder, setSubFolder] = useState(null);
+  const [atoStatus, setAtoStatus] = useState(null);
+  const [ledgerStatus, setLedgerStatus] = useState(null);
+  const [accountantEmail, setAccountantEmail] = useState('');
+  const [accountantStatus, setAccountantStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const months = ['July', 'August', 'September'];
+  const localPaidInvoices = paidInvoices.filter(i => i.paymentStatus === 'PAID');
+
+  const handleAto = async () => { setBusy(true); const r = await onLinkAto(); setAtoStatus(r); setBusy(false); };
+  const handleLedger = async (provider) => { setBusy(true); const r = await onConnectLedger(provider); setLedgerStatus(r); setBusy(false); };
+  const handleAccountant = async () => { if (!accountantEmail.trim()) return; setBusy(true); const r = await onInviteAccountant(accountantEmail.trim()); setAccountantStatus(r); setBusy(false); };
+  const handleBankFeed = async () => { setBusy(true); const r = await onConnectBankFeed(); setBusy(false); return r; };
+
+  const closeAll = () => { setOpen(false); setSubFolder(null); };
+
+  const folders = [
+    { id: 'financial', label: 'Financial Hub', icon: <Landmark className="h-4 w-4" /> },
+    { id: 'corporate', label: 'Corporate Accounts', icon: <Building2 className="h-4 w-4" /> },
+    { id: 'bankfeed', label: 'Live Bank Feed (CDR)', icon: <ShieldCheck className="h-4 w-4" /> },
+    { id: 'residency', label: 'Data Residency & Compliance', icon: <Database className="h-4 w-4" /> },
+    { id: 'archive', label: 'Invoice Archive Ledger', icon: <Archive className="h-4 w-4" /> },
+  ];
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition" style={{ borderColor: C.border, background: C.panel, color: C.text }}>
+        <Settings className="h-4 w-4" style={{ color: C.orange }} /> Account
+        <ChevronDown className="h-3 w-3" style={{ color: C.textDim }} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[70]" onClick={closeAll} />
+          <div className="absolute right-0 z-[71] mt-2 w-80 overflow-hidden rounded-xl border shadow-2xl" style={{ background: C.bg, borderColor: C.border }}>
+            {!subFolder ? (
+              <div className="p-2">
+                {folders.map(f => (
+                  <button key={f.id} onClick={() => setSubFolder(f.id)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-white/5">
+                    <span style={{ color: C.orange }}>{f.icon}</span>
+                    <span className="flex-1">{f.label}</span>
+                    <ChevronRight className="h-3.5 w-3.5" style={{ color: C.textDim }} />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4">
+                <button onClick={() => setSubFolder(null)} className="mb-3 flex items-center gap-1.5 text-xs" style={{ color: C.textDim }}>
+                  <ArrowLeft className="h-3 w-3" /> Back
+                </button>
+
+                {subFolder === 'financial' && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Financial Sync & Tax Compliance</h4>
+                    <button onClick={handleAto} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 transition" style={{ background: C.orange }}>
+                      <Landmark className="h-3.5 w-3.5" /> Link ATO via SBR
+                    </button>
+                    {atoStatus && <StatusBadge label="ATO SBR" status={atoStatus.status} />}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleLedger('Xero')} disabled={busy} className="rounded-lg border px-3 py-2 text-xs font-semibold transition" style={{ borderColor: C.border, color: C.text }}>Connect Xero</button>
+                      <button onClick={() => handleLedger('MYOB')} disabled={busy} className="rounded-lg border px-3 py-2 text-xs font-semibold transition" style={{ borderColor: C.border, color: C.text }}>Connect MYOB</button>
+                    </div>
+                    {ledgerStatus && <StatusBadge label={ledgerStatus.provider} status={ledgerStatus.status} />}
+                    <div>
+                      <input value={accountantEmail} onChange={(e) => setAccountantEmail(e.target.value)} placeholder="accountant@email.com" className="w-full rounded-lg border px-3 py-2 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                      <button onClick={handleAccountant} disabled={busy || !accountantEmail.trim()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition" style={{ borderColor: `${C.cyan}40`, color: C.cyan }}>
+                        <Send className="h-3 w-3" /> Invite Accountant
+                      </button>
+                      {accountantStatus && <StatusBadge label="Accountant" status={accountantStatus.status} />}
+                    </div>
+                  </div>
+                )}
+
+                {subFolder === 'corporate' && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Corporate Accounts & Memberships</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-[10px] font-semibold uppercase" style={{ color: C.textDim }}>Mobile Phone</label>
+                        <input value={corpProfile.phone || ''} onChange={(e) => setCorpProfile({ ...corpProfile, phone: e.target.value })} placeholder="+61 412 345 678" className="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold uppercase" style={{ color: C.textDim }}>{(REGIONS[regionCode] || REGIONS.AU).corpCodeLabel}</label>
+                        <input value={corpProfile.abn || ''} onChange={(e) => setCorpProfile({ ...corpProfile, abn: e.target.value })} placeholder={(REGIONS[regionCode] || REGIONS.AU).corpCodePlaceholder} className="mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                      </div>
+                    </div>
+                    {matchedAccount && (
+                      <div className="rounded-lg border p-3" style={{ borderColor: `${C.gold}30`, background: `${C.gold}05` }}>
+                        <div className="flex items-center gap-2"><Percent className="h-4 w-4" style={{ color: C.gold }} /><span className="text-xs font-bold" style={{ color: C.gold }}>{matchedAccount.name}</span></div>
+                        <p className="mt-1 text-[10px]" style={{ color: C.textDim }}>{MEMBERSHIP_TIERS[matchedAccount.tier]?.label} Tier · {(matchedAccount.discountPct * 100).toFixed(0)}% discount · {matchedAccount.stores.join(', ')}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {subFolder === 'bankfeed' && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Live Corporate Bank Feed — Global Open Banking Middleware</h4>
+                    <div className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4" style={{ color: C.emerald }} />
+                        <span className="text-xs font-bold" style={{ color: C.emerald }}>{(REGIONS[regionCode] || REGIONS.AU).bankProvider.label}</span>
+                      </div>
+                      <p className="mt-1.5 text-[10px] leading-relaxed" style={{ color: C.textDim }}>{(REGIONS[regionCode] || REGIONS.AU).bankProvider.description}</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {REGION_LIST.map(r => (
+                        <div key={r.code} className="flex items-center justify-between rounded-lg border px-2.5 py-2 text-[10px]" style={{ borderColor: r.code === regionCode ? C.emerald : C.border, background: r.code === regionCode ? `${C.emerald}08` : C.panel2, opacity: r.code === regionCode ? 1 : 0.5 }}>
+                          <span className="font-semibold" style={{ color: r.code === regionCode ? C.emerald : C.textDim }}>{r.bankProvider.name}</span>
+                          {r.code === regionCode && <CheckCircle2 className="h-3 w-3" style={{ color: C.emerald }} />}
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={handleBankFeed} disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 transition" style={{ background: C.orange }}>
+                      <ShieldCheck className="h-3.5 w-3.5" /> Connect via {(REGIONS[regionCode] || REGIONS.AU).bankProvider.name}
+                    </button>
+                    {bankFeedStatus && bankFeedStatus.ok && (
+                      <div className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
+                        <p className="text-xs font-bold" style={{ color: C.emerald }}>{bankFeedStatus.bankName} · ****{bankFeedStatus.accountLast4}</p>
+                        <p className="text-[10px]" style={{ color: C.textDim }}>BSB: {bankFeedStatus.bsb} · Connected {new Date(bankFeedStatus.connectedAt).toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {subFolder === 'residency' && (
+                  <DataResidencyNode regionCode={regionCode} />
+                )}
+
+                {subFolder === 'archive' && (
+                  <PaidInvoicesArchive months={months} paidInvoices={localPaidInvoices} onExport={onExportToAccounting} onEmailAccountant={onEmailAccountant} busy={busy} onDelete={(no) => setPaidInvoices(prev => prev.filter(i => i.invoiceNo !== no))} region={regionCode} />
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ label, status }) {
+  return <div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px]" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05`, color: C.emerald }}><CheckCircle2 className="h-3 w-3" /> {label}: {status}</div>;
+}
+
+// ─── Paid Invoices Archive (with accounting export + delete locks) ────────────
+function PaidInvoicesArchive({ months, paidInvoices, onExport, onEmailAccountant, busy, onDelete, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  const [selected, setSelected] = useState(new Set());
+  const [exported, setExported] = useState(new Set());
+  const [emailed, setEmailed] = useState(new Set());
+  const [exportStatus, setExportStatus] = useState(null);
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [viewingJob, setViewingJob] = useState(null);
+
+  const toggle = (no) => {
+    setSelected(prev => { const n = new Set(prev); n.has(no) ? n.delete(no) : n.add(no); return n; });
+  };
+  const allPaid = paidInvoices.filter(i => i.paymentStatus === 'PAID');
+  const allSelected = allPaid.length > 0 && allPaid.every(i => selected.has(i.invoiceNo));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(allPaid.map(i => i.invoiceNo)));
+  const canRemove = (inv) => exported.has(inv.invoiceNo) || inv.paymentStatus === 'PAID' && (exported.has(inv.invoiceNo) || emailed.has(inv.invoiceNo));
+
+  const handleExport = async () => {
+    const items = allPaid.filter(i => selected.has(i.invoiceNo));
+    if (!items.length) return;
+    setExportStatus('exporting');
+    await onExport(items);
+    setExported(prev => { const n = new Set(prev); items.forEach(i => n.add(i.invoiceNo)); return n; });
+    setExportStatus('done');
+    setTimeout(() => setExportStatus(null), 3000);
+  };
+
+  const handleEmail = async () => {
+    const items = allPaid.filter(i => selected.has(i.invoiceNo));
+    if (!items.length) return;
+    setEmailStatus('sending');
+    await onEmailAccountant(items);
+    setEmailed(prev => { const n = new Set(prev); items.forEach(i => n.add(i.invoiceNo)); return n; });
+    setEmailStatus('done');
+    setTimeout(() => setEmailStatus(null), 3000);
+  };
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Invoice Archive Ledger</h4>
+      {allPaid.length === 0 ? <p className="text-[10px]" style={{ color: C.textDimmer }}>No paid invoices yet.</p> : (
+        <>
+          <div className="flex items-center gap-2">
+            <button onClick={toggleAll} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition" style={{ borderColor: C.border, color: C.text }}>
+              <input type="checkbox" checked={allSelected} readOnly className="h-3 w-3" style={{ accentColor: C.orange }} /> Select All
+            </button>
+            <button onClick={handleExport} disabled={busy || selected.size === 0 || exportStatus === 'exporting'} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition" style={{ borderColor: `${C.emerald}40`, color: C.emerald }}>
+              {exportStatus === 'exporting' ? <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" /> : <Landmark className="h-3 w-3" />} Export to Accounting
+            </button>
+            <button onClick={handleEmail} disabled={busy || selected.size === 0 || emailStatus === 'sending'} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition" style={{ borderColor: `${C.cyan}40`, color: C.cyan }}>
+              {emailStatus === 'sending' ? <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" /> : <Mail className="h-3 w-3" />} Email Accountant
+            </button>
+          </div>
+          {exportStatus === 'done' && <div className="flex items-center gap-1.5 text-[10px]" style={{ color: C.emerald }}><CheckCircle2 className="h-3 w-3" /> Exported to accounting software.</div>}
+          {emailStatus === 'done' && <div className="flex items-center gap-1.5 text-[10px]" style={{ color: C.cyan }}><CheckCircle2 className="h-3 w-3" /> Tax data sheets emailed to accountant.</div>}
+        </>
+      )}
+      {months.map((month) => {
+        const monthInvoices = paidInvoices.filter(i => {
+          const d = new Date(i.settledAt || i.compiledAt || i.date);
+          return i.paymentStatus === 'PAID' && d.toLocaleString('en-AU', { month: 'long' }) === month;
+        });
+        return (
+          <details key={month} className="rounded-lg border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+            <summary className="cursor-pointer text-xs font-bold text-slate-100">{month} ({monthInvoices.length})</summary>
+            <div className="mt-2 space-y-1.5">
+              {monthInvoices.length === 0 ? <p className="text-[10px]" style={{ color: C.textDimmer }}>No paid invoices.</p> : monthInvoices.map(inv => {
+                const isExported = exported.has(inv.invoiceNo);
+                const isEmailed = emailed.has(inv.invoiceNo);
+                const canDel = isExported || isEmailed;
+                return (
+                  <div key={inv.invoiceNo} className="flex items-center gap-2 rounded border p-2 text-[10px]" style={{ borderColor: C.border, background: C.bg }}>
+                    <input type="checkbox" checked={selected.has(inv.invoiceNo)} onChange={() => toggle(inv.invoiceNo)} className="h-3 w-3 shrink-0" style={{ accentColor: C.orange }} />
+                    <div className="min-w-0 flex-1"><div className="font-mono text-slate-100">{inv.invoiceNo}</div><div style={{ color: C.textDim }}>{inv.customer}</div></div>
+                    <div className="text-right"><div className="font-mono" style={{ color: C.emerald }}>{f(inv.grandTotal)}</div><div style={{ color: C.textDimmer }}>{inv.settledAt ? new Date(inv.settledAt).toLocaleString(r.locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</div></div>
+                    <button onClick={(e) => { e.preventDefault(); setViewingJob(inv); }} className="flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold transition hover:opacity-80" style={{ background: `${C.cyan}15`, color: C.cyan }}>
+                      <ClipboardList className="h-2.5 w-2.5" /> View Completed Job Card
+                    </button>
+                    <div className="flex shrink-0 flex-col items-end gap-0.5">
+                      {isExported && <span className="text-[9px] font-bold" style={{ color: C.emerald }}>EXPORTED</span>}
+                      {isEmailed && <span className="text-[9px] font-bold" style={{ color: C.cyan }}>EMAILED</span>}
+                      {canDel ? (
+                        <button onClick={() => onDelete && onDelete(inv.invoiceNo)} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold transition hover:opacity-80" style={{ background: `${C.red}10`, color: C.red }}><Trash2 className="h-2.5 w-2.5" /> Remove</button>
+                      ) : (
+                        <span className="flex items-center gap-0.5 text-[9px]" style={{ color: C.textDimmer }}><Lock className="h-2.5 w-2.5" /> Locked</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        );
+      })}
+
+      {viewingJob && (
+        <CompletedJobCardModal invoice={viewingJob} onClose={() => setViewingJob(null)} region={region} />
+      )}
+    </div>
+  );
+}
+
+// ─── Completed Job Card Modal (read-only historical view) ────────────────────
+function CompletedJobCardModal({ invoice, onClose, region }) {
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+  return (
+    <div className="fixed inset-0 z-[92] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.80)' }} onClick={onClose}>
+      <div className="custom-scrollbar max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-5" style={{ background: C.bg, borderColor: C.border }} onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-slate-100"><FileText className="h-4 w-4" style={{ color: C.cyan }} /> Completed Job Card — {invoice.invoiceNo}</h3>
+          <button onClick={onClose} className="rounded p-1" style={{ color: C.textDim }}><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel }}>
+            <div><div className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Customer</div><div className="text-sm font-semibold text-slate-100">{invoice.customer || 'N/A'}</div></div>
+            <div><div className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Vehicle</div><div className="text-sm font-semibold text-slate-100">{invoice.vehicle || 'N/A'} · <span className="font-mono" style={{ color: C.cyan }}>{invoice.vehicleRego || ''}</span></div></div>
+            <div><div className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Date Compiled</div><div className="font-mono text-xs text-slate-300">{invoice.date || '—'}</div></div>
+            <div><div className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Settled At</div><div className="font-mono text-xs text-slate-300">{invoice.settledAt ? new Date(invoice.settledAt).toLocaleString() : '—'}</div></div>
+          </div>
+
+          {invoice.diagnosticNotes && (
+            <div className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.orange }}>Diagnostic Notes</div>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-200">{invoice.diagnosticNotes}</p>
+            </div>
+          )}
+
+          {invoice.technicianLogs && (
+            <div className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.cyan }}>Technician Logs</div>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-200">{invoice.technicianLogs}</p>
+            </div>
+          )}
+
+          <div className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.emerald }}>Parts & Consumables Used</div>
+            <div className="mt-2 space-y-1.5">
+              {(invoice.cart || []).map((p, i) => (
+                <div key={i} className="flex items-center justify-between rounded border px-2 py-1.5 text-[10px]" style={{ borderColor: C.border, background: C.bg }}>
+                  <span className="text-slate-200">{p.brand ? `${p.brand} ` : ''}{p.title} × {p.qty || 1}</span>
+                  <span className="font-mono" style={{ color: C.emerald }}>{f(p.unitPrice || 0)}</span>
+                </div>
+              ))}
+              {(invoice.consumables || []).map((c, i) => (
+                <div key={`c${i}`} className="flex items-center justify-between rounded border px-2 py-1.5 text-[10px]" style={{ borderColor: C.border, background: C.bg }}>
+                  <span className="text-slate-200">{c.brand ? `${c.brand} ` : ''}{c.title} × {c.qty || 1}</span>
+                  <span className="font-mono" style={{ color: C.emerald }}>{f(c.unitPrice || 0)}</span>
+                </div>
+              ))}
+              {(!invoice.cart?.length && !invoice.consumables?.length) && <p className="text-[10px]" style={{ color: C.textDimmer }}>No parts recorded.</p>}
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3 space-y-1.5" style={{ borderColor: `${C.cyan}40`, background: `${C.cyan}08` }}>
+            <div className="flex items-center justify-between text-xs"><span style={{ color: C.textDim }}>Labor ({invoice.laborHours || 0}h)</span><span className="font-mono text-slate-100">{f(invoice.laborTotal || 0)}</span></div>
+            <div className="flex items-center justify-between text-xs"><span style={{ color: C.textDim }}>Parts & Consumables</span><span className="font-mono text-slate-100">{f(invoice.partsTotal || 0)}</span></div>
+            {invoice.gst > 0 && <div className="flex items-center justify-between text-xs"><span style={{ color: C.textDim }}>{r.taxLabel}</span><span className="font-mono text-slate-100">{f(invoice.gst)}</span></div>}
+            <div className="flex items-center justify-between border-t pt-1.5" style={{ borderColor: C.border }}><span className="text-sm font-bold text-white">Grand Total</span><span className="font-mono text-lg font-bold" style={{ color: C.emerald }}>{f(invoice.grandTotal)}</span></div>
+          </div>
+
+          <div className="flex items-center justify-center gap-1.5 text-[10px]" style={{ color: C.textDimmer }}>
+            <Lock className="h-3 w-3" /> Read-only archived record — locked for tax audit compliance
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Customer Checkout Portal (6 Stripe payment methods) ─────────────────────
+function CustomerCheckoutPortal({ invoice, onSettle, onExit, region }) {
+  const [method, setMethod] = useState('card');
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvc, setCvc] = useState('');
+  const [saveCard, setSaveCard] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const r = region || REGIONS.AU;
+  const f = (n) => fmt(n, r);
+
+  const handlePay = async (e) => {
+    e?.preventDefault?.();
+    if (processing || success) return;
+    setProcessing(true);
+    await onSettle(invoice.invoiceNo, method);
+    setProcessing(false);
+    setSuccess(true);
+    setTimeout(onExit, 2200);
+  };
+
+  const wallets = [
+    { id: 'paypal', label: 'PayPal Express', icon: <span className="text-[10px] font-bold">PayPal</span> },
+    { id: 'applepay', label: 'Apple Pay Device Vault', icon: <span className="text-[10px] font-bold"></span> },
+    { id: 'googlepay', label: 'Google Pay Ledger Link', icon: <span className="text-[10px] font-bold">G Pay</span> },
+    { id: 'zip', label: 'Zip Pay Hub', icon: <span className="text-[10px] font-bold">Zip</span> },
+    { id: 'afterpay', label: 'Afterpay Tiers', icon: <span className="text-[10px] font-bold">AP</span> },
+    { id: 'card', label: 'Credit / Debit Card', icon: <CardIcon className="h-3.5 w-3.5" /> },
+  ];
+
+  const methodInfo = {
+    paypal: { msg: 'You will be redirected to PayPal to complete your express checkout securely.', color: C.cyan },
+    applepay: { msg: 'Authenticate via Touch ID / Face ID on your Apple device to authorize payment.', color: C.text },
+    googlepay: { msg: 'Confirm via your Google Pay wallet — no card details required.', color: C.text },
+    zip: { msg: '4 interest-free installments of ' + f(invoice.grandTotal / 4) + ' each via Zip Pay Hub.', color: C.emerald },
+    afterpay: { msg: '4 interest-free installments of ' + f(invoice.grandTotal / 4) + ' each via Afterpay Tiers.', color: C.emerald },
+    card: null,
+  };
+
+  return (
+    <div className="fixed inset-0 z-[95] overflow-y-auto" style={{ background: C.bg }}>
+      <div className="sticky top-0 z-10 border-b p-3" style={{ borderColor: C.border, background: `${C.bg}f0` }}>
+        <div className="mx-auto flex max-w-2xl items-center justify-between">
+          <button onClick={onExit} disabled={processing} className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition" style={{ borderColor: C.border, color: C.text }}><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
+          <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: C.emerald }}><ShieldCheck className="h-4 w-4" /> Stripe Secured</div>
+        </div>
+      </div>
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <div className="text-center"><div className="text-xl font-extrabold tracking-tight text-white">PARTSFORGE BILLING PORTAL</div><div className="mt-1 text-xs font-semibold uppercase tracking-widest" style={{ color: C.cyan }}>Secure Customer Checkout</div></div>
+        <div className="mt-6 rounded-2xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
+          <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: C.border }}>
+            <div><div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.textDim }}>Invoice #</div><div className="font-mono text-sm font-bold text-white">{invoice.invoiceNo}</div></div>
+            <div className="text-right"><div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.textDim }}>Date</div><div className="font-mono text-sm text-slate-300">{invoice.date}</div></div>
+            <div className="text-right"><div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.textDim }}>Status</div><div className="rounded-full border px-2 py-0.5 text-[10px] font-bold" style={{ borderColor: 'rgba(245,158,11,0.5)', color: '#F59E0B' }}>UNPAID</div></div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg p-2.5" style={{ background: C.bg }}><div className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Customer</div><div className="text-sm font-semibold text-white">{invoice.customer}</div></div>
+            <div className="rounded-lg p-2.5" style={{ background: C.bg }}><div className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Vehicle</div><div className="text-sm font-semibold text-slate-200">{invoice.vehicle} · <span className="font-mono" style={{ color: C.cyan }}>{invoice.vehicleRego}</span></div></div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: C.bg }}><span className="text-xs" style={{ color: C.textDim }}>Labor ({invoice.laborHours}h)</span><span className="font-mono text-sm font-bold text-white">{f(invoice.laborTotal)}</span></div>
+            <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: C.bg }}><span className="text-xs" style={{ color: C.textDim }}>Parts & Consumables</span><span className="font-mono text-sm font-bold text-white">{f(invoice.partsTotal)}</span></div>
+            {invoice.gst > 0 && <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ background: C.bg }}><span className="text-xs" style={{ color: C.textDim }}>{r.taxLabel}</span><span className="font-mono text-sm font-bold text-white">{f(invoice.gst)}</span></div>}
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2.5" style={{ borderColor: `${C.cyan}40`, background: `${C.cyan}10` }}><span className="text-sm font-extrabold text-white">GRAND TOTAL</span><span className="font-mono text-lg font-extrabold" style={{ color: C.cyan }}>{f(invoice.grandTotal)}</span></div>
+          </div>
+          <div className="mt-5">
+            <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: C.textDim }}>Select Payment Method</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {wallets.map(w => (
+                <button key={w.id} onClick={(e) => { e.preventDefault(); setMethod(w.id); }} disabled={processing} className="flex flex-col items-center gap-1 rounded-lg border px-2 py-3 text-center transition" style={{ borderColor: method === w.id ? C.orange : C.border, background: method === w.id ? `${C.orange}15` : C.bg, color: method === w.id ? C.orange : C.text }}>
+                  {w.icon}
+                  <span className="text-[10px] font-bold leading-tight">{w.label}</span>
+                </button>
+              ))}
+            </div>
+            {method === 'card' && (
+              <div className="mt-3 space-y-2.5">
+                <div><label className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Cardholder Name</label><input value={cardName} onChange={(e) => setCardName(e.target.value)} disabled={processing} placeholder="John Smith" className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-white outline-none" style={{ borderColor: C.border, background: C.bg }} /></div>
+                <div><label className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Card Number</label><input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} disabled={processing} maxLength={19} placeholder="4242 4242 4242 4242" className="mt-1 w-full rounded-lg border px-3 py-2.5 font-mono text-sm text-white outline-none" style={{ borderColor: C.border, background: C.bg }} /></div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div><label className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>Expiry</label><input value={expiry} onChange={(e) => setExpiry(e.target.value)} disabled={processing} maxLength={5} placeholder="MM/YY" className="mt-1 w-full rounded-lg border px-3 py-2.5 font-mono text-sm text-white outline-none" style={{ borderColor: C.border, background: C.bg }} /></div>
+                  <div><label className="text-[10px] font-bold uppercase" style={{ color: C.textDim }}>CVC</label><input value={cvc} onChange={(e) => setCvc(e.target.value)} disabled={processing} maxLength={4} placeholder="123" className="mt-1 w-full rounded-lg border px-3 py-2.5 font-mono text-sm text-white outline-none" style={{ borderColor: C.border, background: C.bg }} /></div>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-[10px]" style={{ color: C.textDim }}>
+                  <input type="checkbox" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)} disabled={processing} className="h-3.5 w-3.5" style={{ accentColor: C.orange }} /> Save card details for future payments
+                </label>
+              </div>
+            )}
+            {methodInfo[method] && (
+              <div className="mt-3 rounded-lg border px-3 py-2.5 text-xs font-semibold" style={{ borderColor: `${methodInfo[method].color}30`, background: `${methodInfo[method].color}08`, color: methodInfo[method].color }}>
+                {methodInfo[method].msg}
+              </div>
+            )}
+          </div>
+          <button onClick={handlePay} disabled={processing || success} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-extrabold text-slate-950 transition disabled:opacity-50" style={{ background: C.orange }}>
+            {processing ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Processing...</>) : success ? (<><CheckCircle2 className="h-4 w-4" /> Payment Successful</>) : (<><LockIcon className="h-4 w-4" /> Pay {f(invoice.grandTotal)} Safely</>)}
+          </button>
+          <div className="mt-3 text-center text-[10px]" style={{ color: C.textDimmer }}>256-bit SSL encryption · PCI DSS compliant · Powered by Stripe</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Global Region Selector Widget ──────────────────────────────────────────
+function GlobalRegionSelector({ regionCode, onRegionChange, usStateCode, onUsStateChange }) {
+  const [open, setOpen] = useState(false);
+  const region = REGIONS[regionCode] || REGIONS.AU;
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition"
+        style={{ borderColor: open ? C.orange : C.border, background: C.panel, color: open ? C.orange : C.text }}
+      >
+        <Globe className="h-3.5 w-3.5" style={{ color: C.orange }} />
+        {region.label}
+        <ChevronDown className={`h-3 w-3 transition ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border shadow-2xl" style={{ background: C.panel, borderColor: C.border }}>
+            <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textDim }}>Global Region</div>
+            {REGION_LIST.map(r => (
+              <button
+                key={r.code}
+                onClick={() => { onRegionChange(r.code); if (r.code !== 'US') setOpen(false); }}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-xs font-semibold transition"
+                style={{ background: r.code === regionCode ? `${C.orange}10` : 'transparent', color: r.code === regionCode ? C.orange : C.text }}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-sm">{r.currencySymbol}</span> {r.label}
+                </span>
+                {r.code === regionCode && <CheckCircle2 className="h-3.5 w-3.5" />}
+              </button>
+            ))}
+            {regionCode === 'US' && (
+              <div className="border-t" style={{ borderColor: C.border }}>
+                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textDim }}>US State (Sales Tax)</div>
+                <select
+                  value={usStateCode}
+                  onChange={e => onUsStateChange(e.target.value)}
+                  className="mx-3 mb-3 w-[calc(100%-1.5rem)] rounded-lg border px-2.5 py-2 text-xs font-semibold"
+                  style={{ borderColor: C.border, background: C.bg, color: C.text }}
+                >
+                  {(REGIONS.US.usStates || []).map(s => (
+                    <option key={s.code} value={s.code}>{s.label} — {(s.salesTaxRate * 100).toFixed(2)}%</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Enterprise Data Residency & Compliance Node ────────────────────────────────
+function DataResidencyNode({ regionCode }) {
+  const activeRegion = REGIONS[regionCode] || REGIONS.AU;
+  const shards = [
+    { code: 'AU', name: 'APAC SHARD NODE', location: 'Sydney Center', compliance: 'ACCC CDR · Privacy Act 1988', icon: MapPin },
+    { code: 'UK', name: 'EMEA SHARD NODE', location: 'London / Frankfurt Center', compliance: 'GDPR · PSD2 · UK Open Banking', icon: Shield },
+    { code: 'US', name: 'AMER SHARD NODE', location: 'Oregon / Virginia Center', compliance: 'CCPA · GLBA · US Sovereignty', icon: Server },
+  ];
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${C.orange}15` }}>
+          <Database className="h-4 w-4" style={{ color: C.orange }} />
+        </div>
+        <div>
+          <div className="text-sm font-bold text-slate-50">Supabase / PostgreSQL Distributed Tenant Sharded Mesh</div>
+          <div className="text-[10px]" style={{ color: C.textDim }}>Multi-region data residency with sovereign partition enforcement</div>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {shards.map(shard => {
+          const isActive = shard.code === regionCode;
+          const Icon = shard.icon;
+          return (
+            <div
+              key={shard.code}
+              className="rounded-xl border p-3 transition"
+              style={{
+                borderColor: isActive ? C.orange : C.border,
+                background: isActive ? `${C.orange}08` : C.bg,
+                opacity: isActive ? 1 : 0.5,
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <Icon className="h-4 w-4" style={{ color: isActive ? C.orange : C.textDim }} />
+                {isActive ? (
+                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold" style={{ background: `${C.emerald}15`, color: C.emerald }}>
+                    <Activity className="h-2.5 w-2.5" /> ACTIVE
+                  </span>
+                ) : (
+                  <span className="rounded-full px-2 py-0.5 text-[9px] font-bold" style={{ background: C.border, color: C.textDim }}>STANDBY</span>
+                )}
+              </div>
+              <div className="mt-2 text-xs font-bold" style={{ color: isActive ? C.text : C.textDim }}>{shard.name}</div>
+              <div className="text-[10px]" style={{ color: C.textDim }}>{shard.location}</div>
+              <div className="mt-1.5 text-[9px] leading-tight" style={{ color: C.textDimmer }}>{shard.compliance}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: C.textDim }}>
+          <Zap className="h-3 w-3" style={{ color: C.orange }} />
+          Active shard: <span style={{ color: C.orange }}>{activeRegion.shardNode.name}</span> — {activeRegion.shardNode.location}
+        </div>
+        <div className="mt-1 text-[9px]" style={{ color: C.textDimmer }}>{activeRegion.shardNode.compliance}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+const BAY_OPTIONS = [
+  { id: 'BAY-01', label: 'Bay 01 — Hoist A' },
+  { id: 'BAY-02', label: 'Bay 02 — Hoist B' },
+  { id: 'BAY-03', label: 'Bay 03 — Alignment' },
+  { id: 'BAY-04', label: 'Bay 04 — Diagnostics' },
+];
+
+export default function App() {
+  const [accepted, setAccepted] = useState(() => { try { return localStorage.getItem('partsforge_safety_agreed') === 'true'; } catch { return false; } });
+  const [userSession, setUserSession] = useState(() => { try { const raw = localStorage.getItem('partsforge_session'); if (!raw || raw === 'undefined' || raw === 'null') return null; return JSON.parse(raw); } catch { return null; } });
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const role = userSession?.role === 'MECHANIC' ? 'pro' : userSession?.role === 'SELLER' ? 'seller' : 'diy';
+
+  // ── Multi-Region Global State ──
+  const [regionCode, setRegionCode] = useState(() => { try { return localStorage.getItem('partsforge_region') || 'AU'; } catch { return 'AU'; } });
+  const [usStateCode, setUsStateCode] = useState(() => { try { return localStorage.getItem('partsforge_us_state') || 'CA'; } catch { return 'CA'; } });
+  const region = REGIONS[regionCode] || REGIONS.AU;
+  const effectiveTaxRate = getEffectiveTaxRate(region, usStateCode);
+  const handleRegionChange = (code) => { setRegionCode(code); try { localStorage.setItem('partsforge_region', code); } catch {} };
+  const handleUsStateChange = (code) => { setUsStateCode(code); try { localStorage.setItem('partsforge_us_state', code); } catch {} };
+
+  // Vehicle & garage state
+  const [garageVehicles, setGarageVehicles] = useState([]);
+  const [activeVehicleId, setActiveVehicleId] = useState(null);
+  const [regoLoading, setRegoLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [vehicle, setVehicle] = useState(null);
+
+  // Parts search
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [results, setResults] = useState(null);
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [consolidationEnabled, setConsolidationEnabled] = useState(false);
+
+  // Job card state
+  const [consumables, setConsumables] = useState([]);
+  const [laborHours, setLaborHours] = useState(0);
+  const [laborRate, setLaborRate] = useState(95);
+  const [taxOn, setTaxOn] = useState(true);
+  const [diagnostic, setDiagnostic] = useState('');
+  const [custName, setCustName] = useState('');
+  const [custPhone, setCustPhone] = useState('');
+  const [custEmail, setCustEmail] = useState('');
+
+  // Saved jobs & invoices
+  // On the Hoist tracking (replaces savedJobs)
+  const [hoistJobs, setHoistJobs] = useState([]);
+  const [activeHoistJobId, setActiveHoistJobId] = useState(null);
+  const [unpaidInvoices, setUnpaidInvoices] = useState([]);
+  const [paidInvoices, setPaidInvoices] = useState([]);
+  const [checkoutInvoice, setCheckoutInvoice] = useState(null);
+  const [saveToast, setSaveToast] = useState(null);
+
+  // Vault
+  const [vault, setVault] = useState([]);
+  const [allocModalOpen, setAllocModalOpen] = useState(false);
+  const [catalogWindow, setCatalogWindow] = useState(null);
+  const [garageFolderOpen, setGarageFolderOpen] = useState(false);
+
+  // Consumable Asset modal
+
+  // Live Bank Feed + Accounting Ledger (global purchase dispatch)
+  const [bankFeedEntries, setBankFeedEntries] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+
+  // Corporate & bank feed
+  const [corpProfile, setCorpProfile] = useState({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
+  const [bankFeedStatus, setBankFeedStatus] = useState(null);
+  const matchedTradeAccount = useMemo(() => resolveTradeAccount(corpProfile), [corpProfile]);
+
+  // ── Auth handlers ──
+  const handleAuthenticate = (session) => {
+    setIsAuthenticating(true);
+    setTimeout(() => {
+      setUserSession(session);
+      try { localStorage.setItem('partsforge_session', JSON.stringify(session)); } catch {}
+      setIsAuthenticating(false);
+    }, 800);
+  };
+
+  const handleAcceptTerms = () => {
+    setAccepted(true);
+    try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
+  };
+
+  // ── Vehicle handlers ──
+  const handleRego = async (plate, region) => {
+    setRegoLoading(true);
+    const v = await processFreeRegoLookup(plate, region);
+    setRegoLoading(false);
+    setVehicle(v);
+  };
+
+  const handleVin = async (vinStr, region) => {
+    setRegoLoading(true);
+    const v = await processVinLookup(vinStr, region);
+    setRegoLoading(false);
+    setVehicle(v);
+  };
+
+  const handlePhoto = () => {
+    setScanning(true);
+    setTimeout(async () => {
+      setScanning(false);
+      const v = await processFreeRegoLookup('1XX2YY', 'AU_VIC');
+      setVehicle(v);
+    }, 2000);
+  };
+
+  // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
+  const handleCommitVehicle = () => {
+    if (!vehicle) return;
+    const newVehicle = { id: uid(), ...vehicle };
+    setGarageVehicles(prev => [...prev, newVehicle]);
+    setActiveVehicleId(newVehicle.id);
+    setSaveToast('Vehicle committed to Garage Bay Folder.');
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleAddVehicleSlot = () => {
+    const newVehicle = { id: uid(), rego: '', vin: '', make: 'New Vehicle', model: '', engine: '' };
+    setGarageVehicles(prev => [...prev, newVehicle]);
+    setActiveVehicleId(newVehicle.id);
+  };
+
+  const handleRemoveVehicle = (id) => {
+    setGarageVehicles(prev => prev.filter(v => v.id !== id));
+    if (activeVehicleId === id) {
+      const remaining = garageVehicles.filter(v => v.id !== id);
+      setActiveVehicleId(remaining.length > 0 ? remaining[0].id : null);
+      setVehicle(remaining.length > 0 ? remaining[0] : null);
+    }
+  };
+
+  const handleEditVehicle = (id, formData) => {
+    setGarageVehicles(prev => prev.map(v => v.id === id ? { ...v, ...formData } : v));
+    if (activeVehicleId === id) setVehicle(prev => ({ ...prev, ...formData }));
+  };
+
+  const handleSelectVehicle = (id) => {
+    setActiveVehicleId(id);
+    const v = garageVehicles.find(v => v.id === id);
+    if (v) setVehicle(v);
+  };
+
+  // ── Parts search ──
+  const handleSearch = async (query) => {
+    setPartsLoading(true);
+    const r = await processPartsQuery(query);
+    setPartsLoading(false);
+    setResults(r);
+  };
+
+  const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
+
+  const handleAddToCart = (item, tier, qty = 1) => {
+    const price = role === 'pro' ? (item.trade ?? item.price) : (item.retail ?? item.price);
+    setCart(prev => {
+      if (prev.some(c => c.id === item.id)) return prev;
+      return [...prev, { ...item, unitPrice: price, qty, tier }];
+    });
+    setSaveToast('Item added to your sourcing basket.');
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleInc = (id) => setCart(prev => prev.map(c => c.id === id ? { ...c, qty: c.qty + 1 } : c));
+  const handleDec = (id) => setCart(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, c.qty - 1) } : c));
+  const handleUpdateCartItem = (id, field, value) => setCart(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+
+  // ── Consumables (inline editable) ──
+  const handleAddConsumable = (con) => {
+    const price = role === 'pro' ? con.trade : con.retail;
+    setConsumables(prev => {
+      if (prev.some(c => c.id === con.id)) return prev;
+      return [...prev, { ...con, unitPrice: price, qty: 1 }];
+    });
+  };
+
+  const handleUpdateConsumable = (id, field, value) => setConsumables(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  const handleRemoveConsumable = (id) => setConsumables(prev => prev.filter(c => c.id !== id));
+
+  // ── Global Bank Feed + Accounting Ledger dispatch ──
+  const dispatchToBankFeed = useCallback((summary) => {
+    const entry = {
+      id: uid(),
+      timestamp: new Date().toISOString(),
+      description: summary.description,
+      amount: summary.amount,
+      channel: summary.channel || 'OSKO',
+      status: 'CLEARED',
+      ref: summary.ref || `TXN-${Date.now()}`,
+    };
+    setBankFeedEntries(prev => [entry, ...prev]);
+    setLedgerEntries(prev => [{ ...entry, ledgerId: `XRO-${Math.floor(100000 + Math.random() * 900000)}`, accountCode: '500-PURCH', status: 'POSTED' }, ...prev]);
+  }, []);
+
+  // ── Checkout (parts-only, per-item or consolidated shipping, clear after pay) ──
+  const handleCheckout = () => {
+    const cartSnapshot = [...cart];
+    const cartTotal = cartSnapshot.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
+
+    // A. Fire freight dispatch as fire-and-forget (no blocking awaits)
+    let consignmentPrefix = 'CON';
+    let dispatchSummary = '';
+    if (consolidationEnabled && region.consolidationHub) {
+      dispatchSummary = `Consolidated via ${region.consolidationHub.name} — Tier A: ${[...new Set(cartSnapshot.map(c => c.shop || c.loc || 'Unknown'))].length} seller legs → Tier B: 1 driver`;
+      dispatchConsolidatedFreight(cartSnapshot, region.consolidationHub, { lat: 0, lng: 0 })
+        .then(result => { if (result?.tierB?.manifestId) consignmentPrefix = result.tierB.manifestId.slice(0, 12); })
+        .catch(() => {});
+    } else {
+      dispatchSummary = `${cartSnapshot.length} individual courier dispatches`;
+      dispatchUberDirectDrivers(cartSnapshot, { lat: 0, lng: 0 }).catch(() => {});
+    }
+
+    // B. Stock the vault with delivered items — auto-categorized into inventory folders
+    setVault(prev => [
+      ...prev,
+      ...cartSnapshot.map((c) => ({
+        ...c,
+        vaultId: uid(),
+        status: 'DELIVERED TO GARAGE VAULT',
+        seller: c.shop || c.loc || 'Unknown',
+        consignmentNote: `CON-UBER-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 10000)}`,
+        sku: c.id.toUpperCase(),
+        fitment: vehicle ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Universal' : 'Universal',
+        purchasedAt: new Date().toISOString(),
+        source: c.source || c.category || (c.tier === 'local' ? 'part' : 'part'),
+      })),
+    ]);
+
+    // A. Dispatch to bank feed + accounting ledger (synchronous)
+    dispatchToBankFeed({ description: `Parts cart checkout (${cartSnapshot.length} items)`, amount: cartTotal, channel: 'Stripe', ref: `CART-${Date.now()}` });
+    // Mirror to Xero Live API Node accounting ledger
+    setLedgerEntries(prev => [...prev, { id: uid(), ref: `CART-${Date.now()}`, description: `Parts purchase (${cartSnapshot.length} items)`, amount: cartTotal, channel: 'Stripe', syncedAt: new Date().toISOString() }]);
+
+    // D. Clear cart + close drawer immediately
+    setCart([]);
+    setIsCartOpen(false);
+
+    // E. Success notification
+    setSaveToast(`⚡ TRANSACTION SUCCESSFUL! Stripe payment verified. Courier logistics Center notified for immediate single-vehicle freight consolidation hub dispatch.`);
+    setTimeout(() => setSaveToast(null), 5000);
+  };
+
+  const handleSettleInvoice = async (invoiceNo, method) => {
+    const result = await settleInvoiceViaCustomerPortal(invoiceNo, method);
+    const inv = [...unpaidInvoices].find(i => i.invoiceNo === invoiceNo);
+    setPaidInvoices(prev => {
+      return inv ? [...prev, { ...inv, paymentStatus: 'PAID', settledAt: result.settledAt, receiptId: result.receiptId }] : prev;
+    });
+    setUnpaidInvoices(prev => prev.filter(i => i.invoiceNo !== invoiceNo));
+    // Auto-purge: delete the vehicle chip linked to this repair
+    if (inv && (inv.vehicleRego || inv.vehicle)) {
+      const regoMatch = inv.vehicleRego || (inv.vehicle?.rego);
+      setGarageVehicles(prev => prev.filter(v => v.rego !== regoMatch));
+      if (vehicle && vehicle.rego === regoMatch) {
+        setVehicle(null);
+        setActiveVehicleId(null);
+      }
+    }
+  };
+
+  // ── Job card: On the Hoist single-instance lifecycle ──
+  const handleSaveProgress = async () => {
+    const payload = { cart, consumables, laborHours, laborRate, taxOn, diagnostic, custName, custPhone, custEmail, vehicle };
+    const saved = await persistJobProgress(payload);
+    if (activeHoistJobId) {
+      setHoistJobs(prev => prev.map(j => j.jobId === activeHoistJobId ? { ...j, ...payload, jobId: activeHoistJobId, updatedAt: new Date().toISOString() } : j));
+      setSaveToast(`Job progress updated: ${activeHoistJobId}`);
+    } else {
+      const newJob = { ...saved, jobId: saved.jobId || uid() };
+      setHoistJobs(prev => [...prev, newJob]);
+      setActiveHoistJobId(newJob.jobId);
+      setSaveToast(newJob.jobId);
+    }
+    setTimeout(() => setSaveToast(null), 3500);
+    // Clear active Job Card workspace fields for a fresh vehicle slot
+    setCart([]);
+    setConsumables([]);
+    setLaborHours(0);
+    setLaborRate(95);
+    setDiagnostic('');
+    setCustName('');
+    setCustPhone('');
+    setCustEmail('');
+    setVehicle(null);
+    setActiveVehicleId(null);
+    setActiveHoistJobId(null);
+  };
+
+  const handleCompileInvoice = async () => {
+    const jobData = { cart, consumables, laborHours, laborRate, taxOn, custName, custPhone, custEmail, vehicle };
+    const invoice = compileCustomerInvoice(jobData, effectiveTaxRate);
+    // Attach diagnostic notes and technician logs for completed job card archive
+    invoice.diagnosticNotes = diagnostic || 'No diagnostic notes recorded.';
+    invoice.technicianLogs = `Technician: ${userSession?.name || 'Unknown'} · Bay: ${activeHoistJobId || 'Unassigned'} · Labor: ${laborHours}h @ ${fmt(laborRate, region)}/h`;
+    invoice.vehicleRego = vehicle?.rego || '';
+    const dispatchResult = await dispatchInvoicePaymentRequest(invoice);
+    setUnpaidInvoices(prev => [...prev, { ...invoice, paymentLink: dispatchResult.paymentLink, dispatchedAt: dispatchResult.sentAt }]);
+    // Dispatch purchase to bank feed + ledger
+    dispatchToBankFeed({ description: `Invoice compiled: ${invoice.invoiceNo} for ${custName || 'customer'}`, amount: invoice.grandTotal, channel: 'Stripe', ref: invoice.invoiceNo });
+    // Clean Invoice Dispatch Purge: expunge this job from the hoist folder
+    if (activeHoistJobId) {
+      setHoistJobs(prev => prev.filter(j => j.jobId !== activeHoistJobId));
+    }
+    setSaveToast(`Invoice ${invoice.invoiceNo} sent to ${custEmail || 'customer'}`);
+    setTimeout(() => setSaveToast(null), 4000);
+    // Clear active form
+    setCart([]);
+    setConsumables([]);
+    setLaborHours(0);
+    setLaborRate(95);
+    setDiagnostic('');
+    setCustName('');
+    setCustPhone('');
+    setCustEmail('');
+    setVehicle(null);
+    setActiveVehicleId(null);
+    setActiveHoistJobId(null);
+  };
+
+  // Resume a hoist job into the active Job Card area
+  const handleResumeJob = (job, targetBayId = null) => {
+    setCart(job.cart || []);
+    setConsumables(job.consumables || []);
+    setLaborHours(job.laborHours || 0);
+    setLaborRate(job.laborRate || 95);
+    setTaxOn(job.taxOn ?? true);
+    setDiagnostic(job.diagnostic || '');
+    setCustName(job.custName || '');
+    setCustPhone(job.custPhone || '');
+    setCustEmail(job.custEmail || '');
+    setVehicle(job.vehicle || null);
+    setActiveHoistJobId(job.jobId || job.id || null);
+    if (job.vehicle) {
+      const existing = garageVehicles.find(v => v.rego === job.vehicle?.rego);
+      if (existing) setActiveVehicleId(existing.id);
+    }
+    if (targetBayId) {
+      setSaveToast(`Job loaded into ${targetBayId}`);
+      setTimeout(() => setSaveToast(null), 3000);
+    }
+  };
+
+  // In-Progress Delete Guard: remove a job from the hoist folder manually
+  const handleDeleteHoistJob = (jobId) => {
+    setHoistJobs(prev => prev.filter(j => (j.jobId || j.id) !== jobId));
+    if (activeHoistJobId === jobId) {
+      setActiveHoistJobId(null);
+      setCart([]);
+      setConsumables([]);
+      setLaborHours(0);
+      setDiagnostic('');
+      setCustName('');
+      setCustPhone('');
+      setCustEmail('');
+      setVehicle(null);
+      setActiveVehicleId(null);
+    }
+  };
+
+  // ── Vault allocation (mount to bay + remove from vault) ──
+  const handleMountVaultItem = (vaultItem, targetBayId = null) => {
+    setCart(prev => [...prev, { ...vaultItem, id: uid(), unitPrice: vaultItem.unitPrice || 0, qty: 1, fromVault: true, vaultId: vaultItem.vaultId, bayId: targetBayId }]);
+    setVault(prev => prev.filter(v => v.vaultId !== vaultItem.vaultId));
+    setAllocModalOpen(false);
+    setSaveToast(`Part mounted to ${targetBayId || 'active job card'}.`);
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  const handleAllocateFromVault = (vaultId) => {
+    const item = vault.find(v => v.vaultId === vaultId);
+    if (item) handleMountVaultItem(item);
+  };
+
+  // ── Vault batch allocation ──
+  const handleBatchAllocate = (selectedVaultIds, targetBayId) => {
+    const items = vault.filter(v => selectedVaultIds.includes(v.vaultId));
+    setCart(prev => [...prev, ...items.map(v => ({ ...v, id: uid(), unitPrice: v.unitPrice || 0, qty: 1, fromVault: true, vaultId: v.vaultId, bayId: targetBayId }))]);
+    setVault(prev => prev.filter(v => !selectedVaultIds.includes(v.vaultId)));
+    setAllocModalOpen(false);
+    setSaveToast(`${items.length} item(s) allocated to Bay ${targetBayId}`);
+    setTimeout(() => setSaveToast(null), 3500);
+  };
+
+  // ── Return part from job card back to vault ──
+  const handleRemoveFromCart = (id) => {
+    const item = cart.find(c => c.id === id);
+    if (item && item.fromVault && item.vaultId) {
+      // Push the complete unchanged part object back to its designated inventory folder
+      const folder = item.source || item.category || 'part';
+      setVault(prev => [...prev, { ...item, vaultId: item.vaultId, status: 'DELIVERED TO GARAGE VAULT', source: folder }]);
+    }
+    setCart(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleRemoveFromCartDrawer = (id) => {
+    const item = cart.find(c => c.id === id);
+    if (item && item.fromVault && item.vaultId) {
+      const folder = item.source || item.category || 'part';
+      setVault(prev => [...prev, { ...item, vaultId: item.vaultId, status: 'DELIVERED TO GARAGE VAULT', source: folder }]);
+    }
+    setCart(prev => prev.filter(c => c.id !== id));
+  };
+
+  // ── Store dropdown purchase handlers (lubricants, consumables, accessories) ──
+  const handlePurchaseLubricant = (item) => {
+    const price = role === 'pro' ? (item.trade ?? item.retail) : (item.retail ?? item.trade);
+    if (role === 'diy') {
+      setCart(prev => [...prev, { ...item, id: uid(), unitPrice: price, qty: 1, tier: 'local' }]);
+      setSaveToast('Item added to your sourcing basket.');
+      setTimeout(() => setSaveToast(null), 3000);
+    } else {
+      setConsumables(prev => [...prev, { ...item, id: uid(), unitPrice: price, qty: 1, source: 'lubricant' }]);
+      dispatchToBankFeed({ description: `Lubricant: ${item.title}`, amount: price, channel: 'Internal Store', ref: `LUB-${Date.now()}` });
+    }
+  };
+  const handlePurchaseConsumable = (item) => {
+    const price = role === 'pro' ? (item.trade ?? item.retail) : (item.retail ?? item.trade);
+    if (role === 'diy') {
+      setCart(prev => [...prev, { ...item, id: uid(), unitPrice: price, qty: 1, tier: 'local' }]);
+      setSaveToast('Item added to your sourcing basket.');
+      setTimeout(() => setSaveToast(null), 3000);
+    } else {
+      setConsumables(prev => [...prev, { ...item, id: uid(), unitPrice: price, qty: 1, source: 'consumable' }]);
+      dispatchToBankFeed({ description: `Consumable: ${item.title}`, amount: price, channel: 'Internal Store', ref: `CON-${Date.now()}` });
+    }
+  };
+  const handlePurchaseAccessory = (item) => {
+    const price = role === 'pro' ? (item.trade ?? item.retail) : (item.retail ?? item.trade);
+    setCart(prev => [...prev, { ...item, id: uid(), unitPrice: price, qty: 1, tier: 'accessory' }]);
+    dispatchToBankFeed({ description: `Accessory: ${item.title}`, amount: price, channel: 'Internal Store', ref: `ACC-${Date.now()}` });
+  };
+
+  const handleVerifyBankFeed = async (invoice) => {
+    const deposit = await simulateInboundDeposit(invoice);
+    if (deposit.ok) {
+      const settledInvoice = { ...invoice, paymentStatus: 'PAID', settledAt: deposit.depositedAt, receiptId: `OSKO-${Date.now()}` };
+      setPaidInvoices(prev => [...prev, settledInvoice]);
+      setUnpaidInvoices(prev => prev.filter(i => i.invoiceNo !== invoice.invoiceNo));
+      // Auto-purge: delete the vehicle chip linked to this repair from the active Garage Bay list
+      if (invoice.vehicleRego || invoice.vehicle) {
+        const regoMatch = invoice.vehicleRego || (invoice.vehicle?.rego);
+        setGarageVehicles(prev => prev.filter(v => v.rego !== regoMatch));
+        if (vehicle && vehicle.rego === regoMatch) {
+          setVehicle(null);
+          setActiveVehicleId(null);
+        }
+      }
+      setSaveToast(`Bank feed matched: ${invoice.invoiceNo} — ${fmt(invoice.grandTotal, region)} via OSKO`);
+      setTimeout(() => setSaveToast(null), 4000);
+    }
+  };
+
+  const handleConnectBankFeed = async () => {
+    const result = await connectOpenBankingFeed();
+    setBankFeedStatus(result);
+    return result;
+  };
+
+  // ── Accounting export & accountant email ──
+  const handleExportToAccounting = async (items) => {
+    await streamInvoiceToLedger(items[0]);
+  };
+
+  const handleEmailAccountant = async (items) => {
+    await triggerXeroAccountantSync(items[0], corpProfile.accountantEmail || 'accountant@tax.com');
+  };
+
+  // ── Bank feed (on-demand only) ──
+  const handleLinkAto = async () => linkAtoSbr();
+  const handleConnectLedger = async (provider) => connectAccountingSoftware(provider);
+  const handleInviteAccountant = async (email) => inviteAccountant(email);
+
+  // ── Sign Out ──
+  const handleSignOut = () => {
+    setUserSession(null);
+    setAccepted(false);
+    setGarageVehicles([]);
+    setActiveVehicleId(null);
+    setVehicle(null);
+    setCart([]);
+    setConsumables([]);
+    setResults(null);
+    setVault([]);
+    setHoistJobs([]);
+    setUnpaidInvoices([]);
+    setPaidInvoices([]);
+    setLaborHours(0);
+    setLaborRate(95);
+    setDiagnostic('');
+    setCustName('');
+    setCustPhone('');
+    setCustEmail('');
+    setBankFeedStatus(null);
+    setCorpProfile({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
+    setBankFeedEntries([]);
+    setLedgerEntries([]);
+    try { localStorage.removeItem('partsforge_session'); localStorage.removeItem('partsforge_safety_agreed'); } catch {}
+  };
+
+  // ── Render gates (auth → waiver → app) ──
+  if (!userSession) return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
+  if (!accepted) return <SafetyShield onAccept={handleAcceptTerms} />;
+
+  // ── Seller role: exclusive B2B Industrial Transport & Logistics Command Terminal ──
+  if (userSession.role === 'SELLER') {
+    return (
+      <AppErrorBoundary>
+        <SellerConsole
+          region={region}
+          usStateCode={usStateCode}
+          onDispatchToBankFeed={dispatchToBankFeed}
+          onSignOut={handleSignOut}
+          corpProfile={corpProfile}
+          setCorpProfile={setCorpProfile}
+          regionCode={regionCode}
+          onRegionChange={handleRegionChange}
+          usStates={REGIONS.US.usStates || []}
+          onUsStateChange={handleUsStateChange}
+          onConnectLedger={handleConnectLedger}
+          onConnectBankFeed={handleConnectBankFeed}
+          bankFeedStatus={bankFeedStatus}
+        />
+      </AppErrorBoundary>
+    );
+  }
+
+  return (
+    <AppErrorBoundary>
+      <div className="min-h-screen" style={{ background: C.bg, color: C.text }}>
+        {/* Top HUD Nav */}
+        <nav className="sticky top-0 z-50 border-b" style={{ borderColor: C.border, background: `${C.bg}f0` }}>
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-950" style={{ background: C.orange }}>
+                <Wrench className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-50">PartsForge Garage</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>{TIER_LABELS[userSession.role]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <GlobalRegionSelector regionCode={regionCode} onRegionChange={handleRegionChange} usStateCode={usStateCode} onUsStateChange={handleUsStateChange} />
+              <button onClick={() => setIsCartOpen(true)} className="relative flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition" style={{ borderColor: C.border, background: C.panel, color: C.text }}>
+                <ShoppingCart className="h-4 w-4" style={{ color: C.orange }} /> Cart
+                {cart.length > 0 && <span className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-slate-950" style={{ background: C.orange }}>{cart.length}</span>}
+              </button>
+              <AccountSettingsDropdown
+                corpProfile={corpProfile} setCorpProfile={setCorpProfile}
+                matchedAccount={matchedTradeAccount}
+                paidInvoices={paidInvoices}
+                onLinkAto={handleLinkAto}
+                onConnectLedger={handleConnectLedger}
+                onInviteAccountant={handleInviteAccountant}
+                onConnectBankFeed={handleConnectBankFeed}
+                bankFeedStatus={bankFeedStatus}
+                onExportToAccounting={handleExportToAccounting}
+                onEmailAccountant={handleEmailAccountant}
+                regionCode={regionCode}
+              />
+              <button onClick={handleSignOut} className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition" style={{ borderColor: `${C.red}30`, background: `${C.red}08`, color: C.red }}>
+                <LogOut className="h-4 w-4" /> Sign Out
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        <FixedVehicleHUD
+          vehicle={garageVehicles.find(v => v.id === activeVehicleId) || vehicle}
+          vehicles={garageVehicles}
+          onOpenFolder={() => setGarageFolderOpen(true)}
+          onEdit={handleEditVehicle}
+        />
+
+        <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+          {/* Save toast */}
+          {saveToast && (
+            <div className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs" style={{ borderColor: `${C.emerald}40`, background: `${C.emerald}10`, color: C.emerald }}>
+              <CheckCircle2 className="h-4 w-4 shrink-0" /> {saveToast}
+            </div>
+          )}
+
+          {/* Scanner */}
+          <ScannerPanel onRego={handleRego} onVin={handleVin} onPhoto={handlePhoto} onCommit={handleCommitVehicle} loading={regoLoading} vehicle={vehicle} scanning={scanning} />
+
+          {/* Parts Search + Results */}
+          <PartsSearch onSearch={handleSearch} loading={partsLoading} />
+          <PartsResults results={results} role={role} onAdd={handleAddToCart} onAddConsumable={handleAddConsumable} cartIds={cartIds} />
+
+          {/* DIY Driver: Modular Store Catalog Buttons */}
+          {role === 'diy' && (
+            <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+                <Store className="h-3.5 w-3.5" style={{ color: C.orange }} /> Automotive Store Catalogs
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={LUBRICANTS_CATALOG.length} onClick={() => setCatalogWindow('lubricants')} />
+                <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={CONSUMABLES_CATALOG_FLAT.length} onClick={() => setCatalogWindow('consumables')} />
+                <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={ACCESSORIES_CATALOG.length} onClick={() => setCatalogWindow('accessories')} />
+                <StoreCatalogButton label="Specialty Shop Tools" icon={<Wrench className="h-4 w-4" />} accent={C.orange} count={SPECIALTY_TOOLS_CATALOG.length} onClick={() => setCatalogWindow('tools')} />
+              </div>
+            </div>
+          )}
+
+          {/* DIY Driver: Purchased Items Log History Vault */}
+          {role === 'diy' && (
+            <HistoryVault vault={vault} region={region} />
+          )}
+
+          {/* Mechanic-only sections */}
+          {role === 'pro' && (
+            <>
+              <OnTheHoistRepository savedJobs={hoistJobs} onResume={handleResumeJob} onDelete={handleDeleteHoistJob} bayOptions={BAY_OPTIONS} />
+
+              <JobCard
+                cart={cart} role={role}
+                laborHours={laborHours} setLaborHours={setLaborHours}
+                laborRate={laborRate} setLaborRate={setLaborRate}
+                taxOn={taxOn} setTaxOn={setTaxOn}
+                diagnostic={diagnostic} setDiagnostic={setDiagnostic}
+                onInc={handleInc} onDec={handleDec} onRemove={handleRemoveFromCart}
+                onUpdateItem={handleUpdateCartItem}
+                consumables={consumables}
+                onUpdateConsumable={handleUpdateConsumable}
+                onRemoveConsumable={handleRemoveConsumable}
+                storeDropdowns={
+                  <div className="space-y-2">
+                    <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={LUBRICANTS_CATALOG.length} onClick={() => setCatalogWindow('lubricants')} />
+                    <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={CONSUMABLES_CATALOG_FLAT.length} onClick={() => setCatalogWindow('consumables')} />
+                    <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={ACCESSORIES_CATALOG.length} onClick={() => setCatalogWindow('accessories')} />
+                    <StoreCatalogButton label="Specialty Shop Tools" icon={<Wrench className="h-4 w-4" />} accent={C.orange} count={SPECIALTY_TOOLS_CATALOG.length} onClick={() => setCatalogWindow('tools')} />
+                  </div>
+                }
+                custName={custName} setCustName={setCustName}
+                custPhone={custPhone} setCustPhone={setCustPhone}
+                custEmail={custEmail} setCustEmail={setCustEmail}
+                vehicle={vehicle}
+                onSaveProgress={handleSaveProgress}
+                onCompileInvoice={handleCompileInvoice}
+                onOpenAllocation={() => setAllocModalOpen(true)}
+                region={region} effectiveTaxRate={effectiveTaxRate}
+              />
+
+              <VaultPanel vault={vault} onMount={handleMountVaultItem} bayOptions={BAY_OPTIONS} region={region} />
+
+              {/* Live Bank Feed + Accounting Ledger */}
+              <BankFeedPanel bankFeedEntries={bankFeedEntries} ledgerEntries={ledgerEntries} region={region} />
+
+              <UnpaidInvoicesDirectory invoices={unpaidInvoices} onSettle={(inv) => setCheckoutInvoice(inv)} onVerifyBank={handleVerifyBankFeed} region={region} />
+            </>
+          )}
+
+          <footer className="border-t pt-4 text-center text-xs" style={{ borderColor: C.border, color: C.textDim }}>
+            PartsForge — three-sided auto parts marketplace · ForgedParts Pty Ltd
+          </footer>
+        </main>
+
+        {/* Garage Bay Folder Modal */}
+        <GarageBayFolderModal
+          open={garageFolderOpen}
+          vehicles={garageVehicles}
+          activeId={activeVehicleId}
+          onSelect={handleSelectVehicle}
+          onRemove={handleRemoveVehicle}
+          onClose={() => setGarageFolderOpen(false)}
+          onEdit={handleEditVehicle}
+        />
+
+        {/* Store Catalog Windows */}
+        {catalogWindow === 'lubricants' && (
+          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={LUBRICANTS_CATALOG} role={role} onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty)} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)} />
+        )}
+        {catalogWindow === 'consumables' && (
+          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={CONSUMABLES_CATALOG_FLAT} role={role} onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty)} accent={C.cyan} region={region} onClose={() => setCatalogWindow(null)} />
+        )}
+        {catalogWindow === 'accessories' && (
+          <StoreCatalogWindow label="Workshop Accessories Catalog" icon={<Wrench className="h-5 w-5" />} items={ACCESSORIES_CATALOG} role={role} onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty)} accent={C.emerald} region={region} onClose={() => setCatalogWindow(null)} />
+        )}
+        {catalogWindow === 'tools' && (
+          <StoreCatalogWindow label="Specialty Shop Tools Catalog" icon={<Wrench className="h-5 w-5" />} items={SPECIALTY_TOOLS_CATALOG} role={role} onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty)} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)} />
+        )}
+
+        {/* Cart Drawer */}
+        <CartDrawer
+          open={isCartOpen} onClose={() => setIsCartOpen(false)}
+          cart={cart} onInc={handleInc} onDec={handleDec} onRemove={handleRemoveFromCartDrawer}
+          onCheckout={handleCheckout} role={role} region={region} usStateCode={usStateCode}
+          consolidationEnabled={consolidationEnabled} onToggleConsolidation={() => setConsolidationEnabled(v => !v)}
+        />
+
+        {/* Allocation Matrix Modal */}
+        <AllocationMatrixModal
+          open={allocModalOpen} onClose={() => setAllocModalOpen(false)}
+          vault={vault} onBatchAllocate={handleBatchAllocate}
+          bayOptions={BAY_OPTIONS}
+          region={region}
+        />
+
+        {/* Customer Checkout Portal */}
+        {checkoutInvoice && (
+          <CustomerCheckoutPortal
+            invoice={checkoutInvoice}
+            onSettle={handleSettleInvoice}
+            onExit={() => setCheckoutInvoice(null)}
+            region={region}
+          />
+        )}
+      </div>
+    </AppErrorBoundary>
+  );
+}
