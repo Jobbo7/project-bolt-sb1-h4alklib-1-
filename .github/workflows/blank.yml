@@ -98,10 +98,10 @@ jobs:
               id 'com.android.application'
           }
           android {
-              namespace 'com.partsforge.app'
+              namespace 'com.partsforge.trade'
               compileSdk 34
               defaultConfig {
-                  applicationId "com.partsforge.app"
+                  applicationId "com.partsforge.trade"
                   minSdk 22
                   targetSdk 34
                   versionCode 1
