@@ -74,7 +74,7 @@ jobs:
           cd ${{ env.TRUE_PROJECT_ROOT }}
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://android.com"
+         <manifest xmlns:android="http://android.com"
               package="com.partsforge.trade">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-feature android:name="android.hardware.camera" android:required="true" />
