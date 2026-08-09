@@ -113,7 +113,7 @@ jobs:
       - name: Compile Official Android App Bundle (.aab) via Native Cloud Gradle
         run: |
           cd ${{ env.TRUE_PROJECT_ROOT }}/android
-          # Absolute string patch command to guarantee schema validity prior to compilation
+          # Target file path swap fixing the replacement command string natively
           sed -i 's|http://android.com|http://android.com|g' app/src/main/AndroidManifest.xml || true
           chmod +x gradlew
           ./gradlew bundleRelease
