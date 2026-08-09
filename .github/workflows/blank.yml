@@ -74,7 +74,7 @@ jobs:
           cd ${{ env.TRUE_PROJECT_ROOT }}
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://android.com"
+          <manifest xmlns:android="http://android.com"
               package="com.partsforge.trade">
               <uses-permission android:name="android.permission.CAMERA" />
               <uses-feature android:name="android.hardware.camera" android:required="true" />
@@ -113,8 +113,6 @@ jobs:
       - name: Compile Official Android App Bundle (.aab) via Native Cloud Gradle
         run: |
           cd ${{ env.TRUE_PROJECT_ROOT }}/android
-          # String replacement safety valve that overrides any domain typos right before compilation
-          find . -name "AndroidManifest.xml" -exec sed -i 's|http://android.com|http://android.com|g' {} + || true
           chmod +x gradlew
           ./gradlew bundleRelease
 
