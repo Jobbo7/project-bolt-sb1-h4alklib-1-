@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PartsForge",
-    "slug": "partsforge-app",
+    "slug": "partsforge-app-ktibdqr7tyz2b866iryjt",
     "owner": "jobbo7",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -32,6 +32,9 @@
         "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
+    "platforms": [
+      "android"
+    ],
     "extra": {
       "eas": {
         "projectId": "b75bf8b0-3a72-4a2a-a6cc-f05f4a7e6ccc"
