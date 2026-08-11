@@ -5,13 +5,7 @@
     "owner": "jobbo7",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#070A12"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -22,10 +16,6 @@
     "android": {
       "package": "com.partsforge.trade",
       "versionCode": 1,
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#070A12"
-      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
