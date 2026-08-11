@@ -24,12 +24,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Hard Purge Native Android Caches
-        run: |
-          rm -rf android || true
-          rm -rf ./android || true
-          rm -f capacitor.config.json || true
-
       - name: Patch Package to Native Assets Build Target
         run: |
           sed -i 's/"build": "tsc && vite build"/"build": "vite build"/g' package.json || true
@@ -41,7 +35,7 @@ jobs:
       - name: Bundle Production Web Code via Vite
         run: npm run build
 
-      - name: Build Fresh Pure Native Mobile Wrapping Layer
+      - name: Build and Sync Native Mobile Layer
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
           
@@ -53,7 +47,13 @@ jobs:
           }
           EOF
           
-          npx cap add android
+          # Smart Path Check: Skip adding the android folder if it is already in your repository branch
+          if [ ! -d "android" ]; then
+            npx cap add android
+          else
+            echo "Android folder detected in source control. Skipping add block."
+          fi
+          
           npx cap sync android
 
       - name: Inject High Stability Android Compilation Variables
