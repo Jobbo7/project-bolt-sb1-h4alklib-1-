@@ -11,6 +11,7 @@
       "distribution": "internal"
     },
     "production": {
+      "node": "24.19.0",
       "android": {
         "buildType": "app-bundle"
       }
