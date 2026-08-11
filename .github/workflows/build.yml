@@ -70,7 +70,7 @@ jobs:
                       android {
                           compileSdkVersion 35
                           defaultConfig {
-                              minSdkVersion 22
+                              minSdkVersion 24
                               targetSdkVersion 35
                           }
                       }
