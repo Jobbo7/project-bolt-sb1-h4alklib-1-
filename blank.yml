@@ -24,20 +24,30 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Force Purge Incompatible Web Workspace Layouts
+      - name: Hard Sandbox Native Mobile Workspace
         run: |
-          # Physically remove conflicting web directories so the compiler can only see our clean mobile wrapper layout
-          rm -rf src || true
-          rm -rf server || true
-          rm -rf supabase || true
-          rm -f vite.config.ts || true
-          rm -f tsconfig.json || true
+          # Create a separate clean workspace folder
+          mkdir -p ../mobile-sandbox
+          
+          # Move ONLY the clean mobile configuration and wrapper files into the isolated area
+          cp package.json ../mobile-sandbox/
+          cp app.json ../mobile-sandbox/
+          cp eas.json ../mobile-sandbox/
+          cp index.js ../mobile-sandbox/
+          cp babel.config.js ../mobile-sandbox/
+          cp metro.config.js ../mobile-sandbox/
+          
+          # Switch the primary runner environment to the clean sandbox directory
+          echo "SANDBOX_ROOT=$(cd ../mobile-sandbox && pwd)" >> $GITHUB_ENV
 
-      - name: Install Dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Build and Sync Native Project Assets
+      - name: Install Pure Mobile Dependencies
         run: |
+          cd ${{ env.SANDBOX_ROOT }}
+          npm install --legacy-peer-deps
+
+      - name: Build Isolated Production Assets
+        run: |
+          cd ${{ env.SANDBOX_ROOT }}
           npx expo prebuild --no-install --platform android
           cd android
           chmod +x gradlew
