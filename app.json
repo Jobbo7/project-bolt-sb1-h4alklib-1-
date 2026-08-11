@@ -1,34 +1,27 @@
 {
-  "expo": {
-    "name": "PartsForge",
-    "slug": "partsforge-app-ktibdqr7tyz2b866iryjt",
-    "owner": "jobbo7",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.partsforge.trade"
-    },
-    "android": {
-      "package": "com.partsforge.trade",
-      "versionCode": 1,
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
-      ]
-    },
-    "platforms": [
-      "android"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "b75bf8b0-3a72-4a2a-a6cc-f05f4a7e6ccc"
-      }
-    }
+  "main": "node_modules/expo/AppEntry.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "lucide-react": "^0.344.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "expo": "^51.0.0",
+    "react-native": "0.74.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.1",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.18",
+    "eslint": "^9.9.1",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.11",
+    "globals": "^15.9.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.3.0",
+    "vite": "^5.4.2"
   }
 }
