@@ -1,0 +1,42 @@
+name: Build Android Production Bundle
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  compile-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java JDK Compiler Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build and Sync Native Project Assets
+        run: |
+          npx expo prebuild --no-install --platform android
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
+      - name: Upload Final Build Artifact to Dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: partsforge-release.aab
+          path: "**/android/app/build/outputs/bundle/release/app-release.aab"
+          if-no-files-found: error
