@@ -32,7 +32,6 @@ jobs:
 
       - name: Patch Package Build Parameters
         run: |
-          # Overwrite scripts to ensure Vite compiles assets cleanly without strict tsc verification loops
           sed -i 's/"build": "tsc && vite build"/"build": "vite build"/g' package.json || true
           sed -i 's/"build": "tsc && build"/"build": "vite build"/g' package.json || true
 
@@ -44,14 +43,10 @@ jobs:
 
       - name: Hard Sandbox Native Mobile Workspace
         run: |
-          # Construct an isolated staging workspace away from local web configs
           mkdir -p ../mobile-staging
-          
-          # Move ONLY the pre-built web assets and package descriptors into the isolation container
           cp -r dist ../mobile-staging/
           cp package.json ../mobile-staging/
           
-          # Force configure a clean, independent wrapper footprint pointing to the standalone assets
           cat << 'EOF' > ../mobile-staging/capacitor.config.json
           {
             "appId": "com.partsforge.trade",
@@ -60,7 +55,6 @@ jobs:
           }
           EOF
           
-          # Export the clean workspace root directory link to the runner ecosystem
           echo "STAGING_ROOT=$(cd ../mobile-staging && pwd)" >> $GITHUB_ENV
 
       - name: Build Pristine Native Mobile Layer Inside Sandbox
@@ -70,20 +64,32 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Inject High Stability Android Compilation Variables
+      - name: Inject Safe Initialisation Script Overrides
         run: |
-          cd ${{ env.STAGING_ROOT }}
-          if [ -f "android/variables.gradle" ]; then
-            sed -i 's/compileSdkVersion = .*/compileSdkVersion = 34/g' android/variables.gradle || true
-            sed -i 's/targetSdkVersion = .*/targetSdkVersion = 34/g' android/variables.gradle || true
-            sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle || true
-          fi
+          cd ${{ env.STAGING_ROOT }}/android
+          
+          # Inject high-stability global compiler property rules right into the root project file wrapper
+          cat << 'EOF' >> build.gradle
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      android {
+                          compileSdkVersion 34
+                          defaultConfig {
+                              minSdkVersion 22
+                              targetSdkVersion 34
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Compile Official Android App Bundle (.aab) via Isolated Cloud Gradle
         run: |
           cd ${{ env.STAGING_ROOT }}/android
           chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon --stacktrace
+          ./gradlew bundleRelease --no-daemon --no-build-cache --parallel
 
       - name: Upload Final Build Artifact to Dashboard
         uses: actions/upload-artifact@v4
