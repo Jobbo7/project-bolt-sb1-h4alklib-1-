@@ -88,6 +88,33 @@ jobs:
           }
           EOF
 
+      - name: Generate Automated Production Release Upload Keystore
+        run: |
+          cd ${{ env.STAGING_ROOT }}/android/app
+          # Generate a secure, temporary cryptographic signing key inside the workspace container paths
+          keytool -genkey -v -keystore release.keystore -alias partsforge_key -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=PartsForge, OU=Production, O=PartsForge, L=Melbourne, S=Victoria, C=AU" \
+            -storepass "partsforge123" -keypass "partsforge123"
+          
+          # Force link the signing properties directly into the Android build configurations
+          cat << 'EOF' >> build.gradle
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file("release.keystore")
+                      storePassword "partsforge123"
+                      keyAlias "partsforge_key"
+                      keyPassword "partsforge123"
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
       - name: Compile Official Android App Bundle (.aab) via Isolated Cloud Gradle
         run: |
           cd ${{ env.STAGING_ROOT }}/android
