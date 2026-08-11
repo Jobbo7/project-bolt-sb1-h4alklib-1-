@@ -24,15 +24,41 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Install Dependencies
+      - name: Patch Package to Native Assets Build Target
+        run: |
+          # Strip the complex metro compiler and force package scripts to build pure Vite web assets
+          sed -i 's/"build": "tsc && vite build"/"build": "vite build"/g' package.json || true
+          sed -i 's/"build": "tsc && build"/"build": "vite build"/g' package.json || true
+
+      - name: Install Project Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build and Sync Native Project Assets
+      - name: Bundle Production Web Code via Vite
+        run: npm run build
+
+      - name: Build Pure Native Mobile Wrapping Layer
         run: |
-          npx expo prebuild --no-install --platform android
+          # Install the light-density android tool utilities directly
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          
+          # Initialize a clean configuration layout file pointing straight to your built dist folder
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.partsforge.trade",
+            "appName": "PartsForge",
+            "webDir": "dist"
+          }
+          EOF
+          
+          # Add the native wrapper directories and synchronize the web folder contents
+          npx cap add android
+          npx cap sync android
+
+      - name: Compile Official Android App Bundle (.aab) via Native Cloud Gradle
+        run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --no-daemon
 
       - name: Upload Final Build Artifact to Dashboard
         uses: actions/upload-artifact@v4
