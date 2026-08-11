@@ -24,8 +24,15 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Patch Package to Native Assets Build Target
+      - name: Force Clean Leftover Directory Fragments
         run: |
+          rm -rf android || true
+          rm -rf ./android || true
+          rm -f capacitor.config.json || true
+
+      - name: Patch Package Build Parameters
+        run: |
+          # Overwrite scripts to ensure Vite compiles assets cleanly without strict tsc verification loops
           sed -i 's/"build": "tsc && vite build"/"build": "vite build"/g' package.json || true
           sed -i 's/"build": "tsc && build"/"build": "vite build"/g' package.json || true
 
@@ -35,11 +42,17 @@ jobs:
       - name: Bundle Production Web Code via Vite
         run: npm run build
 
-      - name: Build and Sync Native Mobile Layer
+      - name: Hard Sandbox Native Mobile Workspace
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          # Construct an isolated staging workspace away from local web configs
+          mkdir -p ../mobile-staging
           
-          cat << 'EOF' > capacitor.config.json
+          # Move ONLY the pre-built web assets and package descriptors into the isolation container
+          cp -r dist ../mobile-staging/
+          cp package.json ../mobile-staging/
+          
+          # Force configure a clean, independent wrapper footprint pointing to the standalone assets
+          cat << 'EOF' > ../mobile-staging/capacitor.config.json
           {
             "appId": "com.partsforge.trade",
             "appName": "PartsForge",
@@ -47,26 +60,28 @@ jobs:
           }
           EOF
           
-          # Smart Path Check: Skip adding the android folder if it is already in your repository branch
-          if [ ! -d "android" ]; then
-            npx cap add android
-          else
-            echo "Android folder detected in source control. Skipping add block."
-          fi
-          
+          # Export the clean workspace root directory link to the runner ecosystem
+          echo "STAGING_ROOT=$(cd ../mobile-staging && pwd)" >> $GITHUB_ENV
+
+      - name: Build Pristine Native Mobile Layer Inside Sandbox
+        run: |
+          cd ${{ env.STAGING_ROOT }}
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --legacy-peer-deps
+          npx cap add android
           npx cap sync android
 
       - name: Inject High Stability Android Compilation Variables
         run: |
+          cd ${{ env.STAGING_ROOT }}
           if [ -f "android/variables.gradle" ]; then
             sed -i 's/compileSdkVersion = .*/compileSdkVersion = 34/g' android/variables.gradle || true
             sed -i 's/targetSdkVersion = .*/targetSdkVersion = 34/g' android/variables.gradle || true
             sed -i 's/minSdkVersion = .*/minSdkVersion = 22/g' android/variables.gradle || true
           fi
 
-      - name: Compile Official Android App Bundle (.aab) via Native Cloud Gradle
+      - name: Compile Official Android App Bundle (.aab) via Isolated Cloud Gradle
         run: |
-          cd android
+          cd ${{ env.STAGING_ROOT }}/android
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon --stacktrace
 
