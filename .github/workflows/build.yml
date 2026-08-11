@@ -18,11 +18,11 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup Java JDK Compiler Environment
+      - name: Setup Modern Java JDK 21 Compiler Environment
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Force Clean Leftover Directory Fragments
         run: |
@@ -68,7 +68,6 @@ jobs:
         run: |
           cd ${{ env.STAGING_ROOT }}/android
           
-          # Inject high-stability global compiler property rules right into the root project file wrapper
           cat << 'EOF' >> build.gradle
           subprojects {
               afterEvaluate { project ->
