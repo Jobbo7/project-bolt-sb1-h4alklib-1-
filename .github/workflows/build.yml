@@ -13,11 +13,6 @@ jobs:
       - name: Checkout Source Code Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js Environment
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Setup Modern Java JDK 21 Compiler Environment
         uses: actions/setup-java@v4
         with:
@@ -81,7 +76,6 @@ jobs:
                       }
                   }
               }
-              // Force clear any old duplicate duplicate Kotlin configurations
               configurations.all {
                   resolutionStrategy.eachDependency { DependencyResolveDetails details ->
                       if (details.requested.group == 'org.jetbrains.kotlin') {
@@ -103,6 +97,6 @@ jobs:
       - name: Upload Final Build Artifact to Dashboard
         uses: actions/upload-artifact@v4
         with:
-          name: partsforge-release.aab
-          path: "**/android/app/build/outputs/bundle/release/app-release.aab"
+          name: partsforge-release-package
+          path: /home/runner/work/project-bolt-sb1-h4alklib-1-/mobile-staging/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
