@@ -1,11 +1,13 @@
 {
+  "main": "node_modules/expo/AppEntry.js",
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.344.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "expo": "^51.0.0",
-    "react-native": "0.74.5"
+    "react-native": "0.74.5",
+    "react-native-webview": "13.8.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
