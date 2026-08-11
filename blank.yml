@@ -24,34 +24,39 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Hard Sandbox Native Mobile Workspace
+      - name: Patch Package to Native Assets Build Target
         run: |
-          # Create a separate clean workspace folder
-          mkdir -p ../mobile-sandbox
-          
-          # Move ONLY the clean mobile configuration and wrapper files into the isolated area
-          cp package.json ../mobile-sandbox/
-          cp app.json ../mobile-sandbox/
-          cp eas.json ../mobile-sandbox/
-          cp index.js ../mobile-sandbox/
-          cp babel.config.js ../mobile-sandbox/
-          cp metro.config.js ../mobile-sandbox/
-          
-          # Switch the primary runner environment to the clean sandbox directory
-          echo "SANDBOX_ROOT=$(cd ../mobile-sandbox && pwd)" >> $GITHUB_ENV
+          sed -i 's/"build": "tsc && vite build"/"build": "vite build"/g' package.json || true
+          sed -i 's/"build": "tsc && build"/"build": "vite build"/g' package.json || true
 
-      - name: Install Pure Mobile Dependencies
-        run: |
-          cd ${{ env.SANDBOX_ROOT }}
-          npm install --legacy-peer-deps
+      - name: Install Project Dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Build Isolated Production Assets
+      - name: Bundle Production Web Code via Vite
+        run: npm run build
+
+      - name: Build Pure Native Mobile Wrapping Layer
         run: |
-          cd ${{ env.SANDBOX_ROOT }}
-          npx expo prebuild --no-install --platform android
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.partsforge.trade",
+            "appName": "PartsForge",
+            "webDir": "dist"
+          }
+          EOF
+          
+          # Force clear any pre-existing native cache folder blocks before syncing
+          rm -rf android || true
+          npx cap add android
+          npx cap sync android
+
+      - name: Compile Official Android App Bundle (.aab) via Native Cloud Gradle
+        run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --no-daemon
 
       - name: Upload Final Build Artifact to Dashboard
         uses: actions/upload-artifact@v4
