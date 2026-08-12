@@ -1,126 +1,37 @@
-name: Build Android Production Bundle
+name: Extract Permanent Android PEM Certificate
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to trigger this manually with a single click
 
 jobs:
-  compile-android:
+  generate-pem-file:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Source Code Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Modern Java JDK 21 Compiler Environment
+      - name: Setup Java JDK 21 Environment
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Force Clean Leftover Directory Fragments
+      - name: Ingest Keystore and Extract Clean PEM Document
         run: |
-          rm -rf android || true
-          rm -rf ./android || true
-          rm -f capacitor.config.json || true
-
-      - name: Patch Package Build Parameters
-        run: |
-          sed -i 's/"build": "tsc && vite build"/"build": "vite build"/g' package.json || true
-          sed -i 's/"build": "tsc && build"/"build": "vite build"/g' package.json || true
-
-      - name: Install Project Dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Bundle Production Web Code via Vite
-        run: npm run build
-
-      - name: Hard Sandbox Native Mobile Workspace
-        run: |
-          mkdir -p ../mobile-staging
-          cp -r dist ../mobile-staging/
-          cp package.json ../mobile-staging/
+          # 1. Reconstruct your permanent keystore file from your saved repository secret
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > partsforge-permanent.keystore
           
-          cat << 'EOF' > ../mobile-staging/capacitor.config.json
-          {
-            "appId": "com.partsforge.trade",
-            "appName": "PartsForge",
-            "webDir": "dist"
-          }
-          EOF
-          
-          echo "STAGING_ROOT=$(cd ../mobile-staging && pwd)" >> $GITHUB_ENV
+          # 2. Execute Google's exact export command natively inside the cloud environment
+          keytool -export -rfc -keystore partsforge-permanent.keystore -alias partsforge_key -file upload_certificate.pem -storepass "partsforge123"
 
-      - name: Build Pristine Native Mobile Layer Inside Sandbox
+      - name: Print Raw PEM Certificate Text to Screen
         run: |
-          cd ${{ env.STAGING_ROOT }}
-          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --legacy-peer-deps
-          npx cap add android
-          npx cap sync android
+          echo "========================================================================"
+          echo "📋 COPY EVERYTHING BELOW THIS LINE (INCLUDING THE BEGIN/END TAGS):"
+          echo "========================================================================"
+          cat upload_certificate.pem
+          echo "========================================================================"
 
-      - name: Inject Safe Initialisation Script Overrides
-        run: |
-          cd ${{ env.STAGING_ROOT }}/android
-          
-          cat << 'EOF' >> build.gradle
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty("android")) {
-                      android {
-                          compileSdkVersion 36
-                          defaultConfig {
-                              minSdkVersion 24
-                              targetSdkVersion 36
-                          }
-                      }
-                  }
-              }
-              configurations.all {
-                  resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-                      if (details.requested.group == 'org.jetbrains.kotlin') {
-                          if (details.requested.name == 'kotlin-stdlib-jdk7' || details.requested.name == 'kotlin-stdlib-jdk8') {
-                              details.useTarget "org.jetbrains.kotlin:kotlin-stdlib:${details.requested.version}"
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
-
-      - name: Ingest Permanent Production Upload Key
-        run: |
-          cd ${{ env.STAGING_ROOT }}/android/app
-          # Securely decode your permanent repository secret back into a raw file inside the build machine
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-          
-          cat << 'EOF' >> build.gradle
-          android {
-              signingConfigs {
-                  release {
-                      storeFile file("release.keystore")
-                      storePassword "partsforge123"
-                      keyAlias "partsforge_key"
-                      keyPassword "partsforge123"
-                  }
-              }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.release
-                  }
-              }
-          }
-          EOF
-
-      - name: Compile Official Android App Bundle (.aab) via Isolated Cloud Gradle
-        run: |
-          cd ${{ env.STAGING_ROOT }}/android
-          chmod +x gradlew
-          ./gradlew bundleRelease --no-daemon --no-build-cache --parallel
-
-      - name: Upload Final Build Artifact to Dashboard
+      - name: Upload Raw PEM File as Downloadable Artifact Drop
         uses: actions/upload-artifact@v4
         with:
-          name: partsforge-release-package
-          path: /home/runner/work/project-bolt-sb1-h4alklib-1-/mobile-staging/android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          name: upload_certificate_file
+          path: upload_certificate.pem
