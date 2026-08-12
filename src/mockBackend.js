@@ -1,10 +1,25 @@
 /**
  * PartsForge B2B Mock Backend Simulator Engine
- * Architecture Version: v2.0.3 (Harmonized WMS & Bookkeeping Rollout)
+ * Architecture Version: v2.0.4 (Master Harmonized Dataset)
  * Target Zone: Mernda, South Morang, and Epping Trade Hubs
  */
 
-// 1. Live Active Stock Inventory Database Array
+// 1. FINANCIAL DESK CONSTANTS & CONFIGURATIONS
+export const COURIER_BASE_FEE = 10.00;
+export const TAX_RATE = 0.10; // 10% standard GST allocation
+export const CONSUMABLES_MARKUP = 0.15; // 15% automatic workshop expense buffer
+
+// 2. DISTRIBUTION AND MEMBERSHIP TIERS
+export const SOURCING_TIERS = {
+  LOCAL: { id: 'local', name: 'Epping Regional Hub (30km Hot-Shot Delivery)', speed: '45-Min Express' },
+  NATIONAL: { id: 'national', name: 'Interstate Domestic Grid', speed: '24-Hour Air Freight' }
+};
+
+export const MEMBERSHIP_TIERS = {
+  PILOT_FREE: { id: 'pilot_free', name: 'Northern Corridor Closed Pilot Bay Account', fee: 0.00 }
+};
+
+// 3. LIVE STOCK INVENTORY DATABASE ARRAY (WITH BATCH & LOCATION TAGGING)
 export let mockInventory = [
   {
     sku_code: "DB1200-GCT",
@@ -30,8 +45,8 @@ export let mockInventory = [
   }
 ];
 
-// 2. Active Trade Accounts Database Array (Tracks Workshop Credit Wallet Limits)
-export let mockTradeAccounts = [
+// 4. ACTIVE TRADE ACCOUNTS LEDGER DATABASE
+export let TRADE_ACCOUNTS = [
   {
     workshop_id: "WS-3754-01",
     workshop_name: "Plenty Road Mechanical Care",
@@ -40,7 +55,49 @@ export let mockTradeAccounts = [
   }
 ];
 
-// 3. LEGACY COMPATIBILITY HOOKS (Fixes the SellerConsole.tsx Imports)
+// Re-assign for internal legacy matching logic tracks
+export let mockTradeAccounts = TRADE_ACCOUNTS;
+
+// 5. DATA SEARCH & VEHICLE DISCOVERY RESOLVERS
+export function processFreeRegoLookup(regoString) {
+  console.log(`🔍 Decoding Plate: ${regoString} via State Registry Link`);
+  return { success: true, vin: "MOCKVIN1HG4LL3076", fitment_rego: regoString.toUpperCase() };
+}
+
+export function processVinLookup(vinString) {
+  return { success: true, vin: vinString.toUpperCase(), vehicle_match: "2018 Toyota HiLux Utility Double Cab" };
+}
+
+export function processPartsQuery(queryParameters) {
+  return mockInventory.filter(item => 
+    item.part_title.toLowerCase().includes(queryParameters.toLowerCase()) ||
+    item.sku_code.toLowerCase().includes(queryParameters.toLowerCase())
+  );
+}
+
+// 6. FRONT-END AUXILIARY TOOL & INVENTORY FETCHERS
+export function getToolsForComponent(componentId) {
+  return [{ tool_id: "TL-01", name: "Heavy Duty Brake Caliper Piston Wind-Back Tool Kit" }];
+}
+
+export function getConsumablesForComponent(componentId) {
+  return [{ consumable_id: "CS-04", name: "High-Temperature Silicone Brake Lubricant Aerosol", ex_gst: 8.50 }];
+}
+
+export function getDocsForComponent(componentId) {
+  return [{ doc_id: "DOC-88", title: "OEM Torque Specification Reference Sheet" }];
+}
+
+export function resolveTradeAccount(accountId) {
+  return TRADE_ACCOUNTS.find(acc => acc.workshop_id === accountId) || TRADE_ACCOUNTS[0];
+}
+
+// 7. AUTOMATED WORKFLOW FLOW SEGMENT PACKS
+export function persistJobProgress(jobCardPayload) {
+  console.log("💾 Active job card workflow checkpoint cached safely to repository:", jobCardPayload);
+  return { status: "PERSISTED_SUCCESSFULLY", updated_at: new Date().toISOString() };
+}
+
 export function streamInvoiceToLedger(invoicePayload) {
   console.log("🧾 Legacy Ledger Sync: Invoice streamed to trade account balances.", invoicePayload);
   return { status: "STREAMED_SUCCESSFULLY", ledgerRef: `INV-${Date.now()}` };
@@ -51,7 +108,15 @@ export function connectAccountingSoftware(providerName) {
   return { status: "CONNECTED", provider: providerName };
 }
 
-// 4. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
+export function compileCustomerInvoice(orderObject) {
+  return { invoice_id: `INV-${Date.now()}`, grand_total_inc_gst: orderObject.total * 1.10 };
+}
+
+export function dispatchInvoicePaymentRequest(invoiceId) {
+  return { success: true, processing_status: "SETTLED_VIA_STRIPE_CONNECT" };
+}
+
+// 8. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
 export function translateWMSPayload(rawIncomingArray) {
   return rawIncomingArray.map(item => ({
     sku_code: item.sku_code || item.ItemCode || item.PartNumber || "UNKNOWN_SKU",
@@ -66,7 +131,7 @@ export function translateWMSPayload(rawIncomingArray) {
   }));
 }
 
-// 5. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
+// 9. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
 export function generateOptimizedPickingPath(activeOrdersList) {
   return [...activeOrdersList].sort((a, b) => {
     if (a.bin_location < b.bin_location) return -1;
@@ -75,9 +140,9 @@ export function generateOptimizedPickingPath(activeOrdersList) {
   });
 }
 
-// 6. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
+// 10. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
 export function executeInstantReturnLoop(workshopId, skuCode, creditValue) {
-  const account = mockTradeAccounts.find(acc => acc.workshop_id === workshopId);
+  const account = TRADE_ACCOUNTS.find(acc => acc.workshop_id === workshopId);
   
   const creditTokenReceipt = {
     receipt_id: `CRD-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
