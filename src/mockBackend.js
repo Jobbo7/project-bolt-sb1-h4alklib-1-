@@ -1,6 +1,6 @@
 /**
  * PartsForge B2B Mock Backend Simulator Engine
- * Architecture Version: v2.0.5 (Comprehensive Harmonized Dataset)
+ * Architecture Version: v2.0.6 (Master Compliance & high-Velocity WMS Rollout)
  * Target Zone: Mernda, South Morang, and Epping Trade Hubs
  */
 
@@ -92,34 +92,69 @@ export function getDocsForComponent(componentId) {
 }
 
 export function resolveTradeAccount(accountId) {
-  return TRADE_ACCOUNTS.find(acc => acc.workshop_id === accountId) || TRADE_ACCOUNTS;
+  return TRADE_ACCOUNTS.find(acc => acc.workshop_id === accountId) || TRADE_ACCOUNTS[0];
 }
 
 // 7. AUTOMATED WORKFLOW FLOW SEGMENT PACKS
 export function persistJobProgress(jobCardPayload) {
-  console.log("💾 Active job card workflow checkpoint cached safely:", jobCardPayload);
+  console.log("💾 Active job card cached safely to repository:", jobCardPayload);
   return { status: "PERSISTED_SUCCESSFULLY", updated_at: new Date().toISOString() };
 }
 
 export function streamInvoiceToLedger(invoicePayload) {
-  console.log("🧾 Legacy Ledger Sync: Invoice streamed to trade account balances.", invoicePayload);
+  console.log("🧾 Ledger Sync: Invoice streamed to trade account balances.", invoicePayload);
   return { status: "STREAMED_SUCCESSFULLY", ledgerRef: `INV-${Date.now()}` };
 }
 
-export function connectAccountingSoftware(providerName) {
-  console.log(`🔗 Legacy Integration: Connected natively to ${providerName} cloud accounting ledger.`);
-  return { status: "CONNECTED", provider: providerName };
-}
-
 export function compileCustomerInvoice(orderObject) {
-  return { invoice_id: `INV-${Date.now()}`, grand_total_inc_gst: orderObject.total * 1.10 };
+  return { invoice_id: `INV-${Date.now()}`, grand_total_inc_gst: (orderObject.total || 0) * 1.10 };
 }
 
 export function dispatchInvoicePaymentRequest(invoiceId) {
   return { success: true, processing_status: "SETTLED_VIA_STRIPE_CONNECT" };
 }
 
-// 8. COURIER & LOGISTICS FREIGHT ROUTING DISPATCHERS
+// 8. OPEN BANKING, ACCOUNTING SOFTWARE INTEGRATION, & ATO SBR LAYER
+export function settleInvoiceViaCustomerPortal(invoiceId, paymentToken) {
+  console.log(`💳 Invoice ${invoiceId} marked as SETTLED via user clearing gate.`);
+  return { success: true, transactionId: `TXN-${Math.random().toString(36).substr(2, 9).toUpperCase()}` };
+}
+
+export function connectOpenBankingFeed(bankName) {
+  console.log(`🏦 Open Banking CDR: Connected to ${bankName} customer data feed via Basiq API layer.`);
+  return { success: true, consentId: `CDR-CNS-${Date.now()}` };
+}
+
+export function simulateInboundDeposit(accountToken, valueAmount) {
+  return { success: true, reference: "DEPOSIT-CLEARED", value: parseFloat(valueAmount) };
+}
+
+export function startBasiqBankFeedListener(listenerConfig) {
+  console.log("📡 CDR Webhook: Basiq bank activity daemon actively pooling accounts.");
+  return { success: true, daemonRef: "BASIQ-FEED-LST-ACTIVE" };
+}
+
+export function triggerXeroAccountantSync(ledgerExportPayload) {
+  console.log("💼 Xero API Endpoint: Synchronizing chart of accounts data.");
+  return { success: true, batchId: `XRO-BTC-${Date.now()}` };
+}
+
+export function linkAtoSbr(abnString) {
+  console.log(`🇦🇺 SBR Gateway: Linked securely to ATO corporate infrastructure for ABN: ${abnString}`);
+  return { success: true, sbrToken: "ATO-SBR-AUTH-VALID" };
+}
+
+export function connectAccountingSoftware(providerName) {
+  console.log(`🔗 Integration Established: Connected natively to ${providerName} cloud accounting ledger.`);
+  return { status: "CONNECTED", provider: providerName };
+}
+
+export function inviteAccountant(emailString) {
+  console.log(`✉️ Permission Granted: Accountant seat invite dispatched to ${emailString}`);
+  return { success: true, invitationCode: "ACC-INV-TOK" };
+}
+
+// 9. COURIER & LOGISTICS FREIGHT ROUTING DISPATCHERS
 export function dispatchUberDirectDrivers(deliveryPayload) {
   console.log("🚚 Local Hot-Shot Fleet Dispatched:", deliveryPayload);
   return { success: true, tracking_id: "UBR-EPP-3076", eta_minutes: 45 };
@@ -130,7 +165,7 @@ export function dispatchConsolidatedFreight(freightPayload) {
   return { success: true, tracking_id: "LNH-MEL-SYD", eta_hours: 24 };
 }
 
-// 9. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
+// 10. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
 export function translateWMSPayload(rawIncomingArray) {
   return rawIncomingArray.map(item => ({
     sku_code: item.sku_code || item.ItemCode || item.PartNumber || "UNKNOWN_SKU",
@@ -145,7 +180,7 @@ export function translateWMSPayload(rawIncomingArray) {
   }));
 }
 
-// 10. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
+// 11. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
 export function generateOptimizedPickingPath(activeOrdersList) {
   return [...activeOrdersList].sort((a, b) => {
     if (a.bin_location < b.bin_location) return -1;
@@ -154,7 +189,7 @@ export function generateOptimizedPickingPath(activeOrdersList) {
   });
 }
 
-// 11. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
+// 12. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
 export function executeInstantReturnLoop(workshopId, skuCode, creditValue) {
   const account = TRADE_ACCOUNTS.find(acc => acc.workshop_id === workshopId);
   
