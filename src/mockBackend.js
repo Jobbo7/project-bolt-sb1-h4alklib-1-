@@ -1,6 +1,6 @@
 /**
  * PartsForge B2B Mock Backend Simulator Engine
- * Architecture Version: v2.0.4 (Master Harmonized Dataset)
+ * Architecture Version: v2.0.5 (Comprehensive Harmonized Dataset)
  * Target Zone: Mernda, South Morang, and Epping Trade Hubs
  */
 
@@ -8,6 +8,9 @@
 export const COURIER_BASE_FEE = 10.00;
 export const TAX_RATE = 0.10; // 10% standard GST allocation
 export const CONSUMABLES_MARKUP = 0.15; // 15% automatic workshop expense buffer
+export const PLATFORM_LOGISTICS_MARKUP = 0.05; // 5% internal logistics margin
+export const TRANS_TASMAN_FREIGHT_SURCHARGE = 45.00; 
+export const GLOBAL_DIRECT_FREIGHT_SURCHARGE = 85.00;
 
 // 2. DISTRIBUTION AND MEMBERSHIP TIERS
 export const SOURCING_TIERS = {
@@ -89,12 +92,12 @@ export function getDocsForComponent(componentId) {
 }
 
 export function resolveTradeAccount(accountId) {
-  return TRADE_ACCOUNTS.find(acc => acc.workshop_id === accountId) || TRADE_ACCOUNTS[0];
+  return TRADE_ACCOUNTS.find(acc => acc.workshop_id === accountId) || TRADE_ACCOUNTS;
 }
 
 // 7. AUTOMATED WORKFLOW FLOW SEGMENT PACKS
 export function persistJobProgress(jobCardPayload) {
-  console.log("💾 Active job card workflow checkpoint cached safely to repository:", jobCardPayload);
+  console.log("💾 Active job card workflow checkpoint cached safely:", jobCardPayload);
   return { status: "PERSISTED_SUCCESSFULLY", updated_at: new Date().toISOString() };
 }
 
@@ -116,7 +119,18 @@ export function dispatchInvoicePaymentRequest(invoiceId) {
   return { success: true, processing_status: "SETTLED_VIA_STRIPE_CONNECT" };
 }
 
-// 8. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
+// 8. COURIER & LOGISTICS FREIGHT ROUTING DISPATCHERS
+export function dispatchUberDirectDrivers(deliveryPayload) {
+  console.log("🚚 Local Hot-Shot Fleet Dispatched:", deliveryPayload);
+  return { success: true, tracking_id: "UBR-EPP-3076", eta_minutes: 45 };
+}
+
+export function dispatchConsolidatedFreight(freightPayload) {
+  console.log("✈️ Interstate Linehaul Freight Dispatched:", freightPayload);
+  return { success: true, tracking_id: "LNH-MEL-SYD", eta_hours: 24 };
+}
+
+// 9. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
 export function translateWMSPayload(rawIncomingArray) {
   return rawIncomingArray.map(item => ({
     sku_code: item.sku_code || item.ItemCode || item.PartNumber || "UNKNOWN_SKU",
@@ -131,7 +145,7 @@ export function translateWMSPayload(rawIncomingArray) {
   }));
 }
 
-// 9. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
+// 10. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
 export function generateOptimizedPickingPath(activeOrdersList) {
   return [...activeOrdersList].sort((a, b) => {
     if (a.bin_location < b.bin_location) return -1;
@@ -140,7 +154,7 @@ export function generateOptimizedPickingPath(activeOrdersList) {
   });
 }
 
-// 10. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
+// 11. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
 export function executeInstantReturnLoop(workshopId, skuCode, creditValue) {
   const account = TRADE_ACCOUNTS.find(acc => acc.workshop_id === workshopId);
   
