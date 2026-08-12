@@ -1,6 +1,6 @@
 /**
  * PartsForge B2B Mock Backend Simulator Engine
- * Architecture Version: v2.0.2 (High-Velocity WMS Grid Rollout)
+ * Architecture Version: v2.0.3 (Harmonized WMS & Bookkeeping Rollout)
  * Target Zone: Mernda, South Morang, and Epping Trade Hubs
  */
 
@@ -40,7 +40,18 @@ export let mockTradeAccounts = [
   }
 ];
 
-// 3. Automated Universal WMS Data Translation Mapper
+// 3. LEGACY COMPATIBILITY HOOKS (Fixes the SellerConsole.tsx Imports)
+export function streamInvoiceToLedger(invoicePayload) {
+  console.log("🧾 Legacy Ledger Sync: Invoice streamed to trade account balances.", invoicePayload);
+  return { status: "STREAMED_SUCCESSFULLY", ledgerRef: `INV-${Date.now()}` };
+}
+
+export function connectAccountingSoftware(providerName) {
+  console.log(`🔗 Legacy Integration: Connected natively to ${providerName} cloud accounting ledger.`);
+  return { status: "CONNECTED", provider: providerName };
+}
+
+// 4. AUTOMATED UNIVERSAL WMS DATA TRANSLATION MAPPER
 export function translateWMSPayload(rawIncomingArray) {
   return rawIncomingArray.map(item => ({
     sku_code: item.sku_code || item.ItemCode || item.PartNumber || "UNKNOWN_SKU",
@@ -55,7 +66,7 @@ export function translateWMSPayload(rawIncomingArray) {
   }));
 }
 
-// 4. Automated Pick-Route Optimization Module
+// 5. AUTOMATED PICK-ROUTE OPTIMIZATION MODULE
 export function generateOptimizedPickingPath(activeOrdersList) {
   return [...activeOrdersList].sort((a, b) => {
     if (a.bin_location < b.bin_location) return -1;
@@ -64,7 +75,7 @@ export function generateOptimizedPickingPath(activeOrdersList) {
   });
 }
 
-// 5. Zero-Hold Automated Trade Credit & Return Interceptor
+// 6. ZERO-HOLD AUTOMATED TRADE CREDIT & RETURN INTERCEPTOR
 export function executeInstantReturnLoop(workshopId, skuCode, creditValue) {
   const account = mockTradeAccounts.find(acc => acc.workshop_id === workshopId);
   
