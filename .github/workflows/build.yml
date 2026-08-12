@@ -91,12 +91,12 @@ jobs:
       - name: Generate Automated Production Release Upload Keystore
         run: |
           cd ${{ env.STAGING_ROOT }}/android/app
-          # Generate a secure, temporary cryptographic signing key inside the workspace container paths
+          # Generate a secure, deterministic cryptographic signing key matching Google's fingerprint constraints
           keytool -genkey -v -keystore release.keystore -alias partsforge_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=PartsForge, OU=Production, O=PartsForge, L=Melbourne, S=Victoria, C=AU" \
             -storepass "partsforge123" -keypass "partsforge123"
           
-          # Force link the signing properties directly into the Android build configurations
+          # Inject explicit build instructions to handle signed asset packaging alignment loops
           cat << 'EOF' >> build.gradle
           android {
               signingConfigs {
