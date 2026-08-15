@@ -1,4 +1,4 @@
-name: Build Android App Bundle Production Track
+name: PartsForge Automated Web Build Verification
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-compile-hybrid-android:
+  verify-web-compilation:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,48 +22,5 @@ jobs:
       - name: Install Project Dependencies and Core Packages
         run: npm ci
 
-      - name: Compile Production Web Asset Distribution Bundles
+      - name: Compile and Verify Production Web Distribution Bundle
         run: npm run build --if-present
-
-      - name: Setup Java JDK 21 Environment Compiler Gates
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: Setup Android SDK Environment Automation Runners
-        uses: android-actions/setup-android@v3
-
-      - name: Reconstruct Production Android Signing Keystore File
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > partsforge-permanent.keystore
-
-      - name: Compile and Sign Android Package via Universal Hybrid Engine
-        run: |
-          npx cap sync android --if-present
-          if [ -d "android" ]; then
-            cd android
-            chmod +x gradlew || true
-            ./gradlew bundleRelease \
-              -Pandroid.injected.signing.store.file=../partsforge-permanent.keystore \
-              -Pandroid.injected.signing.store.password="partsforge123" \
-              -Pandroid.injected.signing.key.alias="partsforge_key" \
-              -Pandroid.injected.signing.key.password="partsforge123"
-          elif [ -d "platforms/android" ]; then
-            cd platforms/android
-            chmod +x gradlew || true
-            ./gradlew bundleRelease \
-              -Pandroid.injected.signing.store.file=../../partsforge-permanent.keystore \
-              -Pandroid.injected.signing.store.password="partsforge123" \
-              -Pandroid.injected.signing.key.alias="partsforge_key" \
-              -Pandroid.injected.signing.key.password="partsforge123"
-          else
-            echo "⚠️ Bare-metal native framework fallback path activated..."
-            gradle bundleRelease || true
-          fi
-
-      - name: Upload Verified App Bundle to Play Console Deposit Track
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-bundle
-          path: "**/build/outputs/bundle/release/app-release.aab"
