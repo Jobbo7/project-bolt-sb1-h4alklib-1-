@@ -261,7 +261,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     
                     {/* INCOMING APPROVAL TICKETS FOR OWNER TERMINALS */}
-                    <div className="flex flex-col gap-2.5">
+                                      <div className="flex flex-col gap-2.5">
                       <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Awaiting Owner Intercept:</div>
                       {incomingRequests.length === 0 ? (
                         <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-slate-900">No active employee checkout orders pending validation. System operational.</p>
@@ -279,7 +279,8 @@ export default function App() {
                                 <div>Financial Value Clip: <span className="text-orange-400 font-bold">${req.price.toFixed(2)}</span></div>
                                 <div className="text-slate-500 mt-1">Operator ID: {req.apprentice} [{req.timestamp}]</div>
                               </div>
-                                                        <div className="mt-3.5 flex gap-2 border-t pt-2.5 border-slate-800/60">
+                            </div>
+                            <div className="mt-3.5 flex gap-2 border-t pt-2.5 border-slate-800/60">
                               <button onClick={() => handleOwnerApproveOrder(req.id, 'APPROVE')} className="flex-1 py-1.5 rounded-lg font-bold text-[10px] uppercase bg-emerald-600 text-slate-950 hover:bg-emerald-500 transition-all flex items-center justify-center gap-0.5 shadow-sm">
                                 <Check className="h-3 w-3" /> Approve & Pay
                               </button>
@@ -291,7 +292,6 @@ export default function App() {
                         ))
                       )}
                     </div>
-
 
                     {/* COMPLETED FINANCIAL SETTLEMENT TRANSACTION AUDIT LOGS */}
                     <div className="flex flex-col gap-2.5">
