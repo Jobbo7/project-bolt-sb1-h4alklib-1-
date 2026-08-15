@@ -33,13 +33,12 @@ jobs:
 
       - name: Reconstruct Production Android Signing Keystore File
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/partsforge-permanent.keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > partsforge-permanent.keystore
 
       - name: Compile and Sign Production App Bundle Artifact
         run: |
-          cd android
           ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=partsforge-permanent.keystore \
+            -Pandroid.injected.signing.store.file=../partsforge-permanent.keystore \
             -Pandroid.injected.signing.store.password="partsforge123" \
             -Pandroid.injected.signing.key.alias="partsforge_key" \
             -Pandroid.injected.signing.key.password="partsforge123"
@@ -48,4 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release-bundle
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: app/build/outputs/bundle/release/app-release.aab
