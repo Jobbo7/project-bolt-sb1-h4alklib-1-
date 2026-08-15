@@ -189,10 +189,11 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           )}
 
           <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-2 h-24 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
-            <p className="mb-1 font-semibold" style={{ color: C.orange }}>SAFETY PROTOCOL — USER ACCOUNT RESPONSIBILITY</p>
-            <p className="mb-1">All linked sub-accounts remain the financial and trade license liability of the master account holder. Activity logged via apprentice nodes routes directly to ledger archives.</p>
-            <p>Scroll down to check off the validation tokens.</p>
+            <p className="mb-1 font-semibold" style={{ color: C.orange }}>SECURE GATEWAY & LIABILITY ROUTING AGREEMENT</p>
+            <p className="mb-1">By initializing this node, the user verifies that all linked device sessions, automated courier manifest scans, and purchase orders are routed directly onto the Stripe Live Financial Network under the sole fiscal and trade license liability of the master account holder.</p>
+            <p>Scroll down to authorize this node connection and unlock validation tokens.</p>
           </div>
+
 
           <div className="mt-1 flex items-center gap-2 text-[10px]">
             {scrolled ? (
