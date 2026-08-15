@@ -31,13 +31,25 @@ jobs:
       - name: Setup Android SDK Environment Automation Runners
         uses: android-actions/setup-android@v3
 
+      - name: Locate and Move to the True App Build Directory
+        run: |
+          if [ -f "settings.gradle" ]; then
+            echo "DIR_PATH=." >> $GITHUB_ENV
+          elif [ -d "app" ] && [ -f "app/settings.gradle" ]; then
+            echo "DIR_PATH=app" >> $GITHUB_ENV
+          elif [ -d "android" ]; then
+            echo "DIR_PATH=android" >> $GITHUB_ENV
+          else
+            echo "DIR_PATH=$(find . -name "settings.gradle" -exec dirname {} \; | head -n 1)" >> $GITHUB_ENV
+          fi
+
       - name: Reconstruct Production Android Signing Keystore File
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/partsforge-permanent.keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > ${{ env.DIR_PATH }}/partsforge-permanent.keystore
 
-      - name: Compile and Sign Production App Bundle via Folder Routing Engine
+      - name: Compile and Sign Production App Bundle via Adaptive Engine
         run: |
-          cd android
+          cd ${{ env.DIR_PATH }}
           gradle bundleRelease \
             -Pandroid.injected.signing.store.file=partsforge-permanent.keystore \
             -Pandroid.injected.signing.store.password="partsforge123" \
@@ -48,4 +60,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release-bundle
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: "**/build/outputs/bundle/release/app-release.aab"
