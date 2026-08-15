@@ -28,20 +28,13 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Setup Android SDK Environment Automation Runners
-        uses: android-actions/setup-android@v3
-
-      - name: Reconstruct Production Android Signing Keystore File
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > partsforge-permanent.keystore
-
-      - name: Grant Executable Execution Flags to Gradle Wrapper
-        run: chmod +x ./gradlew
+      - name: Grant Executable Execution Flags to Root Gradle Wrapper
+        run: chmod +x gradlew
 
       - name: Compile and Sign Production App Bundle Artifact
         run: |
           ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=../partsforge-permanent.keystore \
+            -Pandroid.injected.signing.store.file=partsforge-permanent.keystore \
             -Pandroid.injected.signing.store.password="partsforge123" \
             -Pandroid.injected.signing.key.alias="partsforge_key" \
             -Pandroid.injected.signing.key.password="partsforge123"
