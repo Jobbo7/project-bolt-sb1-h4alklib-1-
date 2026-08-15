@@ -1,37 +1,51 @@
-name: Extract Permanent Android PEM Certificate
+name: Build Android App Bundle Production Track
 
 on:
-  workflow_dispatch: # Allows you to trigger this manually with a single click
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  generate-pem-file:
+  build-and-compile-android:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Setup Java JDK 21 Environment
+      - name: Checkout Repository Source Code Files
+        uses: actions/checkout@v4
+
+      - name: Initialize Node.js Environment Matrix
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Project Dependencies and Core Packages
+        run: npm ci
+
+      - name: Setup Java JDK 21 Environment Compiler Gates
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Ingest Keystore and Extract Clean PEM Document
-        run: |
-          # 1. Reconstruct your permanent keystore file from your saved repository secret
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > partsforge-permanent.keystore
-          
-          # 2. Execute Google's exact export command natively inside the cloud environment
-          keytool -export -rfc -keystore partsforge-permanent.keystore -alias partsforge_key -file upload_certificate.pem -storepass "partsforge123"
+      - name: Setup Android SDK Environment Automation Runners
+        uses: android-actions/setup-android@v3
 
-      - name: Print Raw PEM Certificate Text to Screen
+      - name: Reconstruct Production Android Signing Keystore File
         run: |
-          echo "========================================================================"
-          echo "📋 COPY EVERYTHING BELOW THIS LINE (INCLUDING THE BEGIN/END TAGS):"
-          echo "========================================================================"
-          cat upload_certificate.pem
-          echo "========================================================================"
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/partsforge-permanent.keystore
 
-      - name: Upload Raw PEM File as Downloadable Artifact Drop
+      - name: Compile and Sign Production App Bundle Artifact
+        run: |
+          cd android
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=partsforge-permanent.keystore \
+            -Pandroid.injected.signing.store.password="partsforge123" \
+            -Pandroid.injected.signing.key.alias="partsforge_key" \
+            -Pandroid.injected.signing.key.password="partsforge123"
+
+      - name: Upload Verified App Bundle to Play Console Deposit Track
         uses: actions/upload-artifact@v4
         with:
-          name: upload_certificate_file
-          path: upload_certificate.pem
+          name: app-release-bundle
+          path: android/app/build/outputs/bundle/release/app-release.aab
