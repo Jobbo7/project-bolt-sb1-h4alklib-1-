@@ -152,7 +152,6 @@ function SafetyShield({ onAccept }) {
     </div>
   );
 }
-
 // ─── Auth Gate ───────────────────────────────────────────────────────────────
 function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [email, setEmail] = useState('');
@@ -162,35 +161,38 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const canSubmit = email.trim() && password.trim() && !isAuthenticating;
   const handleSubmit = () => { if (canSubmit) onAuthenticate({ email: email.trim(), role: tier }); };
 
-      {/* 📦 THE PERFECTLY LAYERED APPRENTICE SCANNER BUTTON INSIDE THE SYSTEM VIEWPORT */}
-      <div className="courier-drop-block" style={{ margin: '15px', padding: '12px', background: 'linear-gradient(135deg, #0A1A10 0%, #0D1321 100%)', border: '1px solid #00CC66', borderRadius: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h4 style={{ margin: '0 0 4px 0', color: '#00CC66', fontSize: '14px', textTransform: 'uppercase', fontWeight: 'bold' }}>📦 Bay-Door Courier Arrival</h4>
-            <p style={{ margin: 0, fontSize: '11px', color: '#8A99AD', textTransform: 'uppercase' }}>Unloading incoming wholesale package manifests</p>
-          </div>
-          <button 
-            onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
-            style={{ backgroundColor: '#00CC66', color: '#070A12', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer' }}
-          >
-            Scan Courier QR Manifest
-          </button>
-        </div>
-      </div>
 
                 <option value="MECHANIC">Registered Mechanic Workshop</option>
                 <option value="SELLER">Verified Parts Seller</option>
               </select>
             </div>
           </div>
-          <button onClick={handleSubmit} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
+             <button onClick={handleSubmit} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
             {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Verifying...</>) : (<><KeyRound className="h-4 w-4" /> Authenticate & Secure Entry</>)}
           </button>
+
+          {/* 📦 THE PERFECTLY LAYERED APPRENTICE SCANNER SHORTCUT MODULE */}
+          <div className="courier-drop-block" style={{ marginTop: '20px', padding: '12px', background: 'linear-gradient(135deg, #0A1A10 0%, #0D1321 100%)', border: '1px solid #00CC66', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h4 style={{ margin: '0 0 4px 0', color: '#00CC66', fontSize: '14px', textTransform: 'uppercase', fontWeight: 'bold' }}>📦 Bay-Door Courier Arrival</h4>
+                <p style={{ margin: 0, fontSize: '11px', color: '#8A99AD', textTransform: 'uppercase' }}>Unloading incoming wholesale package manifests</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
+                style={{ backgroundColor: '#00CC66', color: '#070A12', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Scan Courier QR
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ─── Fixed Vehicle HUD (static header widget, locked position) ──────────────
 function FixedVehicleHUD({ vehicle, vehicles, onOpenFolder, onEdit }) {
