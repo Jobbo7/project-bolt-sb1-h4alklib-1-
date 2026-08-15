@@ -153,6 +153,7 @@ function SafetyShield({ onAccept }) {
   );
 }
 // ─── Auth Gate ───────────────────────────────────────────────────────────────
+// ─── Auth Gate ───────────────────────────────────────────────────────────────
 function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -161,13 +162,43 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const canSubmit = email.trim() && password.trim() && !isAuthenticating;
   const handleSubmit = () => { if (canSubmit) onAuthenticate({ email: email.trim(), role: tier }); };
 
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4" style={{ background: '#070A12' }}>
+      <div className="w-full max-w-md rounded-2xl border p-6 shadow-2xl" style={{ borderColor: C.border, background: C.panel }}>
+        <div className="flex flex-col items-center text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/20">
+            <Wrench className="h-6 w-6 text-slate-950" />
+          </div>
+          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
+          <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Stripe Live Financial Network Active</p>
+        </div>
 
-                <option value="MECHANIC">Registered Mechanic Workshop</option>
-                <option value="SELLER">Verified Parts Seller</option>
-              </select>
+        <div className="mt-6 flex flex-col gap-4">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none transition-all" style={{ borderColor: C.border, background: C.panel2 }} placeholder="name@workshop.com" />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Secure Password</label>
+            <div className="relative mt-1">
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border pl-3 pr-10 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="••••••••" />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
-             <button onClick={handleSubmit} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
+
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
+            <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
+              <option value="DIY">DIY Driver Tier</option>
+              <option value="MECHANIC">Registered Mechanic Workshop</option>
+              <option value="SELLER">Verified Parts Seller</option>
+            </select>
+          </div>
+
+          <button onClick={handleSubmit} disabled={!canSubmit} className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
             {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Verifying...</>) : (<><KeyRound className="h-4 w-4" /> Authenticate & Secure Entry</>)}
           </button>
 
