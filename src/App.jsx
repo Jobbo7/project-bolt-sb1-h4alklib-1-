@@ -279,8 +279,7 @@ export default function App() {
                                 <div>Financial Value Clip: <span className="text-orange-400 font-bold">${req.price.toFixed(2)}</span></div>
                                 <div className="text-slate-500 mt-1">Operator ID: {req.apprentice} [{req.timestamp}]</div>
                               </div>
-                            </div>
-                            <div className="mt-3.5 flex gap-2 border-t pt-2.5 border-slate-800/60">
+                                                        <div className="mt-3.5 flex gap-2 border-t pt-2.5 border-slate-800/60">
                               <button onClick={() => handleOwnerApproveOrder(req.id, 'APPROVE')} className="flex-1 py-1.5 rounded-lg font-bold text-[10px] uppercase bg-emerald-600 text-slate-950 hover:bg-emerald-500 transition-all flex items-center justify-center gap-0.5 shadow-sm">
                                 <Check className="h-3 w-3" /> Approve & Pay
                               </button>
@@ -288,11 +287,11 @@ export default function App() {
                                 <Ban className="h-3 w-3" /> Drop
                               </button>
                             </div>
-                            </div>
                           </div>
                         ))
                       )}
                     </div>
+
 
                     {/* COMPLETED FINANCIAL SETTLEMENT TRANSACTION AUDIT LOGS */}
                     <div className="flex flex-col gap-2.5">
