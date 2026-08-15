@@ -118,11 +118,10 @@ function SafetyShield({ onAccept }) {
             <p className="mb-3">Pro Workshop users performing repairs for paying customers do so under their own trade licence and insurance. The Job Card invoice calculator is an estimation tool only and does not constitute a tax invoice until issued by the registered business.</p>
             <p className="mb-3">Vehicle registration lookups use publicly available data. Misuse of vehicle data for fraud, theft or unlawful identification is a criminal offence. All activity is logged.</p>
             <p style={{ color: C.textDimmer }}>Scroll to the bottom of this box to unlock the acceptance checkbox, then tap "Accept & Enter Garage" to continue. If you do not agree, close this application.</p>
-          </div>
-                    {/* 👇 COPY AND PASTE THIS EXACT APPRENTICE SHORTCUT HERE (ADD IT) 👇 */}
-          <div className="apprentice-gate" style={{ marginTop: '20px', borderTop: '1px dashed ' + C.border, paddingTop: '15px' }}>
-            <button 
-              className="w-full p-3 rounded-lg font-bold text-center text-transform-uppercase" 
+                  </div>
+          
+          <div className="mt-2 flex items-center gap-2 text-xs">
+
               onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
               style={{ backgroundColor: '#00CC66', color: '#070A12', border: 'none', cursor: 'pointer', display: 'block', width: '100%' }}
             >
@@ -163,38 +162,22 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const canSubmit = email.trim() && password.trim() && !isAuthenticating;
   const handleSubmit = () => { if (canSubmit) onAuthenticate({ email: email.trim(), role: tier }); };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: C.bg }}>
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl" style={{ background: C.bg, borderColor: `${C.orange}30` }}>
-        <div className="h-2" style={{ background: `repeating-linear-gradient(45deg, ${C.orange} 0 8px, ${C.bg} 8px 16px)` }} />
-        <div className="p-6">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl text-slate-950" style={{ background: C.orange }}>
-              <Wrench className="h-7 w-7" />
-            </div>
-            <h1 className="text-xl font-bold text-slate-50">PartsForge Secure Entry</h1>
-            <p className="text-xs" style={{ color: C.textDim }}>Authenticate to access the garage workspace</p>
+      {/* 📦 THE PERFECTLY LAYERED APPRENTICE SCANNER BUTTON INSIDE THE SYSTEM VIEWPORT */}
+      <div className="courier-drop-block" style={{ margin: '15px', padding: '12px', background: 'linear-gradient(135deg, #0A1A10 0%, #0D1321 100%)', border: '1px solid #00CC66', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h4 style={{ margin: '0 0 4px 0', color: '#00CC66', fontSize: '14px', textTransform: 'uppercase', fontWeight: 'bold' }}>📦 Bay-Door Courier Arrival</h4>
+            <p style={{ margin: 0, fontSize: '11px', color: '#8A99AD', textTransform: 'uppercase' }}>Unloading incoming wholesale package manifests</p>
           </div>
-          <div className="mt-6 space-y-3">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
-              <div className="mt-1 flex items-center gap-2 rounded-lg border px-3 py-2.5 transition focus-within:border-current" style={{ borderColor: C.border, background: C.panel2 }}>
-                <Mail className="h-4 w-4 shrink-0" style={{ color: C.textDim }} />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="driver@partsforge.io" className="flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:opacity-40" />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Password</label>
-              <div className="mt-1 flex items-center gap-2 rounded-lg border px-3 py-2.5 transition focus-within:border-current" style={{ borderColor: C.border, background: C.panel2 }}>
-                <Lock className="h-4 w-4 shrink-0" style={{ color: C.textDim }} />
-                <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="••••••••" className="flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:opacity-40" />
-                <button onClick={() => setShowPassword(s => !s)} className="shrink-0 transition" style={{ color: C.textDim }}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
-              <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
-                <option value="DIY">DIY Driver Tier</option>
+          <button 
+            onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
+            style={{ backgroundColor: '#00CC66', color: '#070A12', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer' }}
+          >
+            Scan Courier QR Manifest
+          </button>
+        </div>
+      </div>
+
                 <option value="MECHANIC">Registered Mechanic Workshop</option>
                 <option value="SELLER">Verified Parts Seller</option>
               </select>
