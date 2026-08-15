@@ -175,7 +175,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
                        <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
               <option value="DIY">DIY Driver Tier</option>
               <option value="MECHANIC">Registered Mechanic (Master Account Holder)</option>
-              <option value="APPRENTICE">Workshop Apprentice (Linked Account Access)</option>
+              <option value="APPRENTICE">Employee Link (Sub-Account Access)</option>
               <option value="WHOLESALER">Wholesale Merchant Hub</option>
             </select>
           </div>
