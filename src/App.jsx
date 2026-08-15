@@ -119,6 +119,21 @@ function SafetyShield({ onAccept }) {
             <p className="mb-3">Vehicle registration lookups use publicly available data. Misuse of vehicle data for fraud, theft or unlawful identification is a criminal offence. All activity is logged.</p>
             <p style={{ color: C.textDimmer }}>Scroll to the bottom of this box to unlock the acceptance checkbox, then tap "Accept & Enter Garage" to continue. If you do not agree, close this application.</p>
           </div>
+                    {/* 👇 COPY AND PASTE THIS EXACT APPRENTICE SHORTCUT HERE (ADD IT) 👇 */}
+          <div className="apprentice-gate" style={{ marginTop: '20px', borderTop: '1px dashed ' + C.border, paddingTop: '15px' }}>
+            <button 
+              className="w-full p-3 rounded-lg font-bold text-center text-transform-uppercase" 
+              onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
+              style={{ backgroundColor: '#00CC66', color: '#070A12', border: 'none', cursor: 'pointer', display: 'block', width: '100%' }}
+            >
+              📦 Quick Courier Scan Drop (Apprentice Access)
+            </button>
+            <p style={{ fontSize: '11px', color: C.textDim, textAlign: 'center', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              No password required. For bay-door delivery manifest ingestion only.
+            </p>
+          </div>
+          {/* 👆 END OF NEW APPRENTICE CODE SNIPPET 👆 */}
+
           <div className="mt-2 flex items-center gap-2 text-xs">
             {scrolled ? (
               <span className="flex items-center gap-1" style={{ color: C.emerald }}><CheckCircle2 className="h-3.5 w-3.5" /> Terms read</span>
