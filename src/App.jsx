@@ -147,3 +147,36 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
     </div>
   );
 }
+
+// ─── REQUIRED EXPORT ERROR BOUNDARY UTILITY CONTAINER ───────────────────────
+export class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("PartsForge Terminal Critical Error Captured:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center p-4 bg-[#070A12] text-slate-100 font-sans">
+          <div className="w-full max-w-md rounded-2xl border border-red-900/50 p-6 text-center bg-[#0B1329] shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-red-950/30 border border-red-800/30">
+              <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h2 className="mt-4 text-lg font-bold tracking-tight">Terminal Interface Exception</h2>
+            <p className="mt-2 text-xs text-slate-400 leading-relaxed">A runtime render crash was blocked securely. Reload the session cache to re-initialize your Stripe financial streams.</p>
+            <button onClick={() => window.location.reload()} className="mt-5 w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-500 transition-all">Reload Terminal Interface</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
