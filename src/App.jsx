@@ -1,10 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Wrench, KeyRound, Eye, EyeOff, CheckCircle2, AlertTriangle, 
-  Package, ShieldAlert, Truck, Landmark, UserCheck, Smartphone 
-} from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Wrench, KeyRound, Eye, EyeOff, CheckCircle2, AlertTriangle, UserCheck } from 'lucide-react';
 
-// ─── STYLING CONFIGURATION MATRIX ───────────────────────────────────────────
 const C = {
   background: '#070A12',
   panel: '#0B1329',
@@ -12,8 +8,7 @@ const C = {
   border: '#1E293B',
   orange: '#F97316',
   emerald: '#10B981',
-  textDim: '#94A3B8',
-  textDimmer: '#64748B'
+  textDim: '#94A3B8'
 };
 
 export default function App() {
@@ -25,30 +20,11 @@ export default function App() {
     setTimeout(() => {
       setUser({ email, role });
       setIsAuthenticating(false);
-    }, 8000);
+    }, 2000);
   };
 
   return (
     <div className="min-h-screen text-slate-100 font-sans" style={{ background: C.background }}>
-      
-      {/* 📦 TOP CORRIDOR SHORTCUT FOR APPRENTICES ON THE WORKSHOP FLOOR */}
-      <div style={{ margin: '15px', padding: '12px', background: 'linear-gradient(135deg, #0A1A10 0%, #0D1321 100%)', border: '1px solid #00CC66', borderRadius: '8px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h4 style={{ margin: '0 0 4px 0', color: '#00CC66', fontSize: '14px', textTransform: 'uppercase', fontWeight: 'bold' }}>📦 Bay-Door Courier Arrival</h4>
-            <p style={{ margin: 0, fontSize: '11px', color: '#8A99AD', textTransform: 'uppercase' }}>Unloading incoming wholesale package manifests</p>
-          </div>
-          <button 
-            type="button"
-            onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
-            style={{ backgroundColor: '#00CC66', color: '#070A12', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer' }}
-          >
-            Scan Courier QR
-          </button>
-        </div>
-      </div>
-
-      {/* CORE WORKSPACE LOGIC SHIFTER */}
       {!user ? (
         <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />
       ) : (
@@ -69,7 +45,6 @@ export default function App() {
   );
 }
 
-// ─── AUTHENTICATION GATEWAY PORTAL COMPONENT ────────────────────────────────
 function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -92,7 +67,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const handleSubmit = () => { if (canSubmit) onAuthenticate({ email: email.trim(), role: tier }); };
 
   return (
-    <div className="flex items-center justify-center p-4 min-h-[80vh]">
+    <div className="flex items-center justify-center p-4 min-h-screen">
       <div className="w-full max-w-md rounded-2xl border p-6 shadow-2xl" style={{ borderColor: C.border, background: C.panel }}>
         <div className="flex flex-col items-center text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/20">
@@ -127,7 +102,6 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
             </select>
           </div>
 
-          {/* LEGAL TERMS COMPLIANCE LAYER */}
           <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-4 h-32 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
             <p className="mb-2 font-semibold" style={{ color: C.orange }}>SAFETY WARNING — AUTOMOTIVE REPAIR RISK</p>
             <p className="mb-2">By entering the Garage, you acknowledge that automotive repair carries inherent risk of injury. Content is reference only and must be verified against official workshop data.</p>
@@ -151,6 +125,23 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           <button onClick={handleSubmit} disabled={!canSubmit} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
             {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Connecting Ledger...</>) : (<><KeyRound className="h-4 w-4" /> Authenticate & Secure Entry</>)}
           </button>
+
+          {/* 📦 THE PERFECTLY LAYERED APPRENTICE SCANNER SHORTCUT MODULE */}
+          <div className="courier-drop-block" style={{ marginTop: '20px', padding: '12px', background: 'linear-gradient(135deg, #0A1A10 0%, #0D1321 100%)', border: '1px solid #00CC66', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h4 style={{ margin: '0 0 4px 0', color: '#00CC66', fontSize: '14px', textTransform: 'uppercase', fontWeight: 'bold' }}>📦 Bay-Door Courier Arrival</h4>
+                <p style={{ margin: 0, fontSize: '11px', color: '#8A99AD', textTransform: 'uppercase' }}>Unloading incoming wholesale package manifests</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => alert("Initializing High-Speed Apprentice Camera Viewfinder Wrapper...")} 
+                style={{ backgroundColor: '#00CC66', color: '#070A12', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Scan Courier QR
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
