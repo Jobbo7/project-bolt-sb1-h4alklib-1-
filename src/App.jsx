@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
   Wrench, KeyRound, Eye, EyeOff, CheckCircle2, AlertTriangle, 
-  UserCheck, Folder, FolderPlus, Search, ShieldCheck, Check, Ban, ScanLine, ShoppingCart 
+  UserCheck, Folder, FolderPlus, Search, ShieldCheck, Check, Ban, ScanLine, ShoppingCart, Layers 
 } from 'lucide-react';
 
 const C = {
@@ -17,8 +17,16 @@ const C = {
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  
+  // LIVE APPRENTICE PURCHASING LOG INTEGRATION STATE
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [completedTransactions, setCompletedTransactions] = useState([]);
+  
+  // ONSITE STOCK INVENTORY STORAGE
+  const [inventoryList, setInventoryList] = useState([
+    { id: 'STK-01', item: 'Bendix Heavy Duty Front Brake Pads (DB1422)', qty: 4, location: 'Shelf B2' },
+    { id: 'STK-02', item: 'Ryco Oil Filter (Z9)', qty: 12, location: 'Shelf A1' }
+  ]);
 
   const handleAuthenticate = ({ email, role, linkedAccount }) => {
     setIsAuthenticating(true);
@@ -81,6 +89,7 @@ export default function App() {
       ) : (
         <div className="p-4 max-w-6xl mx-auto">
           
+          {/* ORIGINAL TOP HUB CONSOLE BANNER */}
           <div className="rounded-xl border p-4 mb-6 flex justify-between items-center" style={{ borderColor: C.border, background: C.panel }}>
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -92,9 +101,13 @@ export default function App() {
             <button onClick={() => setUser(null)} className="text-xs px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-400 hover:text-red-400 transition-all font-semibold uppercase tracking-wider">Terminate Session</button>
           </div>
 
+          {/* MASTER GARAGE GRID VIEWPORT SHIFTER */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* MAIN INTERFACE SECTION TILES */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               
+              {/* ORIGINAL WIDE DIRECT PARTS SEARCH SEARCHBAR */}
               <div className="rounded-xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
                 <div className="relative flex items-center">
                   <Search className="absolute left-4 h-5 w-5 text-slate-400" />
@@ -102,6 +115,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* ORIGINAL SYSTEM FOLDER AND ACTIVE JOB CARD TILES */}
               <div className="rounded-xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
@@ -113,6 +127,7 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col gap-3">
+                  {/* JOB TILE 1 */}
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all" style={{ background: C.panel2, borderColor: C.border }}>
                     <div>
                       <div className="flex items-center gap-2">
@@ -132,6 +147,7 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* JOB TILE 2 */}
                   <div className="p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all" style={{ background: C.panel2, borderColor: C.border }}>
                     <div>
                       <div className="flex items-center gap-2">
@@ -145,7 +161,7 @@ export default function App() {
                       <button onClick={() => alert("Scanning Courier Manifest via High-Speed Camera Viewfinder...")} className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-bold text-xs bg-slate-800 border border-slate-700 text-slate-200 uppercase tracking-wider hover:bg-slate-700 transition-all">
                         <ScanLine className="h-3.5 w-3.5 text-emerald-400" /> Manifest Ingest
                       </button>
-                      <button onClick={() => handleOrderExecution('JOB-905', 'Ryco Filter Suite Major Service Pack', 145.00)} className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-bold text-xs bg-emerald-600 text-slate-950 uppercase tracking-wider hover:bg-emerald-500 transition-all">
+                                            <button onClick={() => handleOrderExecution('JOB-905', 'Ryco Filter Suite Major Service Pack', 145.00)} className="flex-1 sm:flex-initial flex items-center justify-center gap-1 px-3 py-2 rounded-lg font-bold text-xs bg-emerald-600 text-slate-950 uppercase tracking-wider hover:bg-emerald-500 transition-all">
                         <ShoppingCart className="h-3.5 w-3.5" /> {user?.role === 'APPRENTICE' ? 'Route Order' : 'Order Parts'}
                       </button>
                     </div>
@@ -154,11 +170,15 @@ export default function App() {
               </div>
             </div>
 
+            {/* SIDE CONTAINER COMPONENT SYSTEM BAR */}
             <div className="flex flex-col gap-6">
+              
+              {/* ONSITE PHYSICAL INVENTORY VAULT CARD */}
               <div className="rounded-xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-slate-200">
-                  📁 Onsite Stock Inventory Vault
-                </h3>                {user?.role === 'APPRENTICE' ? (
+                  <Layers className="h-4 w-4 text-orange-500" /> Onsite Stock Inventory Vault
+                </h3>
+                {user?.role === 'APPRENTICE' ? (
                   <p className="text-[11px] text-slate-500 italic bg-slate-900/30 p-2.5 rounded border border-dashed border-slate-800">🔒 Onsite stock catalogue overrides restricted. Modification tools accessible under supervisor terminal sessions only.</p>
                 ) : (
                   <div className="flex flex-col gap-2 p-2 rounded-lg bg-slate-900/40 border border-slate-800 mb-3">
@@ -170,23 +190,19 @@ export default function App() {
                   </div>
                 )}
                 <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
-                  <div className="p-2 rounded border flex justify-between items-center text-xs bg-slate-950/40 border-slate-800">
-                    <div>
-                      <div className="font-semibold text-slate-300">Bendix Front Pads (DB1422)</div>
-                      <div className="text-[9px] text-slate-500 font-mono mt-0.5">STK-01 | Shelf: B2</div>
+                  {inventoryList.map(stock => (
+                    <div key={stock.id} className="p-2 rounded border flex justify-between items-center text-xs bg-slate-950/40 border-slate-800">
+                      <div>
+                        <div className="font-semibold text-slate-300">{stock.item}</div>
+                        <div className="text-[9px] text-slate-500 font-mono mt-0.5">{stock.id} | Shelf: {stock.location}</div>
+                      </div>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded font-mono bg-slate-800 text-orange-400">×{stock.qty}</span>
                     </div>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded font-mono bg-slate-800 text-orange-400">×4</span>
-                  </div>
-                  <div className="p-2 rounded border flex justify-between items-center text-xs bg-slate-950/40 border-slate-800">
-                    <div>
-                      <div className="font-semibold text-slate-300">Ryco Oil Filter (Z9)</div>
-                      <div className="text-[9px] text-slate-500 font-mono mt-0.5">STK-02 | Shelf: A1</div>
-                    </div>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded font-mono bg-slate-800 text-orange-400">×12</span>
-                  </div>
+                  ))}
                 </div>
               </div>
 
+              {/* AUTOMATED EMPLOYEE SECURITY VERIFICATION GATE CARD PANEL */}
               <div className="rounded-xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2" style={{ color: C.emerald }}>
                   <ShieldCheck className="h-4 w-4" /> Employee Authorization Streams
@@ -239,7 +255,6 @@ export default function App() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
       )}
@@ -296,7 +311,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
             <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
-                            <option value="DIY">DIY Driver Tier</option>
+              <option value="DIY">DIY Driver Tier</option>
               <option value="MECHANIC">Registered Mechanic (Master Account Holder)</option>
               <option value="APPRENTICE">Employee Link (Sub-Account Access)</option>
               <option value="WHOLESALER">Wholesale Merchant Hub</option>
@@ -331,7 +346,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           </label>
 
           <button onClick={handleSubmit} disabled={!canSubmit} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
-            {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Synchronizing Node...</>) : (<><KeyRound className="h-4 w-4" /> Authenticate & Link Gateway</>)}
+            {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Synchronizing Node...</>) : (<><KeyRound className="h-4 w-4" /> Authenticate & Secure Entry</>)}
           </button>
         </div>
       </div>
@@ -357,5 +372,4 @@ export class AppErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
 
