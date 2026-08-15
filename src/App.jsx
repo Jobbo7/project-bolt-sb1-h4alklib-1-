@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   Wrench, KeyRound, Eye, EyeOff, CheckCircle2, AlertTriangle, 
   UserCheck, ClipboardList, ScanLine, ShoppingCart, ShieldCheck,
-  Search, PlusCircle, Check, Package, Layers, FileText, Edit2, Ban
+  Search, PlusCircle, Check, Layers, Ban
 } from 'lucide-react';
 
 const C = {
@@ -19,7 +19,6 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   
-  // GLOBAL GLOBAL CATALOG MATRIX STATED DATA
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [inventoryList, setInventoryList] = useState([
@@ -30,13 +29,11 @@ export default function App() {
   const [newItemQty, setNewItemQty] = useState('');
   const [newItemLoc, setNewItemLoc] = useState('');
 
-  // SYNCHRONIZED APP WORKFLOW STATE
   const [activeJobCards, setActiveJobCards] = useState([
     { id: 'JOB-902', customer: 'Toyota Hiace (Rego: YTR-882)', currentTask: 'Front Brake System Rotors & Pads Upgrade', status: 'Awaiting Manifest Ingestion' },
     { id: 'JOB-905', customer: 'Ford Ranger (Rego: 1BC-9XD)', currentTask: 'Logbook Major Service + Filter Suite', status: 'Brake Linings Fitting' }
   ]);
   
-  // MASTER ACCOUNT INCOMING EMPLOYEE APPROVAL LOGS ARCHIVE
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [completedTransactions, setCompletedTransactions] = useState([]);
 
@@ -51,7 +48,6 @@ export default function App() {
   const handleCatalogSearch = (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-    // SIMULATED AUTOMOTIVE WHOLESALE CATALOG API DEPOSIT LOOKUP
     setSearchResults([
       { sku: 'WH-8821', desc: 'DBA T2 Street Series Slotted Brake Rotors (Pair)', price: 245.00 },
       { sku: 'WH-4402', desc: 'Bendix Ultimate 4WD Brake Pad Kit Front', price: 115.00 },
@@ -76,7 +72,6 @@ export default function App() {
 
   const handleOrderExecution = (jobId, itemSku, itemDesc, rawPrice) => {
     if (user?.role === 'APPRENTICE') {
-      // INTERCEPT LOGIC FOR LINKED EMPLOYEES: SEND ROUTING TICKET TO OWNER FOR APPROVAL
       const requestTicket = {
         id: `REQ-${Date.now().toString().slice(-3)}`,
         timestamp: new Date().toLocaleTimeString(),
@@ -91,7 +86,6 @@ export default function App() {
       setIncomingRequests(prev => [requestTicket, ...prev]);
       alert(`🚨 EMPLOYEE LINK ROUTER ACTIVE!\nOrder held securely. Full job card details, parts SKU manifests, and linked logs have been streamed to your master account holder (${user.linkedAccount}) for edit or approval.`);
     } else {
-      // DIRECT ROUTING LOOP FOR MASTER OWNER SECURITY CHANNELS
       const directReceipt = {
         timestamp: new Date().toLocaleTimeString(),
         sku: itemSku,
@@ -133,7 +127,6 @@ export default function App() {
       ) : (
         <div className="p-4 max-w-6xl mx-auto">
           
-          {/* HEADER OPERATIONS HUB CONTROL DESK */}
           <div className="rounded-2xl border p-5 mb-6" style={{ borderColor: C.border, background: C.panel }}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
@@ -154,13 +147,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* MAIN CORE DUAL-WORKSPACE PANEL SYSTEM */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* COLUMN 1: LIVE WHOLESALE CATALOGUE ENGINE & LOOKUP */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               
-              {/* SEARCH ENGINE FRAMEWORK CONTAINER */}
               <div className="rounded-xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2 text-slate-200">
                   <Search className="h-4 w-4 text-orange-500" /> Integrated Parts Marketplace Catalogue
@@ -186,7 +175,7 @@ export default function App() {
                           </select>
                           <button onClick={() => {
                             const selJob = document.getElementById(`select-job-${part.sku}`)?.value;
-                                                        handleOrderExecution(selJob, part.sku, part.desc, part.price);
+                            handleOrderExecution(selJob, part.sku, part.desc, part.price);
                           }} className="px-3 py-1.5 rounded font-bold text-[10px] uppercase bg-emerald-600 text-slate-950 hover:bg-emerald-500 transition-all">
                             {user?.role === 'APPRENTICE' ? 'Route Order' : 'Buy Now'}
                           </button>
@@ -196,3 +185,6 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              <div className="rounded-xl border p-5" style={{ borderColor: C.border, background: C.panel }}>
+                <h3 className="text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2" style={{ color: C.orange }}>
