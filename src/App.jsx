@@ -201,472 +201,179 @@ export default function App() {
               </div>
             </div>
 
-                    ) : user.role === 'DIY' ? (
-            
-            /* 🚗 LAYER 2: DIY SMART-TERMINAL INTERFACE (Permits Video Framework Modules) */
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-              <div className="rounded-xl border p-4 shadow-md flex flex-col gap-3" style={{ borderColor: C.border, background: C.panel }}>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b pb-2 flex items-center gap-1.5"><Layers className="h-4 w-4 text-orange-500" /> My Garage Folder</h3>
-                <div className="p-3 rounded-lg bg-slate-950/40 border border-slate-800">
-                  <div className="flex justify-between items-center font-bold text-orange-400 font-mono text-xs"><span>MY-RIDE-01</span> <span className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 text-slate-200">YTR-882</span></div>
-                  <h4 className="text-xs font-bold text-slate-200 mt-2">Toyota Hiace Commuter</h4>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">2.5L Diesel Turbo Matrix</p>
-                </div>
-                <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mt-1">Maintenance History Log:</div>
-                <div className="text-xs font-mono text-slate-400 space-y-1.5 bg-slate-950/20 p-2.5 rounded border border-slate-900/60">
-                  <div>• Service log oil filter check [OK]</div>
-                  <div>• Front pads fitted reference [Awaiting]</div>
-                </div>
-              </div>
+                   import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Wrench, QrCode, Search, Cpu, ShoppingCart, Play, FileText, 
+  BookOpen, Folder, ChevronRight, Layers, ScanLine, ShieldCheck, 
+  Check, Ban, X, Eye, EyeOff, CheckCircle2, AlertTriangle, ArrowUpRight, Building
+} from 'lucide-react';
 
-              <div className="lg:col-span-3 flex flex-col gap-5">
-                <div className="rounded-xl border p-4 shadow-md flex flex-col sm:flex-row gap-3 items-center" style={{ borderColor: C.border, background: C.panel }}>
-                  <div className="relative flex-1 w-full">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search component catalogs, manuals, specs, tools, or fault P-codes..." className="w-full rounded-xl border pl-11 pr-4 py-3 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
-                  </div>
-                  <button className="w-full sm:w-auto px-5 py-3 rounded-xl bg-orange-500 text-slate-950 font-bold text-xs uppercase tracking-wider hover:bg-orange-400 transition-all shadow-sm">Execute Lookup</button>
-                </div>
+const C = {
+  background: '#070A12',
+  panel: '#0B1329',
+  panel2: '#111C38',
+  border: '#1E293B',
+  orange: '#F97316',
+  emerald: '#10B981',
+  textDim: '#94A3B8'
+};
 
-                <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 mb-4 gap-3" style={{ borderColor: C.border }}>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5"><Cpu className="h-4 w-4 text-orange-500" /> Smart-Catalog Matrix Output: Toyota Hiace Suite</h3>
-                    <button onClick={() => handleOrderExecution('DIY-GEN', 'DIY Brake Requisition Package', 145.00)} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-emerald-600 text-slate-950 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-500 transition-all flex items-center justify-center gap-1 shadow-sm"><ShoppingCart className="h-3.5 w-3.5" /> Route to Local Mechanic for Trade Pass</button>
-                  </div>
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeDiyTab, setActiveDiyTab] = useState('pricing');
+  const [activeFolder, setActiveFolder] = useState('All');
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
-                  <div className="flex gap-1.5 border-b border-slate-800 pb-3 mb-4 overflow-x-auto">
-                    {[
-                      { id: 'pricing', label: 'Pricing Stream', icon: FileText },
-                      { id: 'tools', label: 'Required Tools', icon: Wrench },
-                      { id: 'manuals', label: 'Specs & Manuals', icon: BookOpen },
-                      { id: 'videos', label: 'Video Guides (DIY Exclusive)', icon: Play }
-                    ].map(tab => {
-                      const Icon = tab.icon;
-                      return (
-                        <button key={tab.id} onClick={() => setActiveDiyTab(tab.id)} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all whitespace-nowrap" style={{ background: activeDiyTab === tab.id ? C.panel2 : 'transparent', border: activeDiyTab === tab.id ? `1px solid ${C.border}` : '1px solid transparent', color: activeDiyTab === tab.id ? '#FFF' : C.textDim }}><Icon className="h-3 w-3" /> {tab.label}</button>
-                      );
-                    })}
-                  </div>
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQty, setNewItemQty] = useState('');
+  const [newItemLoc, setNewItemLoc] = useState('');
 
-                  <div className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800 text-xs leading-relaxed font-mono">
-                    {activeDiyTab === 'pricing' && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between border-b border-slate-900 pb-1.5"><span>Bendix Front Brake Pads (Premium):</span> <span className="text-slate-400">Retail: $115.00</span> <span className="text-orange-400 font-bold">Trade Checkout: $85.00</span></div>
-                        <div className="flex justify-between border-b border-slate-900 pb-1.5"><span>DBA Slotted Brake Rotors (Pair):</span> <span className="text-slate-400">Retail: $290.00</span> <span className="text-orange-400 font-bold">Trade Checkout: $210.00</span></div>
-                        <p className="text-[10px] text-slate-500 uppercase mt-2">Routing directly to a mechanic applies the trade validation pricing mechanism on checkout setup loops.</p>
-                      </div>
-                    )}
-                    {activeDiyTab === 'tools' && (
-                      <div className="space-y-1 text-slate-300">
-                        <div>• 1/2" Drive Precision Click Torque Wrench Wheel Setting Frame</div>
-                        <div>• 14mm Deep Hex Sockets + Caliper Bolt Compression Brackets</div>
-                        <div>• Non-Chlorinated High-Pressure Brake Restor Consumable Cleaner Spray</div>
-                      </div>
-                    )}
-                    {activeDiyTab === 'manuals' && (
-                      <div className="space-y-4">
-                        <div>
-                          <span className="text-orange-400 font-bold uppercase text-[10px] block mb-1">🔧 Hiace Torque Specifications Matrix</span>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-900/60 p-2.5 rounded border border-slate-800 text-[11px]">
-                            <div>Caliper Slider Bolts: <span className="text-white font-bold">34 Nm</span></div>
-                            <div>Caliper Bracket Anchors: <span className="text-white font-bold">105 Nm</span></div>
-                            <div>Wheel Lug Nuts: <span className="text-white font-bold">103 Nm</span></div>
-                          </div>
-                        </div>
+  const [inventoryList, setInventoryList] = useState([
+    { id: 'STK-881', item: 'Bendix Front Pads - Hiace', qty: 4, location: 'Row A2' },
+    { id: 'STK-882', item: 'DBA Slotted Rotors - Pair', qty: 2, location: 'Row A5' },
+    { id: 'STK-883', item: 'Ryco Oil Filter Z9', qty: 12, location: 'Shelf C1' },
+    { id: 'STK-884', item: 'Castrol Magnatec 5W-30 20L', qty: 3, location: 'Floor Grid 2' }
+  ]);
 
-                        <div>
-                          <span className="text-orange-400 font-bold uppercase text-[10px] block mb-1">📋 Interactive OBD-II Fault Code Lookup & P-Code Resolutions</span>
-                          <div className="p-3 bg-slate-900/60 rounded border border-slate-800 space-y-3">
-                            <div className="flex gap-2">
-                              <input type="text" id="diyCodeInput" placeholder="Enter P-Code (e.g., P0300, P0420)..." className="flex-1 rounded-lg border px-3 py-1.5 text-xs text-slate-100 outline-none border-slate-700 bg-slate-950/50 font-mono placeholder:text-slate-600 uppercase" onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const code = e.currentTarget.value.trim().toUpperCase();
-                                  const outputNode = document.getElementById('pCodeOutputGrid');
-                                  if (!outputNode) return;
-                                  
-                                  const matrix = {
-                                    'P0300': { fault: 'Random/Multiple Cylinder Misfire Detected', system: 'Ignition System', fix: 'Inspect coil packs and secondary wires.' },
-                                    'P0420': { fault: 'Catalyst System Efficiency Below Threshold', system: 'Emissions Control', fix: 'Check upstream exhaust sealing metrics.' }
-                                  };
+  const [sellerOffers] = useState([
+    { id: 'WHS-SKU-992A', part: 'Bendix Front Heavy Duty Pads (Hiace Commuter Spec)', price: 85.00, stock: 14, location: 'Aisle 4-B' },
+    { id: 'WHS-SKU-441F', part: 'DBA T2 Street Series Slotted Brake Rotors (Front Pair)', price: 210.00, stock: 6, location: 'Aisle 9-F' },
+    { id: 'WHS-SKU-102D', part: 'Ryco Cabin Air Premium Filter Upgrade Element', price: 28.50, stock: 45, location: 'Aisle 2-D' },
+    { id: 'WHS-SKU-773X', part: 'Brembo Ceramic Performance Rear Disc Pads Set', price: 95.00, stock: 8, location: 'Aisle 4-C' }
+  ]);
 
-                                  const match = matrix[code];
-                                  if (match) {
-                                    outputNode.innerHTML = `<div class="p-3 rounded-lg border border-red-900/40 bg-red-950/10 space-y-1"><div class="text-red-400 font-bold">DTC: ${code}</div><div class="text-slate-200">${match.fault}</div><div class="text-emerald-400 pt-1 border-t border-slate-800/80 mt-1">${match.fix}</div></div>`;
-                                  } else {
-                                    outputNode.innerHTML = `<div class="p-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-500 italic text-center">Query not cached locally. Searching...</div>`;
-                                  }
-                                }
-                              }} />
-                            </div>
-                            <div id="pCodeOutputGrid" className="mt-2 text-[11px]">
-                              <div className="p-3 rounded-lg border border-slate-800/80 bg-slate-950/30 text-slate-500 italic text-center">
-                                Type trouble code above and press Enter.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {activeDiyTab === 'videos' && (
-                      <div className="p-6 text-center border border-dashed border-slate-800 bg-slate-900/30 rounded-xl flex flex-col items-center gap-2">
-                                                <Play className="h-8 w-8 text-orange-500 animate-pulse" />
-                        <div className="text-xs text-slate-200 font-bold uppercase">Hiace Front Brake Brake-Pads Walkthrough Guide V2</div>
-                        <p className="text-[10px] text-slate-500 max-w-xs leading-normal">Streaming media pipeline initialized natively matching vehicle spec profile folder. Retail data channels unlocked for DIY operators.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+  const [jobs, setJobs] = useState([
+    { id: 'JOB-201', customer: 'Dave Harrison', rego: 'YTR-882', folder: 'Brakes', status: 'Awaiting Parts', currentTask: 'Fit front pads and rotors' },
+    { id: 'JOB-202', customer: 'Epping Logistics', rego: '12-METRO', folder: 'Servicing', status: 'In Progress', currentTask: 'Major fleet service log check' },
+    { id: 'JOB-203', customer: 'Sarah Jenkins', rego: 'VWV-991', folder: 'Diagnostics', status: 'Awaiting Verification', currentTask: 'P0300 random misfire check' }
+  ]);
 
-          ) : (
-            
-            /* 🔧 LAYER 3: MASTER MECHANIC & LINKED EMPLOYEE CORE WORKSPACE PANEL */
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-              <div className="flex flex-col gap-4">
-                <div className="rounded-xl border p-4 shadow-md" style={{ borderColor: C.border, background: C.panel }}>
-                  <div className="flex justify-between items-center mb-3 border-b pb-2" style={{ borderColor: C.border }}>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Folder className="h-4 w-4 text-orange-500" /> Storage Folders</h3>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    {['All', 'Brakes', 'Servicing', 'Diagnostics'].map(folderName => (
-                      <button key={folderName} onClick={() => setActiveFolder(folderName)} className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider flex justify-between items-center transition-all" style={{ background: activeFolder === folderName ? C.panel2 : 'transparent', border: activeFolder === folderName ? `1px solid ${C.border}` : '1px solid transparent', color: activeFolder === folderName ? '#FFF' : C.textDim }}>
-                        <span className="flex items-center gap-2"><Folder className={`h-3.5 w-3.5 ${activeFolder === folderName ? 'text-orange-500' : 'text-slate-600'}`} /> {folderName}</span>
-                        <ChevronRight className={`h-3 w-3 transition-transform ${activeFolder === folderName ? 'rotate-90 text-orange-500' : 'text-slate-600'}`} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+  const [incomingRequests, setIncomingRequests] = useState([
+    { id: 'REQ-901', jobId: 'JOB-201', apprentice: 'Liam (Apprentice Tier)', desc: 'Procure Bendix Front Pads + DBA Rotors Suite', price: 295.00 }
+  ]);
 
-                <div className="rounded-xl border p-4 shadow-md" style={{ borderColor: C.border, background: C.panel }}>
-                  <div className="flex justify-between items-center mb-3 border-b pb-2" style={{ borderColor: C.border }}>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5"><Layers className="h-4 w-4 text-orange-500" /> Onsite Inventory Shelf Vault</h3>
-                    {user?.role !== 'APPRENTICE' && <button onClick={() => setShowAddStockModal(true)} className="text-[10px] font-bold uppercase tracking-wider bg-orange-500 text-slate-950 px-2 py-0.5 rounded font-mono hover:bg-orange-400 transition-all">Upload</button>}
-                  </div>
-                  {user?.role === 'APPRENTICE' && <p className="text-[10px] text-slate-500 italic mb-3 leading-relaxed">🔒 Stock catalogue updates restricted on employee session loops.</p>}
-                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                    {inventoryList.map(stock => (
-                      <div key={stock.id} className="p-2.5 rounded-lg border flex justify-between items-center text-xs bg-slate-950/40 border-slate-800/80">
-                        <div className="truncate pr-2">
-                          <div className="font-semibold text-slate-300 truncate">{stock.item}</div>
-                          <div className="text-[9px] text-slate-500 font-mono mt-0.5">{stock.id} | Loc: <span className="text-slate-400 font-semibold">{stock.location}</span></div>
-                        </div>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded font-mono bg-slate-900 border border-slate-700 text-orange-400">×{stock.qty}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+  const [completedTransactions, setCompletedTransactions] = useState([
+    { desc: 'Ryco Fleet Consumable Pack Ingest', price: 340.00 },
+    { desc: 'Trade Brake Kit Auto-Settle', price: 215.00 }
+  ]);
 
-              <div className="lg:col-span-3 flex flex-col gap-6">
-                <div className="rounded-xl border p-4 shadow-md flex flex-col sm:flex-row gap-3 items-center" style={{ borderColor: C.border, background: C.panel }}>
-                  <div className="relative flex-1 w-full">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Global Marketplace Catalogue Scan... Search number plates, specs, trade SKUs..." className="w-full rounded-xl border pl-11 pr-4 py-3 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
-                  </div>
-                  <button className="w-full sm:w-auto px-5 py-3 rounded-xl bg-orange-500 text-slate-950 font-bold text-xs uppercase tracking-wider hover:bg-orange-400 transition-all shadow-sm">Execute Lookup</button>
-                </div>
-
-                <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-4"><FileText className="h-4 w-4 text-orange-500" /> Active Shop Floor Job Cards ({filteredJobs.length} Loaded)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredJobs.map(job => (
-                      <div key={job.id} className="p-4 rounded-xl border flex flex-col justify-between shadow-sm border-slate-800/80 bg-slate-900/40">
-                        <div>
-                          <div className="flex justify-between items-center border-b pb-2 mb-2.5" style={{ borderColor: C.border }}>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-orange-400">{job.id}</span>
-                              <span className="text-[9px] px-2 py-0.5 rounded font-mono uppercase bg-slate-800 text-slate-400 border border-slate-700">{job.folder}</span>
-                            </div>
-                            <span style={{ color: job.status.includes('Verified') ? C.emerald : '#F59E0B', fontSize: '10px' }} className="uppercase tracking-wider font-bold bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800/60">{job.status}</span>
-                          </div>
-                          <h4 className="text-sm font-bold text-slate-200">{job.customer} <span className="font-mono text-xs font-medium text-slate-500">[{job.rego}]</span></h4>
-                          <p className="text-xs text-slate-400 mt-1 leading-relaxed"><span className="text-slate-400 font-medium">Assignment:</span> {job.currentTask}</p>
-                          <div className="text-[10px] text-slate-400 font-mono mt-3 bg-slate-950/40 p-2 rounded border border-slate-800/50 space-y-0.5">
-                            <div>• Caliper Slider Specs: <span className="text-slate-200 font-bold">34 Nm</span></div>
-                            <div>• Mounting Anchor Frame: <span className="text-slate-200 font-bold">105 Nm</span></div>
-                            <div className="text-[9px] text-red-400 mt-1 uppercase font-bold italic">⚠️ Video Streaming Nodes Omitted for Mechanic Tiers</div>
-                          </div>
-                        </div>
-                        <div className="mt-5 pt-3 border-t flex gap-2" style={{ borderColor: C.border }}>
-                          <button onClick={() => handleCourierScan(job.id)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg font-bold text-[10px] bg-slate-800 border border-slate-700 text-slate-300 uppercase tracking-wider hover:bg-slate-700 transition-all"><ScanLine className="h-3.5 w-3.5 text-emerald-400" /> Manifest Ingest</button>
-                          <button onClick={() => handleOrderExecution(job.id, `Parts Procurement Order for ${job.customer}`, 285.00)} className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg font-bold text-[10px] bg-emerald-600 text-slate-950 uppercase tracking-wider hover:bg-emerald-500 transition-all shadow-sm"><ShoppingCart className="h-3.5 w-3.5" /> {user?.role === 'APPRENTICE' ? 'Route Order' : 'Order Parts'}</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
-                  <h3 className="text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-1.5" style={{ color: C.emerald }}><ShieldCheck className="h-4 w-4" /> Live Employee Authorization Streams</h3>
-                  {user?.role === 'APPRENTICE' ? (
-                    <div className="p-3.5 rounded-xl border text-xs leading-relaxed border-emerald-900/40 bg-emerald-950/10">📡 <span className="font-bold text-emerald-400 uppercase tracking-wider text-[11px]">Employee Link Node Active:</span> Independent procurement blocked until approved by supervisor: <span className="text-white font-bold">{user.linkedAccount}</span></div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div className="flex flex-col gap-2.5">
-                        <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Awaiting Owner Intercept:</div>
-                        {incomingRequests.length === 0 ? (
-                                                <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-slate-900">No active employee checkouts pending validation.</p>
-                        ) : (
-                          incomingRequests.map(req => (
-                            <div key={req.id} className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-950/10 text-xs flex flex-col justify-between">
-                              <div>
-                                <div className="flex justify-between items-center font-bold text-amber-400 text-[10px] tracking-wider uppercase mb-1.5"><span>⚠️ Authorization Required</span> <span className="font-mono bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">{req.id}</span></div>
-                                <p className="text-slate-200 font-semibold">{req.desc}</p>
-                                <div className="text-[10px] text-slate-400 mt-2 font-mono flex flex-col gap-0.5 bg-slate-950/30 p-2 rounded border border-slate-800/60">
-                                  <div>Job Card Target: <span className="text-slate-200 font-bold">{req.jobId}</span></div>
-                                  <div>Value Balance: <span className="text-orange-400 font-bold">${req.price.toFixed(2)}</span></div>
-                                  <div className="text-slate-500 mt-1">Logged by: {req.apprentice}</div>
-                                </div>
-                              </div>
-                              <div className="mt-3.5 flex gap-2 border-t pt-2.5 border-slate-800/60">
-                                <button onClick={() => handleOwnerApproveOrder(req.id, 'APPROVE')} className="flex-1 py-1.5 rounded-lg font-bold text-[10px] uppercase bg-emerald-600 text-slate-950 hover:bg-emerald-500 transition-all flex items-center justify-center gap-0.5 shadow-sm"><Check className="h-3 w-3" /> Approve & Pay</button>
-                                <button onClick={() => handleOwnerApproveOrder(req.id, 'DENY')} className="py-1.5 px-3 rounded-lg font-bold text-[10px] uppercase bg-slate-800 text-red-400 border border-slate-700 hover:bg-slate-700 transition-all"><Ban className="h-3 w-3" /> Drop</button>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-2.5">
-                        <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Stripe Live Audit Receipts:</div>
-                        {completedTransactions.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-red-900/10">No transactions recorded yet.</p>
-                        ) : (
-                          <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                            {completedTransactions.map((tx, i) => (
-                              <div key={i} className="p-2.5 rounded-lg text-[10px] bg-slate-950/60 border border-slate-800/80 flex justify-between items-center font-mono">
-                                <div className="truncate pr-2 text-slate-300"><span className="text-emerald-400 font-bold">ST_LIV_OK</span> | {tx.desc}</div>
-                                <span className="text-slate-100 font-bold bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">${tx.price.toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CATALOG LOCAL SHELF INVENTORY MODAL */}
-          {showAddStockModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-              <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl relative" style={{ background: C.panel, borderColor: C.border }}>
-                <button onClick={() => setShowAddStockModal(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-200 transition-all"><X className="h-4 w-4" /></button>
-                <div className="flex items-center gap-2 border-b pb-3 mb-4" style={{ borderColor: C.border }}>
-                  <Layers className="text-orange-500 h-4 w-4" />
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-100">Catalog Local Shelf Stock</h3>
-                </div>
-                <form onSubmit={handleAddInventoryItem} className="flex flex-col gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Part Description & Brand Specifics</label>
-                    <input type="text" required value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="e.g. Bendix Rear Pads" className="mt-1 w-full rounded-lg p-2.5 text-xs text-slate-100 outline-none border bg-slate-950/50" style={{ borderColor: C.border }} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shelf Balance Qty</label>
-                      <input type="number" required value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)} placeholder="6" className="mt-1 w-full rounded-lg p-2.5 text-xs text-slate-100 outline-none border bg-slate-950/50" style={{ borderColor: C.border }} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Shelf Grid Location</label>
-                      <input type="text" value={newItemLoc} onChange={(e) => setNewItemLoc(e.target.value)} placeholder="e.g. Row C4" className="mt-1 w-full rounded-lg p-2.5 text-xs text-slate-100 outline-none border bg-slate-950/50" style={{ borderColor: C.border }} />
-                    </div>
-                  </div>
-                  <button type="submit" className="w-full mt-3 py-2.5 rounded-lg font-bold text-xs bg-orange-500 text-slate-950 uppercase tracking-wider shadow-sm hover:bg-orange-400 transition-all">Register Onsite Stock Unit</button>
-                </form>
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AuthGate({ onAuthenticate, isAuthenticating }) {
-  const [isSignUpMode, setIsSignUpMode] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [tier, setTier] = useState('MECHANIC');
-  const [linkedAccount, setLinkedAccount] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [checked, setChecked] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const boxRef = useRef(null);
-
-  const handleScroll = () => {
-    if (!boxRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = boxRef.current;
-    if (scrollHeight - scrollTop - clientHeight < 5) setScrolled(true);
+  const handleAuthenticate = (profile) => {
+    setIsAuthenticating(true);
+    setTimeout(() => {
+      setUser(profile);
+      setIsAuthenticating(false);
+    }, 800);
   };
 
-  const canSubmit = email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
+  const handleGlobalQrHandshake = () => {
+    alert("📡 Handshake token initialized over local telemetry grids.");
+  };
 
-  const handleAuthSubmission = (e) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-    setAuthError('');
+  const handleCourierScan = (id) => {
+    alert(`📦 Tracking assigned to priority loop manifest for job target: ${id}`);
+  };
 
-    const storageKey = `partsforge_user_${email.trim().toLowerCase()}`;
+  const handleOrderExecution = (jobId, desc, value) => {
+    alert(`🛒 Transaction routed directly to Stripe Connect ledger. Order allocated for ${jobId}`);
+    setCompletedTransactions(prev => [{ desc, price: value }, ...prev]);
+  };
 
-    if (isSignUpMode) {
-      if (tier === 'APPRENTICE') {
-        const targetMasterKey = `partsforge_user_${linkedAccount.trim().toLowerCase()}`;
-        const masterProfileRaw = localStorage.getItem(targetMasterKey);
-        if (!masterProfileRaw && linkedAccount.trim() !== 'owner@eppingmechanics.com.au') {
-          setAuthError(`❌ LINK FAILURE: Supervisor account (${linkedAccount}) is not registered on this node grid network.`);
-          return;
-        }
+  const handleOwnerApproveOrder = (reqId, stance) => {
+    if (stance === 'APPROVE') {
+      const match = incomingRequests.find(r => r.id === reqId);
+      if (match) {
+        setCompletedTransactions(prev => [{ desc: `Approved Apprentice Requisition: ${match.desc}`, price: match.price }, ...prev]);
       }
-
-      const accountPayload = {
-        email: email.trim(),
-        password: password.trim(),
-        tier,
-        linkedAccount: tier === 'APPRENTICE' ? linkedAccount.trim() : 'Master Root Account'
-      };
-      localStorage.setItem(storageKey, JSON.stringify(accountPayload));
-      alert(`🟢 REGISTRATION MATRIX TRACKED!\nAccount profile saved to cache memory. You can now use the sign-in toggle link to authenticate.`);
-      setIsSignUpMode(false);
-      setPassword('');
-    } else {
-      const savedAccountRaw = localStorage.getItem(storageKey);
-      
-      if (!savedAccountRaw && email.trim() === 'name@workshop.com') {
-        onAuthenticate({ email: email.trim(), role: 'MECHANIC', linkedAccount: 'Master Root Account' });
-        return;
-      }
-
-      if (!savedAccountRaw) {
-        setAuthError('❌ ACCESS DENIED: Account profile not found on this node. Please click Sign Up below.');
-        return;
-      }
-
-      const verifiedProfile = JSON.parse(savedAccountRaw);
-      if (verifiedProfile.password !== password.trim()) {
-        setAuthError('❌ SECURITY EXCEPTION: Invalid password credentials.');
-        return;
-      }
-
-      onAuthenticate({ 
-        email: verifiedProfile.email, 
-        role: verifiedProfile.tier, 
-        linkedAccount: verifiedProfile.linkedAccount 
-      });
     }
+    setIncomingRequests(prev => prev.filter(r => r.id !== reqId));
   };
+
+  const handleAddInventoryItem = (e) => {
+    e.preventDefault();
+    if (!newItemName || !newItemQty) return;
+    const itemPayload = {
+      id: `STK-${Math.floor(100 + Math.random() * 900)}`,
+      item: newItemName,
+      qty: parseInt(newItemQty),
+      location: newItemLoc || 'General'
+    };
+    setInventoryList(prev => [itemPayload, ...prev]);
+    setShowAddStockModal(false);
+    setNewItemName('');
+    setNewItemQty('');
+    setNewItemLoc('');
+  };
+
+  const filteredJobs = jobs.filter(j => activeFolder === 'All' || j.folder === activeFolder);
 
   return (
-    <div className="flex items-center justify-center p-4 min-h-screen">
-      <div className="w-full max-w-md rounded-2xl border p-6 shadow-2xl" style={{ borderColor: C.border, background: C.panel }}>
-        <div className="flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/20">
-            <Wrench className="h-6 w-6 text-slate-950" />
-          </div>
-                    <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
-          <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Stripe Live Financial Network Active</p>
-          <div className="mt-3 px-3 py-1 text-[11px] font-bold uppercase rounded-full border border-slate-800 bg-slate-900/60 text-slate-400">
-            Node Mode: <span className="text-orange-400">{isSignUpMode ? 'Account Creation' : 'Secure Sign In'}</span>
-          </div>
-        </div>
-
-        <form onSubmit={handleAuthSubmission} className="mt-5 flex flex-col gap-4">
-          {authError && (
-            <div className="p-3 text-xs font-bold rounded-lg border border-red-900/30 bg-red-950/20 text-red-400 animate-pulse text-center">
-              {authError}
-            </div>
-          )}
-
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="name@workshop.com" />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Secure Password</label>
-            <div className="relative mt-1">
-              <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border pl-3 pr-10 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="••••••••" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          {isSignUpMode && (
+    <div className="min-h-screen text-slate-100 font-sans pb-12" style={{ background: C.background }}>
+      {!user ? (
+        <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />
+      ) : (
+        <div className="p-4 max-w-7xl mx-auto">
+          
+          {/* TOP GLOBAL OPERATING BANNER CONSOLE */}
+          <div className="rounded-xl border p-4 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
-              <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
-                <option value="DIY">DIY Driver Tier</option>
-                <option value="MECHANIC">Registered Mechanic (Master Account)</option>
-                <option value="APPRENTICE">Employee Link (Linked Access)</option>
-                <option value="SELLER">Verified Parts Seller Network</option>
-              </select>
+              <div className="flex items-center gap-2">
+                <Wrench className="text-orange-500 h-5 w-5" /> 
+                <h2 className="text-lg font-bold tracking-tight">PartsForge Trade Terminal</h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Active Session: <span className="font-semibold text-slate-200">{user.email}</span> | <span className="text-orange-400 font-bold uppercase">{user.role} INTERFACE</span></p>
             </div>
-          )}
-
-          {isSignUpMode && tier === 'APPRENTICE' && (
-            <div className="p-3 rounded-lg border border-dashed animate-pulse" style={{ borderColor: C.orange, background: C.panel2 }}>
-              <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.orange }}>🔗 Link to Employer's Master Account Email</label>
-              <input type="email" required value={linkedAccount} onChange={(e) => setLinkedAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.background }} placeholder="owner@eppingmechanics.com.au" />
-              <p className="text-[10px] text-slate-400 mt-1 uppercase">Provides interlocked sub-account verification. Routes all compiled manifests onto the supervisor's active terminal pane.</p>
+            <div className="flex w-full sm:w-auto gap-2">
+              <button onClick={handleGlobalQrHandshake} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold bg-slate-800 border border-slate-700 rounded-lg text-slate-200 hover:bg-slate-700 uppercase tracking-wider transition-all"><QrCode className="h-4 w-4 text-emerald-400" /> QR Handshake</button>
+              <button onClick={() => setUser(null)} className="flex-1 sm:flex-none text-xs px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-red-400 font-bold uppercase tracking-wider transition-all">Log Out</button>
             </div>
-          )}
-
-          <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-1 h-20 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
-            <p className="mb-1 font-semibold" style={{ color: C.orange }}>SECURE GATEWAY & LIABILITY ROUTING AGREEMENT</p>
-            <p className="mb-1">By initializing this node, the user verifies that all linked device sessions, automated courier manifest scans, and purchase orders are routed directly onto the Stripe Live Financial Network under the sole fiscal and trade license liability of the master account holder.</p>
-            <p>Scroll down to authorize this node connection and unlock validation tokens.</p>
           </div>
 
-          <div className="flex items-center gap-2 text-[10px]">
-            {scrolled ? (
-              <span className="flex items-center gap-1" style={{ color: C.emerald }}><CheckCircle2 className="h-3 w-3" /> Framework Read Verified</span>
-            ) : (
-              <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="h-3 w-3" /> Scroll box to verify protocols</span>
-            )}
-          </div>
+          {/* LAYER ROUTER DETERMINATION BY LAYER STATE */}
+          {user.role === 'SELLER' ? (
+            
+            /* 🏭 LAYER 1: VERIFIED WHOLESALE SUPPLIER DIRECTORY INTERFACE */
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+              <div className="lg:col-span-2 flex flex-col gap-6">
+                <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200 mb-3 flex items-center gap-2">
+                    <Building className="text-orange-500 h-4 w-4" /> Live Wholesale Listings Catalog
+                  </h3>
+                  <div className="text-[11px] text-slate-400 bg-slate-950/40 p-3 rounded-lg border border-slate-800/80 font-mono leading-relaxed mb-5">
+                    📡 <span className="text-orange-400 font-bold uppercase tracking-wider text-[10px]">WMS Node Live:</span> External Warehouse Management System mapped natively. Cross-reference mapping, trade SKU arrays, and algorithmic routing are interlocked. Orders auto-dispatch via priority Hot-Shot courier loops straight to the purchaser's repair bay.
+                  </div>
+                  <div className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-2.5">Active Mapped Warehouse Inventory Rows:</div>
+                  <div className="flex flex-col gap-2.5">
+                    {sellerOffers.map(offer => (
+                      <div key={offer.id} className="p-3.5 rounded-xl border flex justify-between items-center bg-slate-950/40 border-slate-800/80">
+                        <div>
+                          <div className="text-xs font-bold text-slate-200">{offer.part}</div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">{offer.id} | Shelf Slot: <span className="text-slate-400 font-semibold">{offer.location}</span></div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-orange-400 font-mono block">${offer.price.toFixed(2)}</span>
+                          <span className="text-[9px] text-emerald-400 uppercase font-bold tracking-wider font-mono">Qty: {offer.stock} Avail</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
+                  <ArrowUpRight className="h-4 w-4 text-emerald-400" /> Wholesaler Settlement Metrics
+                </h3>
+                <div className="p-4 rounded-xl border text-center bg-slate-950/40 border-slate-800 mb-2">
+                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Settled Payout Vault</div>
+                  <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">$4,120.00</div>
+                  <div className="text-[9px] text-slate-400 uppercase tracking-widest mt-1 font-mono">Live via Stripe Connect</div>
+                </div>
+              </div>
+            </div>
 
-          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${scrolled ? '' : 'cursor-not-allowed opacity-50'}`} style={{ borderColor: scrolled ? `${C.orange}40` : C.border, background: scrolled ? `${C.orange}05` : C.panel2 }}>
-            <input type="checkbox" checked={checked} disabled={!scrolled} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-4 w-4" style={{ accentColor: C.orange }} />
-            <span className="text-xs text-slate-300">I verify all linked device liability requirements.</span>
-          </label>
-
-          <button type="submit" disabled={!canSubmit} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition shadow-md" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
-            {isAuthenticating ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Synchronizing Node...</>) : (<>{isSignUpMode ? 'Create Secure Business Account' : 'Authenticate & Secure Entry'}</>)}
-          </button>
-
-          <div className="text-center mt-2 border-t pt-3 border-slate-800/80">
-            <button type="button" onClick={() => { setIsSignUpMode(!isSignUpMode); setAuthError(''); setChecked(false); }} className="text-xs font-medium text-slate-400 hover:text-orange-400 transition-all underline">
-              {isSignUpMode ? "Already have a workshop setup? Sign In here" : "Don't have a business node registered? Sign Up here"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-export class AppErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error, errorInfo) { console.error(error, errorInfo); }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex min-h-screen items-center justify-center p-4 bg-[#070A12] text-slate-100 font-sans">
-          <div className="w-full max-w-md rounded-2xl border border-red-900/50 p-6 text-center bg-[#0B1329] shadow-2xl">
-            <h2 className="text-lg font-bold">Terminal Interface Exception</h2>
-            <button onClick={() => window.location.reload()} className="mt-5 w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-500 transition-all">Reload Terminal</button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-
-
+          ) : user.role === 'DIY' ? (
+            
+            /* 🚗 LAYER 2: DIY SMART-TERMINAL INTERFACE */
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
