@@ -159,7 +159,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* LAYER ROUTER DETERMINATION BY LAYER STATE */}
+                   {/* LAYER ROUTER DETERMINATION BY LAYER STATE */}
           {user.role === 'SELLER' ? (
             
             /* 🏭 LAYER 1: VERIFIED WHOLESALE SUPPLIER DIRECTORY INTERFACE */
@@ -186,7 +186,7 @@ export default function App() {
                         </div>
                       </div>
                     ))}
-                                      </div>
+                  </div>
                 </div>
               </div>
               <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
@@ -223,7 +223,7 @@ export default function App() {
                 <div className="rounded-xl border p-4 shadow-md flex flex-col sm:flex-row gap-3 items-center" style={{ borderColor: C.border, background: C.panel }}>
                   <div className="relative flex-1 w-full">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search component catalogs, manuals, specs, tools, or fault P-codes..." className="w-full rounded-xl border pl-11 pr-4 py-3 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search component catalogs, manuals, specs, tools, or fault P-codes..." className="w-full rounded-xl border pl-11 pr-4 py-3 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Search catalogs..." />
                   </div>
                   <button className="w-full sm:w-auto px-5 py-3 rounded-xl bg-orange-500 text-slate-950 font-bold text-xs uppercase tracking-wider hover:bg-orange-400 transition-all shadow-sm">Execute Lookup</button>
                 </div>
@@ -264,9 +264,11 @@ export default function App() {
                       </div>
                     )}
                     {activeDiyTab === 'manuals' && (
-                      <div className="space-y-3">
-                        <div><span className="text-orange-400 font-bold uppercase text-[10px] block mb-0.5">🔧 Hiace Torque Specifications Matrix:</span> Caliper Slider Bolts: <span className="text-white font-bold">34 Nm</span> | Caliper Mounting Anchor Frame Mounts: <span className="text-white font-bold">105 Nm</span> | Wheel Lug Lugnuts: <span className="text-white font-bold">103 Nm</span></div>
-                        <div><span className="text-orange-400 font-bold uppercase text-[10px] block mb-0.5">📋 OBD-II Fault Code Lookup:</span> Entering <span className="text-red-400 font-bold">P0300</span> outputs: Random/Multiple Cylinder Misfire Detected. Verify ignition pack resistance coils and secondary filter lines.</div>
+                      <div className="space-y-4">
+                        <div>
+                          <span className="text-orange-400 font-bold uppercase text-[10px] block mb-1">🔧 Hiace Torque Specifications Matrix</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-900/60 p-2.5 rounded border border-slate-800 text-[11px]">
+
                       </div>
                     )}
                                       </div>
