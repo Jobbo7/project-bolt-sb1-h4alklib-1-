@@ -130,7 +130,7 @@ export default function App() {
           {/* LAYER ROUTER DETERMINATION BY LAYER STATE */}
           {user.role === 'SELLER' ? (
             
-                            /* 🏭 LAYER 1: VERIFIED WHOLESALE SUPPLIER DIRECTORY INTERFACE */
+            /* 🏭 LAYER 1: VERIFIED WHOLESALE SUPPLIER DIRECTORY INTERFACE */
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               <div className="lg:col-span-2 flex flex-col gap-6">
                 <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
