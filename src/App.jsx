@@ -539,7 +539,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
               </div>
             </div>
 
-          ) : (
+                   ) : (
             
             /* 🔧 LAYER 3: MASTER MECHANIC & LINKED EMPLOYEE CORE WORKSPACE PANEL */
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -550,7 +550,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {['All', 'Brakes', 'Servicing', 'Diagnostics'].map(folderName => (
-                                    <button key={folderName} onClick={() => setActiveFolder(folderName)} className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider flex justify-between items-center transition-all" style={{ background: activeFolder === folderName ? C.panel2 : 'transparent', border: activeFolder === folderName ? `1px solid ${C.border}` : '1px solid transparent', color: activeFolder === folderName ? '#FFF' : C.textDim }}>
+                      <button key={folderName} onClick={() => setActiveFolder(folderName)} className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider flex justify-between items-center transition-all" style={{ background: activeFolder === folderName ? C.panel2 : 'transparent', border: activeFolder === folderName ? `1px solid ${C.border}` : '1px solid transparent', color: activeFolder === folderName ? '#FFF' : C.textDim }}>
                         <span className="flex items-center gap-2"><Folder className={`h-3.5 w-3.5 ${activeFolder === folderName ? 'text-orange-500' : 'text-slate-600'}`} /> {folderName}</span>
                         <ChevronRight className={`h-3 w-3 transition-transform ${activeFolder === folderName ? 'rotate-90 text-orange-500' : 'text-slate-600'}`} />
                       </button>
@@ -640,7 +640,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
                                 </div>
                               </div>
                               <div className="mt-3.5 flex gap-2 border-t pt-2.5 border-slate-800/60">
-                                                               <button onClick={() => handleOwnerApproveOrder(req.id, 'APPROVE')} className="flex-1 py-1.5 rounded-lg font-bold text-[10px] uppercase bg-emerald-600 text-slate-950 hover:bg-emerald-500 transition-all flex items-center justify-center gap-0.5 shadow-sm"><Check className="h-3 w-3" /> Approve & Pay</button>
+                                <button onClick={() => handleOwnerApproveOrder(req.id, 'APPROVE')} className="flex-1 py-1.5 rounded-lg font-bold text-[10px] uppercase bg-emerald-600 text-slate-950 hover:bg-emerald-500 transition-all flex items-center justify-center gap-0.5 shadow-sm"><Check className="h-3 w-3" /> Approve & Pay</button>
                                 <button onClick={() => handleOwnerApproveOrder(req.id, 'DENY')} className="py-1.5 px-3 rounded-lg font-bold text-[10px] uppercase bg-slate-800 text-red-400 border border-slate-700 hover:bg-slate-700 transition-all"><Ban className="h-3 w-3" /> Drop</button>
                               </div>
                             </div>
@@ -790,7 +790,6 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Stripe Live Financial Network Active</p>
           <div className="mt-3 px-3 py-1 text-[11px] font-bold uppercase rounded-full border border-slate-800 bg-slate-900/60 text-slate-400">
             Node Mode: <span className="text-orange-400">{isSignUpMode ? 'Account Creation' : 'Secure Sign In'}</span>
-          </div>
         </div>
 
         <form onSubmit={handleAuthSubmission} className="mt-5 flex flex-col gap-4">
@@ -808,8 +807,8 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Secure Password</label>
             <div className="relative mt-1">
-                          <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border pl-3 pr-10 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="••••••••" />
-              <button type="button" onClick={() => { setShowPassword(!showPassword); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+              <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border pl-3 pr-10 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="••••••••" />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
@@ -887,6 +886,7 @@ export class AppErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+
   
  
 
