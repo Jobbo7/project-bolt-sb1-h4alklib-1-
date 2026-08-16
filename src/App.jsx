@@ -201,7 +201,7 @@ export default function App() {
               </div>
             </div>
 
-          ) : user.role === 'DIY' ? (
+                    ) : user.role === 'DIY' ? (
             
             /* 🚗 LAYER 2: DIY SMART-TERMINAL INTERFACE (Permits Video Framework Modules) */
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -212,7 +212,7 @@ export default function App() {
                   <h4 className="text-xs font-bold text-slate-200 mt-2">Toyota Hiace Commuter</h4>
                   <p className="text-[10px] text-slate-500 font-mono mt-0.5">2.5L Diesel Turbo Matrix</p>
                 </div>
-                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mt-1">Maintenance History Log:</div>
+                <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mt-1">Maintenance History Log:</div>
                 <div className="text-xs font-mono text-slate-400 space-y-1.5 bg-slate-950/20 p-2.5 rounded border border-slate-900/60">
                   <div>• Service log oil filter check [OK]</div>
                   <div>• Front pads fitted reference [Awaiting]</div>
@@ -223,7 +223,7 @@ export default function App() {
                 <div className="rounded-xl border p-4 shadow-md flex flex-col sm:flex-row gap-3 items-center" style={{ borderColor: C.border, background: C.panel }}>
                   <div className="relative flex-1 w-full">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search component catalogs, manuals, specs, tools, or fault P-codes..." className="w-full rounded-xl border pl-11 pr-4 py-3 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Search catalogs..." />
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search component catalogs, manuals, specs, tools, or fault P-codes..." className="w-full rounded-xl border pl-11 pr-4 py-3 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
                   </div>
                   <button className="w-full sm:w-auto px-5 py-3 rounded-xl bg-orange-500 text-slate-950 font-bold text-xs uppercase tracking-wider hover:bg-orange-400 transition-all shadow-sm">Execute Lookup</button>
                 </div>
@@ -268,15 +268,58 @@ export default function App() {
                         <div>
                           <span className="text-orange-400 font-bold uppercase text-[10px] block mb-1">🔧 Hiace Torque Specifications Matrix</span>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-900/60 p-2.5 rounded border border-slate-800 text-[11px]">
+                            <div>Caliper Slider Bolts: <span className="text-white font-bold">34 Nm</span></div>
+                            <div>Caliper Bracket Anchors: <span className="text-white font-bold">105 Nm</span></div>
+                            <div>Wheel Lug Nuts: <span className="text-white font-bold">103 Nm</span></div>
+                          </div>
+                        </div>
 
+                        <div>
+                          <span className="text-orange-400 font-bold uppercase text-[10px] block mb-1">📋 Interactive OBD-II Fault Code Lookup & P-Code Resolutions</span>
+                          <div className="p-3 bg-slate-900/60 rounded border border-slate-800 space-y-3">
+                            <div className="flex gap-2">
+                              <input type="text" id="diyCodeInput" placeholder="Enter P-Code (e.g., P0300, P0420)..." className="flex-1 rounded-lg border px-3 py-1.5 text-xs text-slate-100 outline-none border-slate-700 bg-slate-950/50 font-mono placeholder:text-slate-600 uppercase" onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const code = e.currentTarget.value.trim().toUpperCase();
+                                  const outputNode = document.getElementById('pCodeOutputGrid');
+                                  if (!outputNode) return;
+                                  
+                                  const matrix = {
+                                    'P0300': { fault: 'Random/Multiple Cylinder Misfire Detected', system: 'Ignition System', fix: 'Inspect coil packs and secondary wires.' },
+                                    'P0420': { fault: 'Catalyst System Efficiency Below Threshold', system: 'Emissions Control', fix: 'Check upstream exhaust sealing metrics.' }
+                                  };
+
+                                  const match = matrix[code];
+                                  if (match) {
+                                    outputNode.innerHTML = `<div class="p-3 rounded-lg border border-red-900/40 bg-red-950/10 space-y-1"><div class="text-red-400 font-bold">DTC: ${code}</div><div class="text-slate-200">${match.fault}</div><div class="text-emerald-400 pt-1 border-t border-slate-800/80 mt-1">${match.fix}</div></div>`;
+                                  } else {
+                                    outputNode.innerHTML = `<div class="p-3 rounded-lg border border-slate-800 bg-slate-950 text-slate-500 italic text-center">Query not cached locally. Searching...</div>`;
+                                  }
+                                }
+                              }} />
+                            </div>
+                            <div id="pCodeOutputGrid" className="mt-2 text-[11px]">
+                              <div className="p-3 rounded-lg border border-slate-800/80 bg-slate-950/30 text-slate-500 italic text-center">
+                                Type trouble code above and press Enter.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
-                                      </div>
+                    {activeDiyTab === 'videos' && (
+                      <div className="p-6 text-center border border-dashed border-slate-800 bg-slate-900/30 rounded-xl flex flex-col items-center gap-2">
+                                                <Play className="h-8 w-8 text-orange-500 animate-pulse" />
+                        <div className="text-xs text-slate-200 font-bold uppercase">Hiace Front Brake Brake-Pads Walkthrough Guide V2</div>
+                        <p className="text-[10px] text-slate-500 max-w-xs leading-normal">Streaming media pipeline initialized natively matching vehicle spec profile folder. Retail data channels unlocked for DIY operators.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-                    ) : (
+          ) : (
             
             /* 🔧 LAYER 3: MASTER MECHANIC & LINKED EMPLOYEE CORE WORKSPACE PANEL */
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -338,7 +381,7 @@ export default function App() {
                             <span style={{ color: job.status.includes('Verified') ? C.emerald : '#F59E0B', fontSize: '10px' }} className="uppercase tracking-wider font-bold bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800/60">{job.status}</span>
                           </div>
                           <h4 className="text-sm font-bold text-slate-200">{job.customer} <span className="font-mono text-xs font-medium text-slate-500">[{job.rego}]</span></h4>
-                          <p className="text-xs text-slate-400 mt-1 leading-relaxed"><span className="text-slate-500 font-medium">Assignment:</span> {job.currentTask}</p>
+                          <p className="text-xs text-slate-400 mt-1 leading-relaxed"><span className="text-slate-400 font-medium">Assignment:</span> {job.currentTask}</p>
                           <div className="text-[10px] text-slate-400 font-mono mt-3 bg-slate-950/40 p-2 rounded border border-slate-800/50 space-y-0.5">
                             <div>• Caliper Slider Specs: <span className="text-slate-200 font-bold">34 Nm</span></div>
                             <div>• Mounting Anchor Frame: <span className="text-slate-200 font-bold">105 Nm</span></div>
@@ -363,7 +406,7 @@ export default function App() {
                       <div className="flex flex-col gap-2.5">
                         <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Awaiting Owner Intercept:</div>
                         {incomingRequests.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-slate-900">No active employee checkouts pending validation.</p>
+                                                <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-slate-900">No active employee checkouts pending validation.</p>
                         ) : (
                           incomingRequests.map(req => (
                             <div key={req.id} className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-950/10 text-xs flex flex-col justify-between">
@@ -387,7 +430,7 @@ export default function App() {
                       <div className="flex flex-col gap-2.5">
                         <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Stripe Live Audit Receipts:</div>
                         {completedTransactions.length === 0 ? (
-                          <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-slate-900">No transactions recorded yet.</p>
+                          <p className="text-xs text-slate-500 italic bg-slate-950/30 p-3 rounded-xl border border-red-900/10">No transactions recorded yet.</p>
                         ) : (
                           <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
                             {completedTransactions.map((tx, i) => (
@@ -523,10 +566,11 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/20">
             <Wrench className="h-6 w-6 text-slate-950" />
           </div>
-          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
+                    <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
           <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Stripe Live Financial Network Active</p>
           <div className="mt-3 px-3 py-1 text-[11px] font-bold uppercase rounded-full border border-slate-800 bg-slate-900/60 text-slate-400">
             Node Mode: <span className="text-orange-400">{isSignUpMode ? 'Account Creation' : 'Secure Sign In'}</span>
+          </div>
         </div>
 
         <form onSubmit={handleAuthSubmission} className="mt-5 flex flex-col gap-4">
@@ -623,3 +667,6 @@ export class AppErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+
+
+
