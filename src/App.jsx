@@ -427,3 +427,12 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
             onClick={() => onAuthenticate({ email: 'workshop-lead@diy-pro.net', role: 'DIY' })}
             className="w-full py-3 bg-slate-900 hover:bg-slate-850 text-emerald-400 font-bold text-xs uppercase tracking-widest rounded-xl border border-slate-800 hover:border-emerald-500/40 transition-all"
           >
+                       {isAuthenticating ? 'Initializing System...' : 'Node 2: DIY Workshop Smart-Terminal'}
+          </button>
+        </div>
+        <div className="text-[10px] text-slate-600 font-mono mt-6 uppercase tracking-widest">Secure Telemetry Sandbox v0.4.8</div>
+      </div>
+    </div>
+  );
+}
+ 
