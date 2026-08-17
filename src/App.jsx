@@ -435,4 +435,12 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
     </div>
   );
 }
- 
+ // Error Boundary fallback component expected by main.tsx
+export function AppErrorBoundary({ children }) {
+  return (
+    <React.StrictMode>
+      {children}
+    </React.StrictMode>
+  );
+}
+
