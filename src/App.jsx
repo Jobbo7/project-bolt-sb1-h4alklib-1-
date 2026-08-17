@@ -289,5 +289,141 @@ export default function App() {
                 {/* SUB-TAB 3: INVENTORY HUB & REQUISITION MANAGEMENT */}
                 {activeDiyTab === 'inventory' && (
                   <div className="flex flex-col gap-6">
-                    {/* APPRENTICE REQUISITION APPROVAL DECK */}
+                                        {/* APPRENTICE REQUISITION APPROVAL DECK */}
                     {incomingRequests.length > 0 && (
+                      <div className="rounded-xl border p-5 shadow-lg border-amber-500/30 bg-amber-500/5">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-3 flex items-center gap-2 animate-pulse">
+                          <AlertTriangle className="h-4 w-4" /> Pending Requisition Escrow Stream
+                        </h3>
+                        <div className="flex flex-col gap-2.5">
+                          {incomingRequests.map(req => (
+                            <div key={req.id} className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                              <div>
+                                <div className="text-xs font-bold text-slate-200">{req.desc}</div>
+                                <div className="text-[10px] text-slate-400 font-mono mt-0.5">Origin: <span className="text-orange-400 font-semibold">{req.apprentice}</span> mapped to target <span className="text-slate-300 underline">{req.jobId}</span></div>
+                              </div>
+                              <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <span className="text-sm font-bold text-amber-400 font-mono mr-2">${req.price.toFixed(2)}</span>
+                                <button onClick={() => handleOwnerApproveOrder(req.id, 'APPROVE')} className="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 rounded-lg transition-all"><Check className="h-4 w-4" /></button>
+                                <button onClick={() => handleOwnerApproveOrder(req.id, 'DENY')} className="p-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 rounded-lg transition-all"><X className="h-4 w-4" /></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PHYSICAL LOCAL STOCK MANAGER */}
+                    <div className="rounded-xl border p-5 shadow-lg" style={{ borderColor: C.border, background: C.panel }}>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                          <Layers className="text-orange-500 h-4 w-4" /> Local Bay Physical Stock Records
+                        </h3>
+                        <button 
+                          onClick={() => setShowAddStockModal(true)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-all shadow-md shadow-emerald-600/10"
+                        >
+                          + Ingest Item
+                        </button>
+                      </div>
+
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500 tracking-wider font-mono">
+                            <th className="pb-2">SKU ID</th>
+                            <th className="pb-2">Material / Part Descriptor</th>
+                            <th className="pb-2">Qty</th>
+                            <th className="pb-2 text-right">Physical Footprint Allocation</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-mono text-xs text-slate-300">
+                          {inventoryList.map(item => (
+                            <tr key={item.id} className="hover:bg-slate-900/40">
+                              <td className="py-3 text-slate-500 font-bold">{item.id}</td>
+                              <td className="py-3 font-sans font-semibold text-slate-200">{item.item}</td>
+                              <td className="py-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.qty <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-slate-850 text-slate-300'}`}>{item.qty} units</span></td>
+                              <td className="py-3 text-right text-slate-400">{item.location}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* HISTORIC COMPLETED TRANSACTIONS FOOTPRINT */}
+                <div className="rounded-xl border p-4 shadow-md bg-slate-950/20 border-slate-800">
+                  <h4 className="text-[11px] uppercase font-bold tracking-widest text-slate-400 mb-2 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Connected Real-Time Accounting Ledger</h4>
+                  <div className="flex flex-col gap-1.5">
+                    {completedTransactions.map((tx, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-[11px] font-mono text-slate-400 bg-slate-950/50 px-3 py-1.5 rounded border border-slate-900">
+                        <span className="truncate max-w-md">✓ {tx.desc}</span>
+                        <span className="text-emerald-400 font-bold">${tx.price.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          ) : (
+            <div className="text-center p-8 text-slate-400">
+              Select a valid dashboard view.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* STOCK INGESTION MODAL OVERLAY PORTAL */}
+      {showAddStockModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-xl border p-6 shadow-2xl relative" style={{ background: C.panel, borderColor: C.border }}>
+            <button onClick={() => setShowAddStockModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-200"><X className="h-5 w-5" /></button>
+            <h3 className="text-base font-bold text-slate-100 uppercase tracking-wide mb-4">Ingest Physical Inventory Material</h3>
+            <form onSubmit={handleAddInventoryItem} className="flex flex-col gap-4 text-xs">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-slate-400 font-bold uppercase tracking-wider">Item Name / Specification</label>
+                <input required type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="e.g. NGK Spark Plug Laser Iridium" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-slate-700" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-slate-400 font-bold uppercase tracking-wider">Quantity</label>
+                  <input required type="number" min="1" value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)} placeholder="10" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-slate-700" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-slate-400 font-bold uppercase tracking-wider">Location / Shelf Slot</label>
+                  <input type="text" value={newItemLoc} onChange={(e) => setNewItemLoc(e.target.value)} placeholder="e.g. Row B6" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-slate-700" />
+                </div>
+              </div>
+              <button type="submit" className="mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-widest rounded-lg transition-all shadow-lg shadow-emerald-600/20">Commit to Stock Matrix</button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+{/* PROTOTYPE FALLBACK COMPONENT FOR AUTH DECK GATING */}
+function AuthGate({ onAuthenticate, isAuthenticating }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
+      <div className="w-full max-w-sm rounded-2xl border p-6 shadow-2xl text-center" style={{ background: '#0B1329', borderColor: '#1E293B' }}>
+        <Wrench className="h-10 w-10 mx-auto text-orange-500 mb-4" />
+        <h1 className="text-xl font-black tracking-tight text-slate-100">PartsForge Console</h1>
+        <p className="text-xs text-slate-400 mt-1 mb-6">Select a profile node simulation interface</p>
+        
+        <div className="flex flex-col gap-3">
+          <button 
+            disabled={isAuthenticating}
+            onClick={() => onAuthenticate({ email: 'wholesaler@node-east.trade', role: 'SELLER' })}
+            className="w-full py-3 bg-slate-900 hover:bg-slate-850 text-orange-400 font-bold text-xs uppercase tracking-widest rounded-xl border border-slate-800 hover:border-orange-500/40 transition-all"
+          >
+            {isAuthenticating ? 'Initializing System...' : 'Node 1: Supplier / Seller Deck'}
+          </button>
+          
+          <button 
+            disabled={isAuthenticating}
+            onClick={() => onAuthenticate({ email: 'workshop-lead@diy-pro.net', role: 'DIY' })}
+            className="w-full py-3 bg-slate-900 hover:bg-slate-850 text-emerald-400 font-bold text-xs uppercase tracking-widest rounded-xl border border-slate-800 hover:border-emerald-500/40 transition-all"
+          >
