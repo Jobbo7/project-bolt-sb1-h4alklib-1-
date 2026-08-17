@@ -142,8 +142,10 @@ function hydrateVehicleSpecs(base, region) {
   };
 }
 
-// 🔍 DUAL-ENGINE SEARCH BROKER AGGREGATOR (LIVE DB + FB CRAWLER)
-export const processPartsQuery = async (searchString) => {
+// 🔍 DUAL-ENGINE SEARCH AGGREGATOR BROKER (LIVE SUPABASE DB + WEB CRAWLER AGGREGATOR)
+// Intercepts frontend dashboard keywords and funnels them directly down to your 
+// private Vercel serverless routing nodes to merge wholesaler stock and live web results.
+export const processPartsQuery = async (searchString: string) => {
   try {
     if (!searchString || !searchString.trim()) {
       return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] };
@@ -151,6 +153,7 @@ export const processPartsQuery = async (searchString) => {
 
     console.log(`📡 Pushing unified query parameters to Vercel live search node: ${searchString}`);
 
+    // Call your Vercel serverless function endpoint securely over the network
     const response = await fetch('/api/parts-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -158,23 +161,24 @@ export const processPartsQuery = async (searchString) => {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Server rejected search handshake');
+    if (!response.ok) throw new Error(data.error || 'Server rejected unified search handshake');
 
-    // Maps your real backend arrays straight onto your existing dashboard tabs
+    // Feed the live results smoothly back directly into your matching dashboard tabs
     return {
-      local: data.localWholesalers || [],        // Live Registered Wholesalers from your database
+      local: data.localWholesalers || [],        // 🏢 Live Wholesalers from your Supabase Table
       national: [],                              // Open slots preserved for downstream modules
       trans_tasman: [],
       global_direct: [],
-      facebook: data.facebookMarketplace || []  // Live crawled Facebook listings
+      facebook: data.facebookMarketplace || []  // 🌐 Live Scraped Marketplace ads from the web
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Aggregator Search Connection Interrupted:", error.message);
-    // Returns clean empty arrays to prevent your frontend AppErrorBoundary from crashing
+    // Secure empty array fallback protects your user interface framework from a crash
     return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [], error: error.message };
   }
 };
+
 
 
 // ─── Required Tools Catalog ──────────────────────────────────────────────────
