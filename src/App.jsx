@@ -127,7 +127,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* LAYER ROUTER DETERMINATION BY LAYER STATE */}
+                   {/* LAYER ROUTER DETERMINATION BY LAYER STATE */}
           {user.role === 'SELLER' ? (
             
             /* 🏭 LAYER 1: VERIFIED WHOLESALE SUPPLIER DIRECTORY INTERFACE */
@@ -172,7 +172,7 @@ export default function App() {
           ) : user.role === 'DIY' ? (
             
             /* 🚗 LAYER 2: DIY SMART-TERMINAL INTERFACE */
-                       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
               <div className="rounded-xl border p-4 shadow-md flex flex-col gap-3" style={{ borderColor: C.border, background: C.panel }}>
                 <div className="text-sm text-slate-400">
                   Smart-Terminal active. Configure your DIY metrics and controls here.
@@ -187,10 +187,6 @@ export default function App() {
         </main>
       </div>
     );
-  }
 }
 
 export default App;
-
- 
-             
