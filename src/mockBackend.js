@@ -802,7 +802,6 @@ export const triggerXeroAccountantSync = async (invoice, accountantEmail) => {
   };
 };
 // ─── ADDING COMPLIANCE HOOKS FOR APP.JSX UI ELEMENT MAPPINGS ──────────────────
-export const WORKSHOP_BUSINESS = { name: "PartsForge Automated Test Facility Node" };
 export const PLATFORM_LOGISTICS_MARKUP = 0.05;
 export const TRANS_TASMAN_FREIGHT_SURCHARGE = 45.00;
 export const GLOBAL_DIRECT_FREIGHT_SURCHARGE = 85.00;
