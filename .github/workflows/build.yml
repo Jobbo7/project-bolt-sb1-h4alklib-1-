@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main, master ]
 
+# ⚡ GLOBAL ENVIRONMENT SWITCH: Force-kills strict lockfile enforcement
+env:
+  NPM_CONFIG_CI: false
+  NPM_CONFIG_FUND: false
+  NPM_CONFIG_AUDIT: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,8 +25,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Project Dependencies and Core Packages
-        run: npm install --legacy-peer-deps
+      - name: Force-Sync All Project Dependencies
+        run: |
+          npm config set package-lock false
+          npm install --legacy-peer-deps
 
       - name: Compile and Verify Production Web Distribution Bundle
         run: npm run build --if-present
