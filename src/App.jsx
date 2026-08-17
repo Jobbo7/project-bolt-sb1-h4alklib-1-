@@ -1,3 +1,4 @@
+import { createWorker } from 'tesseract.js';
 import { useState, useRef, useMemo, useCallback, Component } from 'react';
 import {
   ShieldCheck, Wrench, Mail, Lock, Eye, EyeOff, KeyRound, Search, Camera,
