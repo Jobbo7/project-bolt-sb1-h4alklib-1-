@@ -145,7 +145,7 @@ function hydrateVehicleSpecs(base, region) {
 // 🔍 DUAL-ENGINE SEARCH AGGREGATOR BROKER (LIVE SUPABASE DB + WEB CRAWLER AGGREGATOR)
 // Intercepts frontend dashboard keywords and funnels them directly down to your 
 // private Vercel serverless routing nodes to merge wholesaler stock and live web results.
-export const processPartsQuery = async (searchString: string) => {
+export const processPartsQuery = async (searchString) => {
   try {
     if (!searchString || !searchString.trim()) {
       return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] };
@@ -165,19 +165,20 @@ export const processPartsQuery = async (searchString: string) => {
 
     // Feed the live results smoothly back directly into your matching dashboard tabs
     return {
-      local: data.localWholesalers || [],        // 🏢 Live Wholesalers from your Supabase Table
+      local: data.localWholesalers || [],        // Live Wholesalers from your Supabase Table
       national: [],                              // Open slots preserved for downstream modules
       trans_tasman: [],
       global_direct: [],
-      facebook: data.facebookMarketplace || []  // 🌐 Live Scraped Marketplace ads from the web
+      facebook: data.facebookMarketplace || []  // Live Scraped Marketplace ads from the web
     };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("❌ Aggregator Search Connection Interrupted:", error.message);
     // Secure empty array fallback protects your user interface framework from a crash
     return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [], error: error.message };
   }
 };
+
 
 
 
