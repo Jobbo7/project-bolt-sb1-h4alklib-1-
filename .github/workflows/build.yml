@@ -1,19 +1,20 @@
-name: PartsForge Automated Web Build Verification
+name: Build and Verify Workspace Matrix
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
-  verify-web-compilation:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository Source Code Files
+      - name: Checkout Code Repository Node
         uses: actions/checkout@v4
 
-      -      - name: Initialize Node.js Environment Matrix
+      - name: Initialize Node.js Environment Matrix
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -24,4 +25,3 @@ jobs:
 
       - name: Compile and Verify Production Web Distribution Bundle
         run: npm run build --if-present
-
