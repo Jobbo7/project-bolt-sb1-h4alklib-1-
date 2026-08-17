@@ -172,21 +172,25 @@ export default function App() {
           ) : user.role === 'DIY' ? (
             
             /* 🚗 LAYER 2: DIY SMART-TERMINAL INTERFACE */
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-                           {/* DIY Interface Content Goes Here */}
-              <div className="text-sm text-slate-400">
-                Smart-Terminal active. Configure your DIY metrics and controls here.
+                       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+              <div className="rounded-xl border p-4 shadow-md flex flex-col gap-3" style={{ borderColor: C.border, background: C.panel }}>
+                <div className="text-sm text-slate-400">
+                  Smart-Terminal active. Configure your DIY metrics and controls here.
+                </div>
               </div>
-            </div> {/* Closes inner border div */}
-          </div> {/* Closes grid grid-cols-1 div */}
-        ) : (
-          <div className="text-center p-8 text-slate-400">
-            Select a valid dashboard view.
-          </div>
-        )}
-      </main>
-    </div>
-  );
+            </div>
+          ) : (
+            <div className="text-center p-8 text-slate-400">
+              Select a valid dashboard view.
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
 }
+
+export default App;
+
  
              
