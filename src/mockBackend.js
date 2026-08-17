@@ -142,33 +142,40 @@ function hydrateVehicleSpecs(base, region) {
   };
 }
 
-export const processPartsQuery = async (query, userLat = -37.6012, userLon = 145.1054) => {
-  await new Promise(r => setTimeout(r, 600));
-  const normalized = query.toLowerCase();
-  let key = 'brake pads';
-  if (normalized.includes('oil') || normalized.includes('filter')) key = 'oil filter';
-  else if (normalized.includes('spark') || normalized.includes('plug')) key = 'spark plugs';
-  else if (normalized.includes('air')) key = 'air filter';
-  const data = DATA_MATRIX.catalog[key];
+// 🔍 DUAL-ENGINE SEARCH BROKER AGGREGATOR (LIVE DB + FB CRAWLER)
+export const processPartsQuery = async (searchString) => {
+  try {
+    if (!searchString || !searchString.trim()) {
+      return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] };
+    }
 
-  const calcDist = (lat1, lon1, lat2, lon2) => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
-    return Math.round((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))) * 10) / 10;
-  };
+    console.log(`📡 Pushing unified query parameters to Vercel live search node: ${searchString}`);
 
-  const mapper = (item) => ({ ...item, distanceKm: calcDist(userLat, userLon, item.lat, item.lon) });
-  return {
-    torque: data.torque, video: data.video, videoTitle: data.videoTitle,
-    local: data.local.map(mapper), national: data.national.map(mapper), facebook: data.facebook.map(mapper),
-    trans_tasman: (data.trans_tasman || []).map(mapper), global_direct: (data.global_direct || []).map(mapper),
-    tools: getToolsForComponent(query),
-    consumables: getConsumablesForComponent(query),
-    docs: getDocsForComponent(query),
-  };
+    const response = await fetch('/api/parts-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: searchString.trim() })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Server rejected search handshake');
+
+    // Maps your real backend arrays straight onto your existing dashboard tabs
+    return {
+      local: data.localWholesalers || [],        // Live Registered Wholesalers from your database
+      national: [],                              // Open slots preserved for downstream modules
+      trans_tasman: [],
+      global_direct: [],
+      facebook: data.facebookMarketplace || []  // Live crawled Facebook listings
+    };
+
+  } catch (error) {
+    console.error("❌ Aggregator Search Connection Interrupted:", error.message);
+    // Returns clean empty arrays to prevent your frontend AppErrorBoundary from crashing
+    return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [], error: error.message };
+  }
 };
+
 
 // ─── Required Tools Catalog ──────────────────────────────────────────────────
 // Dynamically recommends the exact tools needed for removal and installation
