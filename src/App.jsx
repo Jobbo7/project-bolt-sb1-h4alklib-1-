@@ -15,19 +15,35 @@ import {
   Navigation, MapPin as MapPinIcon, ClipboardCheck, PackageCheck, UserCheck,
 } from 'lucide-react';
 import {
-  processFreeRegoLookup, processVinLookup, processPartsQuery,
-  persistJobProgress, COURIER_BASE_FEE, TAX_RATE, CONSUMABLES_MARKUP,
-  SOURCING_TIERS, getToolsForComponent, getConsumablesForComponent,
-  getDocsForComponent, TRADE_ACCOUNTS, MEMBERSHIP_TIERS, resolveTradeAccount,
-  compileCustomerInvoice, dispatchInvoicePaymentRequest,
-  settleInvoiceViaCustomerPortal, connectOpenBankingFeed, simulateInboundDeposit,
-  startBasiqBankFeedListener, triggerXeroAccountantSync, linkAtoSbr,
-  connectAccountingSoftware, inviteAccountant, streamInvoiceToLedger,
-  WORKSHOP_BUSINESS, createLiveCourierQuote, executeStripeSplitPayouts,
-  dispatchUberDirectDrivers, PLATFORM_LOGISTICS_MARKUP,
-  TRANS_TASMAN_FREIGHT_SURCHARGE, GLOBAL_DIRECT_FREIGHT_SURCHARGE,
-  dispatchConsolidatedFreight,
+  processFreeRegoLookup,
+  processVinLookup,
+  processPartsQuery,
+  persistJobProgress,
+  COURIER_BASE_FEE,
+  TAX_RATE,
+  CONSUMABLES_MARKUP,
+  SOURCING_TIERS,
+  getToolsForComponent,
+  getConsumablesForComponent,
+  getDocsForComponent,
+  MEMBERSHIP_TIERS,
+  resolveTradeAccount,
+  compileCustomerInvoice,
+  dispatchInvoicePaymentRequest,
+  settleInvoiceViaCustomerPortal,
+  connectOpenBankingFeed,
+  simulateInboundDeposit,
+  triggerXeroAccountantSync,
+  linkAtoSbr,
+  connectAccountingSoftware,
+  inviteAccountant,
+  streamInvoiceToLedger,
+  executeStripeSplitPayouts,
+  executeWholesalerItemUpload,
+  dispatchUberDirectDrivers,
+  dispatchConsolidatedFreight
 } from './mockBackend.js';
+
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
 
@@ -3341,12 +3357,20 @@ export default function App() {
     if (v) setVehicle(v);
   };
 
-  // ── Parts search ──
+   // ── Parts search ──
   const handleSearch = async (query) => {
+    if (!query || !query.trim()) return;
     setPartsLoading(true);
-    const r = await processPartsQuery(query);
-    setPartsLoading(false);
-    setResults(r);
+    setResults(null); // Instantly flushes old mock views from tablet cache layout
+    try {
+      const r = await processPartsQuery(query);
+      setResults(r);
+    } catch (err) {
+      console.error("❌ Live search bridge error:", err);
+      setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+    } finally {
+      setPartsLoading(false);
+    }
   };
 
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
@@ -3361,6 +3385,7 @@ export default function App() {
     setSaveToast('Item added to your sourcing basket.');
     setTimeout(() => setSaveToast(null), 3000);
   };
+
 
   // ── Workshop catalog purchase: routes through cart with LINE1 classification ──
   const handleWorkshopPurchase = (item, category) => {
