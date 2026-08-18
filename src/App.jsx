@@ -3357,32 +3357,30 @@ export default function App() {
     if (v) setVehicle(v);
   };
 
-    // ── True Live Search Aggregator Mapping ──
+   // ── Parts search ──
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
-    
     setPartsLoading(true);
-    setResults(null); // Instantly clears out old views
-    
+    setResults(null); // Instantly flushes old mock views from tablet cache layout
     try {
-      // Calls your live Vercel fetch aggregator broker
-      const liveResults = await processPartsQuery(query);
+      const liveData = await processPartsQuery(query);
       
-      // Forces the frontend state to map the exact keys your Vercel API returns
+      // Map your real serverless response arrays directly into your layout rows
       setResults({
-        local: liveResults.local || [], // Maps live Supabase Wholesalers
-        national: [],
+        local: liveData.local || [],        // Live Wholesalers from your Supabase Table
+        national: [],                       // Open slots preserved for downstream modules
         trans_tasman: [],
         global_direct: [],
-        facebook: liveResults.facebook || [] // Maps live crawled Facebook ads
+        facebook: liveData.facebook || []   // Live Scraped Marketplace ads from the web
       });
-    } catch (error) {
-      console.error("❌ Live search connection timeout:", error);
+    } catch (err) {
+      console.error("❌ Live search bridge error:", err);
       setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     } finally {
       setPartsLoading(false);
     }
   };
+
 
 
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
@@ -4220,26 +4218,24 @@ export default function App() {
           onEdit={handleEditVehicle}
         />
 
-        {/* Store Catalog Windows */}
-                {/* Store Catalog Windows Live Overrides */}
+               {/* Store Catalog Windows Live Overrides */}
         {catalogWindow === 'lubricants' && (
-          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={results?.local?.filter(i => i.loc.toLowerCase().includes('oil')) || []} role={role} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={results?.local?.filter(i => i.title.toLowerCase().includes('oil') || i.title.toLowerCase().includes('fluid') || i.title.toLowerCase().includes('lubricant')) || []} role={role} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE2_BAY_ALLOCATION')}
             workshopMode={false} />
         )}
         {catalogWindow === 'consumables' && (
-          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={results?.local?.filter(i => i.title.toLowerCase().includes('cleaner') || i.title.toLowerCase().includes('spray')) || []} role={role} accent={C.cyan} region={region} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={results?.local?.filter(i => i.title.toLowerCase().includes('cleaner') || i.title.toLowerCase().includes('spray') || i.title.toLowerCase().includes('wipe')) || []} role={role} accent={C.cyan} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
-
         {catalogWindow === 'accessories' && (
-          <StoreCatalogWindow label="Workshop Accessories Catalog" icon={<Wrench className="h-5 w-5" />} items={ACCESSORIES_CATALOG} role={role} accent={C.emerald} region={region} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Workshop Accessories Catalog" icon={<Wrench className="h-5 w-5" />} items={results?.local?.filter(i => i.title.toLowerCase().includes('accessory') || i.title.toLowerCase().includes('glove') || i.title.toLowerCase().includes('mat')) || []} role={role} accent={C.emerald} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
         {catalogWindow === 'tools' && (
-          <StoreCatalogWindow label="Specialty Shop Tools Catalog" icon={<Wrench className="h-5 w-5" />} items={SPECIALTY_TOOLS_CATALOG} role={role} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Specialty Shop Tools Catalog" icon={<Wrench className="h-5 w-5" />} items={results?.local?.filter(i => i.title.toLowerCase().includes('tool') || i.title.toLowerCase().includes('wrench') || i.title.toLowerCase().includes('socket') || i.title.toLowerCase().includes('jack')) || []} role={role} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
