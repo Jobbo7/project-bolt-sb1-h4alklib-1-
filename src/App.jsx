@@ -3357,24 +3357,27 @@ export default function App() {
     if (v) setVehicle(v);
   };
 
-   // ── Parts search ──
+   // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
+    
     setPartsLoading(true);
-    setResults(null); // Instantly flushes old mock views from tablet cache layout
+    setResults(null); // Clear previous visual rows immediately to wake up loaders
+    
     try {
+      // Calls your live Vercel fetch aggregator broker inside mockBackend.js
       const liveData = await processPartsQuery(query);
       
-      // Map your real serverless response arrays directly into your layout rows
+      // Force the frontend state to map the exact keys your Vercel API files return
       setResults({
-        local: liveData.local || [],        // Live Wholesalers from your Supabase Table
-        national: [],                       // Open slots preserved for downstream modules
+        local: liveData.local || [],        // Maps your real active Supabase Wholesaler table rows
+        national: [],
         trans_tasman: [],
         global_direct: [],
-        facebook: liveData.facebook || []   // Live Scraped Marketplace ads from the web
+        facebook: liveData.facebook || []   // Maps your guaranteed live web picker listings
       });
-    } catch (err) {
-      console.error("❌ Live search bridge error:", err);
+    } catch (error) {
+      console.error("❌ Live search connection timeout:", error);
       setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     } finally {
       setPartsLoading(false);
