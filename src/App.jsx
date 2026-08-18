@@ -4221,16 +4221,18 @@ export default function App() {
         />
 
         {/* Store Catalog Windows */}
+                {/* Store Catalog Windows Live Overrides */}
         {catalogWindow === 'lubricants' && (
-          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={LUBRICANTS_CATALOG} role={role} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={results?.local?.filter(i => i.loc.toLowerCase().includes('oil')) || []} role={role} accent={C.orange} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE2_BAY_ALLOCATION')}
             workshopMode={false} />
         )}
         {catalogWindow === 'consumables' && (
-          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={CONSUMABLES_CATALOG_FLAT} role={role} accent={C.cyan} region={region} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={results?.local?.filter(i => i.title.toLowerCase().includes('cleaner') || i.title.toLowerCase().includes('spray')) || []} role={role} accent={C.cyan} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
+
         {catalogWindow === 'accessories' && (
           <StoreCatalogWindow label="Workshop Accessories Catalog" icon={<Wrench className="h-5 w-5" />} items={ACCESSORIES_CATALOG} role={role} accent={C.emerald} region={region} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
