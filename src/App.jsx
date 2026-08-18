@@ -3357,8 +3357,7 @@ export default function App() {
     if (v) setVehicle(v);
   };
 
-   // ── Parts search ──
-   // ── True Live Search Aggregator Mapping ──
+    // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
     
