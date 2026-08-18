@@ -3358,20 +3358,33 @@ export default function App() {
   };
 
    // ── Parts search ──
+   // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
+    
     setPartsLoading(true);
-    setResults(null); // Instantly flushes old mock views from tablet cache layout
+    setResults(null); // Instantly clears out old views
+    
     try {
-      const r = await processPartsQuery(query);
-      setResults(r);
-    } catch (err) {
-      console.error("❌ Live search bridge error:", err);
+      // Calls your live Vercel fetch aggregator broker
+      const liveResults = await processPartsQuery(query);
+      
+      // Forces the frontend state to map the exact keys your Vercel API returns
+      setResults({
+        local: liveResults.local || [], // Maps live Supabase Wholesalers
+        national: [],
+        trans_tasman: [],
+        global_direct: [],
+        facebook: liveResults.facebook || [] // Maps live crawled Facebook ads
+      });
+    } catch (error) {
+      console.error("❌ Live search connection timeout:", error);
       setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     } finally {
       setPartsLoading(false);
     }
   };
+
 
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
 
