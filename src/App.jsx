@@ -3228,15 +3228,16 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [regoLoading, setRegoLoading] = useState(false);
   
-  // Safe default vehicle object properties wrapper
-  const [vehicle, setVehicle] = useState({
+  // 🟢 SAFE DEFAULT INITIALIZATION FALLBACK FOR ACTIVE VEHICLES
+  const activeVehicle = garageVehicles.find(v => v.id === activeVehicleId) || {
+    id: 'BAY-1',
     make: "STANDBY",
-    model: "AWAITING SEARCH INPUT OR OCR LENS SCAN",
+    model: "AWAITING REGO LOOKUP OR CAM OCR SCAN",
     year: 2026,
-    engine: "SYSTEM READY",
+    engine: "SYSTEM ONLINE",
     vin: "WMI-LOGISTICS-NODE-001",
     rego: "STANDBY"
-  });
+  };
 
   // Parts search
   const [partsLoading, setPartsLoading] = useState(false);
