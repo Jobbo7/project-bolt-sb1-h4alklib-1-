@@ -3342,11 +3342,12 @@ export default function App() {
 
 
 
-     const handlePhoto = () => {
-    // Keeps your camera scanner overlay screen open and responsive 
-    // while the client-side WebAssembly camera layer decodes the number plate pixels
-    setScanning(true);
-  };
+    const handlePhoto = () => {
+  // Keeps your camera scanner overlay screen open and responsive 
+  // while the client-side WebAssembly camera layer decodes the number plate pixels
+  setScanning(true);
+};
+
 
 
   // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
