@@ -1,3 +1,5 @@
+```javascript
+   import PhotoScanner from './components/PhotoScanner';
 import { createWorker } from 'tesseract.js';
 import { useState, useRef, useMemo, useCallback, Component } from 'react';
 import MechanicTerminal from './components/MechanicTerminal';
@@ -4057,7 +4059,7 @@ export default function App() {
     setCorpProfile({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
     setBankFeedEntries([]);
     setLedgerEntries([]);
-    try { localStorage.removeItem('partsforge_session'); localStorage.removeItem('partsforge_safety_agreed'); } catch {}
+   try { localStorage.removeItem('partsforge_session'); localStorage.removeItem('partsforge_safety_agreed'); } catch {}
   };
 // ── Render gates (auth → waiver → app) ──
   if (!userSession) return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
@@ -4106,6 +4108,40 @@ export default function App() {
         />
       </AppErrorBoundary>
     );
+  }
+
+  // ── Mechanic role: True Live High-Fidelity Sourcing & Diagnostics Terminal ──
+  if (userSession.role === 'MECHANIC') {
+    return (
+      <AppErrorBoundary>
+        <PhotoScanner
+          session={userSession}
+          onSignOut={handleSignOut}
+          results={results}
+          partsLoading={partsLoading}
+          handleSearch={handleSearch}
+          handleRego={handleRego}
+          handleAddToCart={handleAddToCart}
+          cart={cart}
+          executeStripeSplitPayouts={executeStripeSplitPayouts}
+        />
+      </AppErrorBoundary>
+    );
+  }
+
+  // Final emergency fallback return closure statement terminates compilation path cleanly
+  return (
+    <AppErrorBoundary>
+      <div className="min-h-screen bg-[#070A12] text-slate-100 p-6 flex items-center justify-center">
+        <div className="text-center p-6 border border-slate-800 bg-[#101524] rounded-xl max-w-xs shadow-2xl">
+          <div className="text-xs font-bold text-slate-200">Terminal Node Initialized</div>
+          <button onClick={() => window.location.reload()} className="mt-4 w-full py-2 bg-orange-500 text-slate-950 font-bold rounded-lg text-xs uppercase tracking-wider">Launch Node</button>
+        </div>
+      </div>
+    </AppErrorBoundary>
+  );
+}
+
   }
 
   // ── Mechanic role: True Live High-Fidelity Sourcing & Diagnostics Terminal ──
