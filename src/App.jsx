@@ -3389,32 +3389,29 @@ export default function App() {
     if (v) setVehicle(v);
   };
 
-   // ── True Live Search Aggregator Mapping ──
+     // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
-    if (!query || !query.trim()) return;
-    
     setPartsLoading(true);
-    setResults(null); // Clear previous visual rows immediately to wake up loaders
-    
+    setResults(null); 
     try {
-      // Calls your live Vercel fetch aggregator broker inside mockBackend.js
-      const liveData = await processPartsQuery(query);
+      const liveData = await processPartsQuery(query || "");
       
-      // Force the frontend state to map the exact keys your Vercel API files return
+      // Rigidly synchronize incoming Vercel backend payload keys
       setResults({
-        local: liveData.local || [],        // Maps your real active Supabase Wholesaler table rows
+        local: liveData.localWholesalers || [],
         national: [],
         trans_tasman: [],
         global_direct: [],
-        facebook: liveData.facebook || []   // Maps your guaranteed live web picker listings
+        facebook: liveData.facebookMarketplace || []
       });
-    } catch (error) {
-      console.error("❌ Live search connection timeout:", error);
+    } catch (err) {
+      console.error("❌ Live search bridge error:", err);
       setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     } finally {
       setPartsLoading(false);
     }
   };
+
 
 
 
