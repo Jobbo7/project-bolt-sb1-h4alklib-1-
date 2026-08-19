@@ -3297,56 +3297,59 @@ export default function App() {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-     // ── True Live Vehicle Registration Scanner Matrix ──
+       // ── True Live Vehicle Registration Scanner Matrix ──
   const handleRego = async (plate, region) => {
     if (!plate || !plate.trim()) return;
+    
     setRegoLoading(true);
-    setVehicle(null);
+    setVehicle(null); // Instantly flushes out old mock data from your screen cache
+    
     try {
+      console.log(`📡 Shipping number plate over the wire to Vercel: ${plate}`);
+      
+      // Force a real browser network request to your serverless endpoint
       const response = await fetch('/api/vehicle-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plate: plate.trim(), type: 'rego', region })
+        body: JSON.stringify({ plate: plate.trim(), type: 'rego', region: region || 'AU_VIC' })
       });
-      const data = await response.json();
-      setVehicle(data);
+      
+      const realVehicleData = await response.json();
+      setVehicle(realVehicleData);
     } catch (error) {
-      console.error("❌ Live registration lookup failure:", error);
+      console.error("❌ Live registration lookup network failure:", error);
+      alert("⚠️ Network Failure: Could not reach the serverless vehicle lookup endpoint.");
       setVehicle(null);
     } finally {
       setRegoLoading(false);
+      setScanning(false); // Unlocks the "Analysing photo" screen overlay
     }
   };
 
   const handleVin = async (vinStr, region) => {
     if (!vinStr || !vinStr.trim()) return;
+    
     setRegoLoading(true);
     setVehicle(null);
+    
     try {
+      console.log(`📡 Shipping 17-char VIN over the wire to Vercel: ${vinStr}`);
       const response = await fetch('/api/vehicle-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vin: vinStr.trim(), type: 'vin', region })
+        body: JSON.stringify({ vin: vinStr.trim(), type: 'vin', region: region || 'AU_VIC' })
       });
-      const data = await response.json();
-      setVehicle(data);
+      
+      const realVehicleData = await response.json();
+      setVehicle(realVehicleData);
     } catch (error) {
-      console.error("❌ Live VIN lookup failure:", error);
+      console.error("❌ Live VIN lookup network failure:", error);
       setVehicle(null);
     } finally {
       setRegoLoading(false);
+      setScanning(false); // Unlocks the "Analysing photo" screen overlay
     }
   };
-
-
-
-
-
-    const handlePhoto = () => {
-  // Keeps your camera scanner overlay screen open and responsive 
-  // while the client-side WebAssembly camera layer decodes the number plate pixels
-  setScanning(true);
-};
 
 
 
@@ -4162,8 +4165,9 @@ export default function App() {
             </div>
           )}
 
-          {/* Scanner */}
+                    {/* Scanner */}
           <ScannerPanel onRego={handleRego} onVin={handleVin} onPhoto={handlePhoto} onCommit={handleCommitVehicle} loading={regoLoading} vehicle={vehicle} scanning={scanning} />
+
 
           {/* Parts Search + Results */}
           <PartsSearch onSearch={handleSearch} loading={partsLoading} />
