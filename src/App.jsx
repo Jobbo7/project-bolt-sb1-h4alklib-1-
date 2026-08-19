@@ -3300,52 +3300,41 @@ export default function App() {
      // ── True Live Vehicle Registration Scanner Matrix ──
   const handleRego = async (plate, region) => {
     if (!plate || !plate.trim()) return;
-    
     setRegoLoading(true);
-    setVehicle(null); // Flushes out old mock data instantly
-    
+    setVehicle(null);
     try {
-      const liveVehicleSpecs = await processFreeRegoLookup(plate, region);
-      setVehicle(liveVehicleSpecs);
-      
-      // Auto-populate customer fields if empty to make the job card faster
-      if (!custName) setCustName("Walk-In Fleet Client");
+      const response = await fetch('/api/vehicle-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plate: plate.trim(), type: 'rego', region })
+      });
+      const data = await response.json();
+      setVehicle(data);
     } catch (error) {
       console.error("❌ Live registration lookup failure:", error);
       setVehicle(null);
     } finally {
       setRegoLoading(false);
-      setScanning(false); // Unlocks the "Analysing photo" screen overlay
     }
   };
 
   const handleVin = async (vinStr, region) => {
     if (!vinStr || !vinStr.trim()) return;
-    
     setRegoLoading(true);
     setVehicle(null);
-    
     try {
-      const liveVehicleSpecs = await processVinLookup(vinStr, region);
-      setVehicle(liveVehicleSpecs);
+      const response = await fetch('/api/vehicle-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vin: vinStr.trim(), type: 'vin', region })
+      });
+      const data = await response.json();
+      setVehicle(data);
     } catch (error) {
       console.error("❌ Live VIN lookup failure:", error);
       setVehicle(null);
     } finally {
       setRegoLoading(false);
-      setScanning(false); // Unlocks the "Analysing photo" screen overlay
-    }
-  };
-
-  // Triggered when a photo scanner canvas completes text extraction
-  const handlePhoto = (extractedText, currentRegion) => {
-    setScanning(true);
-    if (extractedText && extractedText.trim()) {
-      handleRego(extractedText.trim(), currentRegion || 'AU_VIC');
-    } else {
-      // Emergency fail-safe if camera fails to decode pixels cleanly
-      setScanning(false);
-      alert("⚠️ Optical scanning failed to resolve text lines. Please use manual entry input.");
     }
   };
 
