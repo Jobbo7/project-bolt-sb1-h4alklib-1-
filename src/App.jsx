@@ -1,5 +1,6 @@
 import { createWorker } from 'tesseract.js';
 import { useState, useRef, useMemo, useCallback, Component } from 'react';
+import MechanicTerminal from './components/MechanicTerminal';
 import {
   ShieldCheck, Wrench, Mail, Lock, Eye, EyeOff, KeyRound, Search, Camera,
   ScanLine, BadgeCheck, CheckCircle2, AlertTriangle, X, ChevronDown,
