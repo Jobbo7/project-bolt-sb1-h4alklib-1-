@@ -3225,9 +3225,18 @@ export default function App() {
   // Vehicle & garage state
   const [garageVehicles, setGarageVehicles] = useState([]);
   const [activeVehicleId, setActiveVehicleId] = useState(null);
-  const [regoLoading, setRegoLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [vehicle, setVehicle] = useState(null);
+  const [regoLoading, setRegoLoading] = useState(false);
+  
+  // Safe default vehicle object properties wrapper
+  const [vehicle, setVehicle] = useState({
+    make: "STANDBY",
+    model: "AWAITING SEARCH INPUT OR OCR LENS SCAN",
+    year: 2026,
+    engine: "SYSTEM READY",
+    vin: "WMI-LOGISTICS-NODE-001",
+    rego: "STANDBY"
+  });
 
   // Parts search
   const [partsLoading, setPartsLoading] = useState(false);
@@ -3239,7 +3248,6 @@ export default function App() {
     facebook: []
   });
   const [cart, setCart] = useState([]);
-
 
   // Job card state
   const [consumables, setConsumables] = useState([]);
