@@ -3231,10 +3231,15 @@ export default function App() {
 
   // Parts search
   const [partsLoading, setPartsLoading] = useState(false);
-  const [results, setResults] = useState(null);
+  const [results, setResults] = useState({
+    local: [],
+    national: [],
+    trans_tasman: [],
+    global_direct: [],
+    facebook: []
+  });
   const [cart, setCart] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [consolidationEnabled, setConsolidationEnabled] = useState(false);
+
 
   // Job card state
   const [consumables, setConsumables] = useState([]);
