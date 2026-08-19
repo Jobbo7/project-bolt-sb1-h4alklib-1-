@@ -179,3 +179,78 @@ return (
           <div>
             <h1 className="text-md font-extrabold tracking-tight">PartsForge Master Mechanic Terminal</h1>
             <p className="text-xs text-slate-400">Operator Session: <span className="text-orange-400 font-bold">{userSession.email}</span></p>
+
+            return (
+    <div className="min-h-screen bg-[#070A12] text-slate-100 p-4 font-sans space-y-6">
+      <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+        <h1 className="text-md font-extrabold tracking-tight">PartsForge Master Mechanic Terminal ({userSession.email})</h1>
+        <button onClick={() => setUserSession(null)} className="rounded border border-slate-800 bg-[#101524] px-3 py-1.5 text-xs font-bold text-slate-300">Sign Out</button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-[#101524] p-5 space-y-4 shadow-2xl">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">🔍 Core Parts Aggregator Console Search Engine</div>
+            <div className="flex gap-2">
+              <input type="text" id="live-search-input" placeholder="Search component (e.g. Brake Pads, Oil Filter...)" className="flex-1 rounded-lg border border-slate-800 bg-[#0C111C] px-4 py-2 text-xs text-slate-100 outline-none" onKeyDown={(e) => e.key === 'Enter' && handleSearch(e.currentTarget.value)} />
+              <button onClick={() => handleSearch(document.getElementById('live-search-input').value)} className="rounded-lg bg-orange-500 text-slate-950 font-bold px-4 py-2 text-xs">Search</button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+              {partsLoading && <div className="text-xs text-orange-400 animate-pulse py-2 font-mono">📡 Scanning Supabase DB Rows + Live Facebook Marketplace Index...</div>}
+              {results.local?.map((item, idx) => (
+                <div key={idx} className="rounded-lg border border-slate-800 bg-[#0C111C] p-3 flex justify-between items-center">
+                  <div>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-orange-400 uppercase tracking-wider">Wholesale Inventory</span>
+                    <div className="text-xs font-bold text-slate-200 mt-1">{item.title}</div>
+                    <div className="text-[10px] text-slate-400">Supplier: {item.shop} · Qty: {item.stock}</div>
+                  </div>
+                  <button onClick={() => setCart(p => [...p, item])} className="rounded bg-orange-500 text-slate-950 font-bold px-2.5 py-1 text-[10px]">A${parseFloat(item.trade || item.price).toFixed(2)} - Add</button>
+                </div>
+              ))}
+              {results.facebook?.map((item, idx) => (
+                <div key={idx} className="rounded-lg border border-slate-800 bg-[#101524] p-3 flex justify-between items-center">
+                  <div>
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 uppercase tracking-wider">Live Web Scraper Consumer Ad</span>
+                    <div className="text-xs font-bold text-slate-300 mt-1">{item.title}</div>
+                    <div className="text-[10px] text-slate-400">Seller: {item.shop} · Area: {item.loc}</div>
+                  </div>
+                  <button onClick={() => setCart(p => [...p, item])} className="rounded border border-slate-800 bg-slate-900 text-slate-300 font-bold px-2.5 py-1 text-[10px]">A${parseFloat(item.price).toFixed(2)} - Source</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-[#101524] p-4 shadow-xl space-y-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">🏎️ Vehicle Registry Scanner Terminal</div>
+            <div className="flex gap-2">
+              <input type="text" id="rego-input" placeholder="e.g. NISSAN55, FORD123" className="flex-1 rounded-lg border border-slate-800 bg-[#0C111C] px-3 py-2 text-xs uppercase" />
+              <button onClick={() => handleRegoLookup(document.getElementById('rego-input').value)} className="rounded-lg bg-orange-500 text-slate-950 font-bold px-3 text-xs">Lookup</button>
+            </div>
+            {vehicle && (
+              <div className="mt-3 rounded-lg border border-emerald-900 bg-emerald-950/20 p-3 text-xs space-y-1">
+                <div className="font-extrabold text-emerald-400">✓ Real Vehicle Matched</div>
+                <div className="text-slate-200 font-bold">{vehicle.year} {vehicle.make} {vehicle.model}</div>
+                <div className="text-slate-400 font-mono text-[10px]">{vehicle.engine}</div>
+                <div className="text-slate-500 font-mono text-[9px] border-t border-slate-800 pt-1 mt-1">VIN: {vehicle.vin} · PLATES: {vehicle.rego}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-[#101524] p-4 shadow-xl space-y-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex justify-between items-center">
+              <span>🛒 Sourcing Basket Folder</span>
+              <span className="text-[10px] text-orange-400 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10 font-bold">{cart.length} items</span>
+            </div>
+            <div className="space-y-2 max-h-[150px] overflow-y-auto font-mono text-xs">
+              {cart.map((c, i) => (
+                <div key={i} className="flex justify-between items-center border-b border-slate-900 pb-1">
+                  <span className="text-slate-300 truncate max-w-[150px]">{c.title}</span>
+                  <span className="text-emerald-400 font-bold">A${parseFloat(c.trade || c.price).toFixed(2)}</span>
+                </div>
+              ))}
+              {cart.length === 0 && <p className="text-[10px] text-slate-500 text-center py-2">Basket empty.</p>}
+            </div>
+            {cart.length > 0 && (
