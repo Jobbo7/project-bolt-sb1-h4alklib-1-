@@ -80,7 +80,7 @@ export default function App() {
       });
     } catch (err) {
       console.error(err);
-    } finally {
+    } military: {
       setPartsLoading(false);
     }
   };
@@ -109,7 +109,7 @@ const handleRegoLookup = async (plate) => {
         body: JSON.stringify({ inventoryArray: inventory, businessName: userSession?.email || 'Epping Auto Wholesalers' })
       });
       if (response.ok) {
-        setSuccess("✅ CLOUD MATRIX SYNCED: All 12 warehouse SKUs are live across the PartsForge Network!");
+        setSuccess("✅ CLOUD MATRIX SYNCED: All warehouse SKUs are live across the PartsForge Network!");
         setTimeout(() => setSuccess(null), 4000);
       }
     } catch (err) {
@@ -117,7 +117,7 @@ const handleRegoLookup = async (plate) => {
     }
   };
 
-const handleAddToCart = (item) => {
+  const handleAddToCart = (item) => {
     setCart(prev => [...prev, item]);
   };
 
@@ -125,8 +125,7 @@ const handleAddToCart = (item) => {
     return <AuthGate onAuthenticate={handleAuthenticate} />;
   }
 
-  // 🏢 SELLER DASHBOARD VIEW CONSOLE LAYER
-  if (userSession.role === 'SELLER') {
+ if (userSession.role === 'SELLER') {
     return (
       <div className="p-4 max-w-7xl mx-auto space-y-6 text-slate-100 bg-[#070A12] min-h-screen font-sans">
         <div className="flex justify-between items-center border-b border-slate-800 pb-4">
@@ -139,9 +138,7 @@ const handleAddToCart = (item) => {
           </div>
           <button onClick={handleSignOut} className="rounded-lg border border-slate-800 bg-[#101524] px-3 py-2 text-xs font-bold text-slate-300 transition hover:bg-slate-800">Log Out</button>
         </div>
-
         {success && <div className="p-3 text-xs font-bold rounded-lg border border-emerald-900/30 bg-emerald-950/20 text-emerald-400 shadow-md">{success}</div>}
-
         <div className="rounded-xl border border-slate-800 bg-[#101524] p-4 shadow-xl">
           <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">📦 Merchant Shelf Inventory Vault</div>
@@ -156,7 +153,7 @@ const handleAddToCart = (item) => {
                   <th className="p-2.5 text-center">Stock Qty</th>
                   <th className="p-2.5 text-right">Trade Price</th>
                 </tr>
-                 </thead>
+              </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                 {inventory.map((row) => (
                   <tr key={row.sku} className="hover:bg-slate-900/40 transition-colors">
@@ -174,11 +171,11 @@ const handleAddToCart = (item) => {
     );
   }
 
-  // ⚙️ MECHANIC WORKSHOP VIEW CONSOLE LAYER
-  return (
+return (
     <div className="min-h-screen bg-[#070A12] text-slate-100 p-4 font-sans">
       <div className="max-w-7xl mx-auto flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 text-slate-950 font-black shadow-lg shadow-orange-500/10">⚙️</div>
           <div>
             <h1 className="text-md font-extrabold tracking-tight">PartsForge Master Mechanic Terminal</h1>
+            <p className="text-xs text-slate-400">Operator Session: <span className="text-orange-400 font-bold">{userSession.email}</span></p>
