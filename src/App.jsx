@@ -3302,22 +3302,20 @@ export default function App() {
     if (!plate || !plate.trim()) return;
     
     setRegoLoading(true);
-    setVehicle(null); // Instantly flushes old mock views from your tablet screen cache
+    setVehicle(null); // Flushes out old mock data instantly
     
     try {
-      console.log(`📡 Shipping number plate token over the web to your Vercel lookup node: ${plate}`);
-      
-      // Forces the app to call the live API route broker inside mockBackend.js
       const liveVehicleSpecs = await processFreeRegoLookup(plate, region);
-      
-      // Inject the actual vehicle specifications returned by the live registry into your UI cards
       setVehicle(liveVehicleSpecs);
+      
+      // Auto-populate customer fields if empty to make the job card faster
+      if (!custName) setCustName("Walk-In Fleet Client");
     } catch (error) {
-      console.error("❌ Live registration scanner connection failure:", error);
-      // Safe empty layout fallback protects the interface framework from a white-screen crash
+      console.error("❌ Live registration lookup failure:", error);
       setVehicle(null);
     } finally {
       setRegoLoading(false);
+      setScanning(false); // Unlocks the "Analysing photo" screen overlay
     }
   };
 
@@ -3328,16 +3326,29 @@ export default function App() {
     setVehicle(null);
     
     try {
-      console.log(`📡 Shipping 17-char VIN token over the web to your Vercel lookup node: ${vinStr}`);
       const liveVehicleSpecs = await processVinLookup(vinStr, region);
       setVehicle(liveVehicleSpecs);
     } catch (error) {
-      console.error("❌ Live VIN scanner connection failure:", error);
+      console.error("❌ Live VIN lookup failure:", error);
       setVehicle(null);
     } finally {
       setRegoLoading(false);
+      setScanning(false); // Unlocks the "Analysing photo" screen overlay
     }
   };
+
+  // Triggered when a photo scanner canvas completes text extraction
+  const handlePhoto = (extractedText, currentRegion) => {
+    setScanning(true);
+    if (extractedText && extractedText.trim()) {
+      handleRego(extractedText.trim(), currentRegion || 'AU_VIC');
+    } else {
+      // Emergency fail-safe if camera fails to decode pixels cleanly
+      setScanning(false);
+      alert("⚠️ Optical scanning failed to resolve text lines. Please use manual entry input.");
+    }
+  };
+
 
 
 
