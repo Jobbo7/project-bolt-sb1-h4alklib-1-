@@ -3297,7 +3297,7 @@ export default function App() {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-    // ── True Live Vehicle Registration Scanner Matrix ──
+     // ── True Live Vehicle Registration Scanner Matrix ──
   const handleRego = async (plate, region) => {
     if (!plate || !plate.trim()) return;
     
@@ -3340,7 +3340,9 @@ export default function App() {
   };
 
 
-    const handlePhoto = () => {
+
+
+     const handlePhoto = () => {
     // Keeps your camera scanner overlay screen open and responsive 
     // while the client-side WebAssembly camera layer decodes the number plate pixels
     setScanning(true);
