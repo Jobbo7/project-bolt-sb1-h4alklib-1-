@@ -1,252 +1,193 @@
-import { useEffect, useRef, useState } from 'react';
-import { X, Camera, Loader2, Cpu, ScanLine, CheckCircle2, Zap } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, X, Sparkles, RefreshCw } from 'lucide-react';
+import { createWorker } from 'tesseract.js';
 
-interface PhotoScannerProps {
-  open: boolean;
-  onClose: () => void;
-  onResult: (component: string, confidence: number, searchQuery: string) => void;
-}
-
-type Phase = 'idle' | 'capturing' | 'analyzing' | 'result';
-
-export function PhotoScanner({ open, onClose, onResult }: PhotoScannerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const [phase, setPhase] = useState<Phase>('idle');
+export default function PhotoScanner({ open, onClose, onResult, region }) {
+  const [phase, setPhase] = useState('idle'); // 'idle' | 'streaming' | 'processing' | 'result'
   const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState<{ component: string; confidence: number } | null>(null);
-  const [scanLineY, setScanLineY] = useState(0);
+  const [errorMessage, setErrorMessage] = useState(null);
+  
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+  // 📹 ACTIVATE CAMERA HARDWARE AND REQUEST USER PERMISSIONS NATIVELY
+  const startCameraStream = async () => {
+    setErrorMessage(null);
+    setPhase('idle');
+    
+    try {
+      // Dispatches request directly to the tablet's operating system browser layer
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } }, // Force tablet's rear workshop camera lens
+        audio: false
+      }).catch(async () => {
+        // Soft fallback to standard lens arrays if tablet doesn't report an "environment" label
+        return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      });
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true'); // Prevents iOS Safari opening native full-screen player
+        await videoRef.current.play();
+        setPhase('streaming'); // Safely opens the camera viewport display
+      }
+    } catch (err) {
+      console.error("Camera hardware access handshake rejected:", err);
+      setErrorMessage("⚠️ LENS ACCESS DENIED: Please update your tablet's site privacy permissions to allow camera hardware access.");
+      setPhase('idle');
     }
-    if (videoRef.current) videoRef.current.srcObject = null;
   };
 
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setPhase('idle');
+    setProgress(0);
+  };
+
+  // Trigger camera activation when modal portals are opened by the user
   useEffect(() => {
-    if (!open) return;
-
-    let raf: number;
-    let direction = 1;
-    const animateScanLine = () => {
-      setScanLineY((prev) => {
-        let next = prev + direction * 1.4;
-        if (next >= 100) {
-          next = 100;
-          direction = -1;
-        } else if (next <= 0) {
-          next = 0;
-          direction = 1;
-        }
-        return next;
-      });
-      raf = requestAnimationFrame(animateScanLine);
-    };
-
-    const startCamera = async () => {
-      setPhase('idle');
-      setResult(null);
-      setProgress(0);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-          audio: false,
-        });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-        raf = requestAnimationFrame(animateScanLine);
-      } catch {
-        raf = requestAnimationFrame(animateScanLine);
-      }
-    };
-    startCamera();
-
+    if (open) {
+      startCameraStream();
+    }
     return () => {
-      cancelAnimationFrame(raf);
-      stopCamera();
+      stopCameraStream();
     };
   }, [open]);
 
-  const handleCapture = () => {
-    setPhase('capturing');
-    setProgress(0);
+  // 🧠 CAPTURE CANVAS FRAME BUFFER AND EXECUTE LIVE EDGE OCR
+  const captureFrameAndScanText = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setPhase('processing');
+    setProgress(20);
 
-    const startedAt = Date.now();
-    const duration = 2000;
-    const tick = () => {
-      const elapsed = Date.now() - startedAt;
-      const pct = Math.min(100, (elapsed / duration) * 100);
-      setProgress(pct);
-      if (pct < 100) {
-        setTimeout(tick, 30);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    // Freeze-frame the precise visual video pixels onto background canvas dimensions
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setProgress(50);
+
+    try {
+      // Initialize text recognition workers locally inside your tablet device memory cache
+      const worker = await createWorker('eng');
+      const ocrOutput = await worker.recognize(canvas);
+      
+      // Filter out punctuation space lines and force uppercase alphanumeric codes
+      const cleanRegoText = ocrOutput.data.text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+      await worker.terminate();
+      setProgress(80);
+
+      if (cleanRegoText && cleanRegoText.length >= 3) {
+        console.log(`📡 Shipping decoded camera plate text to Vercel API lookup tunnel: ${cleanRegoText}`);
+        
+        // Pass the ACTUAL characters recognized by the lens out over the live internet
+        const response = await fetch('/api/vehicle-lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plate: cleanRegoText, type: 'rego', region: region || 'AU_VIC' })
+        });
+
+        const liveVehicleSpecs = await response.json();
+        setProgress(100);
+
+        // Map live response columns directly back up to your parent App.jsx layout cards
+        onResult(`${liveVehicleSpecs.year || ''} ${liveVehicleSpecs.make || ''} ${liveVehicleSpecs.model || 'PLATE FOUND'}`, 99, cleanRegoText);
+        stopCameraStream();
+        onClose();
       } else {
-        setResult({ component: 'Alternator', confidence: 94 });
-        setPhase('result');
+        alert("⚠️ Text recognition timed out. Reposition tablet crosshairs directly over the registration numbers.");
+        setPhase('streaming');
+        setProgress(0);
       }
-    };
-    setTimeout(tick, 30);
-  };
-
-  const handleUseResult = () => {
-    if (result) {
-      onResult(result.component, result.confidence, result.component.toLowerCase());
+    } catch (error) {
+      console.error("❌ Optical Text Evaluation Exception Failed:", error);
+      alert("⚠️ Processing Exception: Server connection timeout.");
+      setPhase('streaming');
+      setProgress(0);
     }
-    handleClose();
-  };
-
-  const handleClose = () => {
-    stopCamera();
-    setPhase('idle');
-    setResult(null);
-    setProgress(0);
-    setScanLineY(0);
-    onClose();
   };
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-[#0A0D14]">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-[#E2E8F0]">
-          <Cpu className="h-4 w-4 text-[#FF5A1F]" />
-          AI Photo Recognition
-        </div>
-        <button
-          onClick={handleClose}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#121824]/90 text-slate-300 ring-1 ring-[#1F293D] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition hover:bg-[#121824] active:scale-95"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Viewfinder */}
-      <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4">
-        <div className="relative w-full overflow-hidden rounded-3xl border border-[#1F293D] bg-[#121824] shadow-2xl shadow-black/50">
-          <div className="relative aspect-[3/4] w-full">
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              className="h-full w-full object-cover"
-            />
-
-            {/* Dark vignette */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0A0D14]/70 via-transparent to-[#0A0D14]/40" />
-
-            {/* Scanning matrix overlay */}
-            {phase !== 'result' && (
-              <div className="pointer-events-none absolute inset-0">
-                {/* Targeting reticle */}
-                <div className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2">
-                  <span className="absolute -left-1 -top-1 h-8 w-8 border-l-4 border-t-4 border-[#FF5A1F]" />
-                  <span className="absolute -right-1 -top-1 h-8 w-8 border-r-4 border-t-4 border-[#FF5A1F]" />
-                  <span className="absolute -bottom-1 -left-1 h-8 w-8 border-b-4 border-l-4 border-[#FF5A1F]" />
-                  <span className="absolute -bottom-1 -right-1 h-8 w-8 border-b-4 border-r-4 border-[#FF5A1F]" />
-
-                  {/* Animated scan line */}
-                  <div
-                    className="absolute inset-x-0 h-0.5 bg-[#FF5A1F] shadow-[0_0_12px_2px_rgba(255,90,31,0.7)]"
-                    style={{ top: `${scanLineY}%` }}
-                  />
-
-                  {/* Matrix grid lines */}
-                  <div className="absolute inset-0 opacity-30">
-                    <div className="absolute left-1/3 top-0 h-full w-px bg-[#FF5A1F]/40" />
-                    <div className="absolute left-2/3 top-0 h-full w-px bg-[#FF5A1F]/40" />
-                    <div className="absolute top-1/3 w-full h-px bg-[#FF5A1F]/40" />
-                    <div className="absolute top-2/3 w-full h-px bg-[#FF5A1F]/40" />
-                  </div>
-                </div>
-
-                {/* HUD telemetry */}
-                <div className="absolute left-3 top-3 font-mono text-[10px] text-[#FF5A1F]/80">
-                  <div className="flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5A1F]" />
-                    AI.VISION v2.1
-                  </div>
-                  <div className="mt-0.5 text-slate-500">MODE: COMPONENT_ID</div>
-                </div>
-                <div className="absolute right-3 top-3 text-right font-mono text-[10px] text-slate-500">
-                  <div>FPS: 30</div>
-                  <div>RES: 1080p</div>
-                </div>
-              </div>
-            )}
-
-            {/* Capturing / analyzing progress */}
-            {(phase === 'capturing' || phase === 'analyzing') && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0A0D14]/80 backdrop-blur-sm">
-                <Loader2 className="h-10 w-10 animate-spin text-[#FF5A1F]" />
-                <p className="font-mono text-xs uppercase tracking-wider text-[#FF5A1F]">
-                  {phase === 'capturing' ? 'Analyzing component…' : 'Processing…'}
-                </p>
-                <div className="h-1.5 w-48 overflow-hidden rounded-full bg-[#121824]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#FF5A1F] to-[#00E5FF] transition-[width] duration-75"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <p className="font-mono text-[10px] text-[#64748B]">{Math.round(progress)}%</p>
-              </div>
-            )}
-
-            {/* Result overlay */}
-            {phase === 'result' && result && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0A0D14]/85 px-6 backdrop-blur-md">
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FF5A1F] text-slate-950 shadow-[0_0_20px_rgba(255,90,31,0.5)]">
-                  <CheckCircle2 className="h-9 w-9" />
-                </span>
-                <div className="text-center">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#FF5A1F]">
-                    AI Object Match
-                  </p>
-                  <p className="mt-1 text-xl font-bold text-[#E2E8F0]">{result.component}</p>
-                  <p className="mt-1 text-sm text-[#00E5FF]">
-                    {result.confidence}% fitment confidence
-                  </p>
-                </div>
-                <button
-                  onClick={handleUseResult}
-                  className="flex items-center gap-2 rounded-xl bg-[#FF5A1F] px-6 py-3 text-sm font-bold text-slate-950 shadow-[0_0_15px_rgba(255,90,31,0.4)] transition-all duration-200 hover:shadow-[0_0_20px_rgba(255,90,31,0.6)] active:scale-[0.98]"
-                >
-                  <Zap className="h-4 w-4" />
-                  Find Matching Parts
-                </button>
-              </div>
-            )}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-800 bg-[#0C111C] p-5 shadow-2xl text-slate-100">
+        
+        {/* Top Control Bar Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Camera className="h-4 w-4 text-orange-500 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">Optical Image Scanner Lens</span>
           </div>
+          <button onClick={() => { stopCameraStream(); onClose(); }} className="rounded-lg p-1 text-slate-400 hover:bg-slate-900 hover:text-slate-100">
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Capture button */}
-        {phase === 'idle' && (
-          <button
-            onClick={handleCapture}
-            className="mt-6 flex items-center gap-2 rounded-full bg-[#FF5A1F] px-6 py-3 text-sm font-bold text-slate-950 shadow-[0_0_15px_rgba(255,90,31,0.4)] transition-all duration-200 hover:shadow-[0_0_20px_rgba(255,90,31,0.6)] active:scale-[0.98]"
-          >
-            <Camera className="h-4 w-4" />
-            Capture &amp; Analyze
-          </button>
+        {/* Display Alert Messages if Camera Hardware Permissions Are Blocked */}
+        {errorMessage && (
+          <div className="mt-4 rounded-xl border border-red-950/40 bg-red-950/10 p-3 text-xs font-semibold text-red-400">
+            {errorMessage}
+          </div>
         )}
 
-        {phase === 'idle' && (
-          <p className="mt-3 text-center text-[11px] text-[#64748B]">
-            Point at any engine bay component — AI will identify it and find matching parts.
-          </p>
-        )}
-      </div>
+        {/* 📹 REAL TIME VIDEO STREAM TERMINAL VIEWPORT CONTAINER */}
+        <div className="relative mt-4 h-64 w-full overflow-hidden rounded-xl border border-slate-800 bg-[#070A12] flex items-center justify-center">
+          
+          {phase === 'idle' && !errorMessage && (
+            <div className="text-center space-y-2">
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent inline-block" />
+              <p className="text-xs text-slate-400 tracking-wider">Awaiting Operating System Camera Permission Prompt...</p>
+            </div>
+          )}
 
-      <div className="px-4 pb-6 pt-2 text-center">
-        <p className="flex items-center justify-center gap-1.5 text-[11px] text-[#64748B]">
-          <ScanLine className="h-3 w-3 text-[#FF5A1F]" />
-          Simulated AI vision · demo mode
-        </p>
+          {phase === 'streaming' && (
+            <>
+              <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover opacity-90" />
+              
+              {/* Target Reticle Crosshair Bounding Frame Overlay */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
+                <div className="h-20 w-full rounded-lg border-2 border-dashed border-orange-500 bg-orange-500/5 animate-pulse flex items-center justify-center">
+                  <span className="bg-slate-950/80 px-2 py-0.5 rounded font-mono text-[8px] uppercase tracking-widest text-orange-400">Align Registration Text Inside Crosshair</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {phase === 'processing' && (
+            <div className="text-center space-y-3 px-6 w-full">
+              <Sparkles className="h-6 w-6 text-orange-400 animate-spin mx-auto" />
+              <div className="text-xs font-bold text-slate-300">Decoding Image Framework Arrays...</div>
+              <div className="w-full bg-slate-950 rounded-full h-1.5 border border-slate-800">
+                <div className="bg-orange-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+        <canvas ref={canvasRef} className="hidden" />
+
+        {/* Bottom Context Controls */}
+        <div className="mt-4 flex gap-2">
+          {phase === 'streaming' && (
+            <button onClick={captureFrameAndScanText} className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-slate-950 font-extrabold py-2.5 text-xs uppercase tracking-wider transition-colors shadow-md">
+              <Camera className="h-4 w-4" /> Freeze Frame & OCR Decode
+            </button>
+          )}
+          {errorMessage && (
+            <button onClick={startCameraStream} className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800">
+              <RefreshCw className="h-3.5 w-3.5" /> Re-Authorize Camera Streams
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
