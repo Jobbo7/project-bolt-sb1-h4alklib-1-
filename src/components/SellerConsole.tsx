@@ -6,7 +6,7 @@ import {
   Settings, ChevronRight, ArrowLeft, Landmark, ShieldCheck, Send, X,
   Bell, Volume2, AlertTriangle, Link2,
 } from 'lucide-react';
-import { REGIONS, getEffectiveTaxRate, formatCurrency } from '@/regionConfig';
+const regionConfig = { defaultRegion: 'AU_VIC', currencies: { AU_VIC: 'A$' } };
 import {
   streamInvoiceToLedger, connectAccountingSoftware,
 } from '@/mockBackend.js';
