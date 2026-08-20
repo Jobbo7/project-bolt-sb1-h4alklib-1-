@@ -2904,8 +2904,15 @@ function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode
   const [dbShards, setDbShards] = useState({ apac: true, emea: true, amer: false });
   const [overrideToast, setOverrideToast] = useState(null);
 
-  // Simulated live platform telemetry — Melbourne northern growth corridor nodes
+// Simulated live platform telemetry — Melbourne northern growth corridor nodes
   const [nodes, setNodes] = useState([
+    { id: 'PF-WALLAN-01', name: 'Wallan Auto Works', vehicle: 'VRA-892 Toyota Hilux', cdr: 'SYNCED', basket: 142.50, stuck: false },
+    { id: 'PF-MICKLEHAM-02', name: 'Mickleham Performance', vehicle: '1F9-2KJ Ford Ranger', cdr: 'SYNCING', basket: 389.00, stuck: false },
+    { id: 'PF-CRAIGIEBURN-03', name: 'Craigieburn Tyre & Auto', vehicle: 'ABC-123 Mazda CX-5', cdr: 'SYNCED', basket: 67.20, stuck: false },
+    { id: 'PF-ROXBURGH-04', name: 'Roxburgh Park Mobile Mech', vehicle: 'XYZ-789 Hyundai i30', cdr: 'OFFLINE', basket: 0, stuck: true },
+    { id: 'PF-KALKALLO-05', name: 'Kalkallo Diesel Specialists', vehicle: 'DEF-456 Isuzu D-Max', cdr: 'SYNCED', basket: 1245.75, stuck: false },
+    { id: 'PF-ATTWOOD-06', name: 'Attwood European Garage', vehicle: 'GHI-012 BMW X5', cdr: 'SYNCING', basket: 890.30, stuck: false },
+  ]);
     { id: 'PF-WALLAN-01', name: 'Wallan Auto Works', vehicle: 'VRA-892 Toyota Hilux', cdr: 'SYNCED', basket: 142.50, stuck: false },
     { id: 'PF-MICKLEHAM-02', name: 'Mickleham Performance', vehicle: '1F9-2KJ Ford Ranger', cdr: 'SYNCING', basket: 389.00, stuck: false },
     { id: 'PF-CRAIGIEBURN-03', name: 'Craigieburn Tyre & Auto', vehicle: 'ABC-123 Mazda CX-5', cdr: 'SYNCED', basket: 67.20, stuck: false },
@@ -3281,24 +3288,24 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-    const handleRego = async (plate, region) => {
+   const handleRego = async (plate, region) => {
     if (!plate || !plate.trim()) return;
     
     setRegoLoading(true);
-    setVehicle(null); // Instantly flushes your display's old layout cache memory
+    setVehicle(null); // Instantly clears layout cache memory
     
     try {
       console.log(`📡 Shipping query to live Transport Data Broker for plate: ${plate}`);
-      const response = await fetch('/api/vehicle-lookup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plate: plate.trim().toUpperCase(), type: 'rego', region: region || 'AU_VIC' })
-      });
+      const response = await fetch(`/api/vehicle-lookup?plate=${encodeURIComponent(plate.trim().toUpperCase())}&region=${region || 'AU_VIC'}`);
+      
+      if (!response.ok) {
+        throw new Error(`Serverless gateway rejection status code: ${response.status}`);
+      }
       
       const liveVehicleSpecs = await response.json();
       setVehicle(liveVehicleSpecs);
     } catch (error) {
-      console.error("❌ Live vehicle telemetry network connection timeout:", error);
+      console.error("❌ Live vehicle lookup connection crash:", error);
       alert("⚠️ Network Failure: Could not reach the serverless transport registry node.");
       setVehicle(null);
     } finally {
