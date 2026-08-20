@@ -7,10 +7,9 @@ import {
   Bell, Volume2, AlertTriangle, Link2,
 } from 'lucide-react';
 const regionConfig = { defaultRegion: 'AU_VIC', currencies: { AU_VIC: 'A$' } };
-import { streamInvoiceToLedger, connectAccountingSoftware } from '../mockBackend.js';
-import { executeWholesalerItemUpload, executeStripeSplitPayouts } from '../mockBackend.js';
+import { streamInvoiceToLedger, connectAccountingSoftware, executeWholesalerItemUpload, executeStripeSplitPayouts } from '../mockBackend.js';
 
-// ─── Design Tokens ──────────────────────────────────────────────────────────
+// ─── Design Ttokens ──────────────────────────────────────────────────────────
 const C = {
   bg: '#070A12',
   panel: '#101524',
