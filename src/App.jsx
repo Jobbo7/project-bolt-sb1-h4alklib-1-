@@ -2911,15 +2911,7 @@ function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode
     { id: 'PF-CRAIGIEBURN-03', name: 'Craigieburn Tyre & Auto', vehicle: 'ABC-123 Mazda CX-5', cdr: 'SYNCED', basket: 67.20, stuck: false },
     { id: 'PF-ROXBURGH-04', name: 'Roxburgh Park Mobile Mech', vehicle: 'XYZ-789 Hyundai i30', cdr: 'OFFLINE', basket: 0, stuck: true },
     { id: 'PF-KALKALLO-05', name: 'Kalkallo Diesel Specialists', vehicle: 'DEF-456 Isuzu D-Max', cdr: 'SYNCED', basket: 1245.75, stuck: false },
-    { id: 'PF-ATTWOOD-06', name: 'Attwood European Garage', vehicle: 'GHI-012 BMW X5', cdr: 'SYNCING', basket: 890.30, stuck: false },
-  ]);
-    { id: 'PF-WALLAN-01', name: 'Wallan Auto Works', vehicle: 'VRA-892 Toyota Hilux', cdr: 'SYNCED', basket: 142.50, stuck: false },
-    { id: 'PF-MICKLEHAM-02', name: 'Mickleham Performance', vehicle: '1F9-2KJ Ford Ranger', cdr: 'SYNCING', basket: 389.00, stuck: false },
-    { id: 'PF-CRAIGIEBURN-03', name: 'Craigieburn Tyre & Auto', vehicle: 'ABC-123 Mazda CX-5', cdr: 'SYNCED', basket: 67.20, stuck: false },
-    { id: 'PF-ROXBURGH-04', name: 'Roxburgh Park Mobile Mech', vehicle: 'XYZ-789 Hyundai i30', cdr: 'OFFLINE', basket: 0, stuck: true },
-    { id: 'PF-KALKALLO-05', name: 'Kalkallo Diesel Specialists', vehicle: 'DEF-456 Isuzu D-Max', cdr: 'SYNCED', basket: 1245.75, stuck: false },
-    { id: 'PF-ATTWOOD-06', name: 'Attwood European Garage', vehicle: 'GHI-012 BMW X5', cdr: 'SYNCING', basket: 890.30, stuck: false },
-  ]);
+   
 
   // Live revenue pipeline calculations
   const monthlySaaS = paidInvoices.length * 99 + 149 * 3; // simplified accumulator
