@@ -3365,20 +3365,25 @@ const handleAcceptTerms = () => {
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
     
-    setPartsLoading(true);
+       setPartsLoading(true);
     setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     
     try {
       console.log(`📡 Shipping search parameter over the wire to cloud routes: "${query}"`);
       const liveData = await processPartsQuery(query);
       
-      // Rigidly map incoming Vercel backend payload columns directly to your layout tables
+      // ── UNIVERSAL ARCHITECTURE MAPPER BRIDGES ALL POTENTIAL FRONTEND LABELS ──
+      const databaseRows = liveData?.localWholesalers || liveData?.local || (Array.isArray(liveData) ? liveData : []);
+      const consumerAds = liveData?.facebookMarketplace || liveData?.facebook || [];
+
       setResults({
-        local: liveData.localWholesalers || [],
+        local: databaseRows,
+        localWholesalers: databaseRows,
         national: [],
         trans_tasman: [],
         global_direct: [],
-        facebook: liveData.facebookMarketplace || []
+        facebook: consumerAds,
+        facebookMarketplace: consumerAds
       });
     } catch (err) {
       console.error("❌ Live search bridge pipeline failure:", err);
@@ -3387,6 +3392,7 @@ const handleAcceptTerms = () => {
       setPartsLoading(false);
     }
   };
+
  
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
 
