@@ -9,7 +9,7 @@ import {
 const regionConfig = { defaultRegion: 'AU_VIC', currencies: { AU_VIC: 'A$' } };
 import {
   streamInvoiceToLedger, connectAccountingSoftware,
-} from '@/mockBackend.js';
+import { executeWholesalerItemUpload, executeStripeSplitPayouts } from '../mockBackend.js';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 const C = {
