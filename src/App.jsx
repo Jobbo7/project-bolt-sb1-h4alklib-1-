@@ -3281,12 +3281,32 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-  // ── Vehicle handlers ──
+ // ── True Live Vehicle Registration Gateway Connection ──
   const handleRego = async (plate, region) => {
+    if (!plate || !plate.trim()) return;
+    
     setRegoLoading(true);
-    const v = await processFreeRegoLookup(plate, region);
-    setRegoLoading(false);
-    setVehicle(v);
+    setVehicle(null); // Instantly clears old simulation values from your screen cache
+    
+    try {
+      console.log(`📡 Dispatched query to live Transport Data Broker for plate: ${plate}`);
+      
+      const response = await fetch('/api/vehicle-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plate: plate.trim().toUpperCase(), type: 'rego', region: region || 'AU_VIC' })
+      });
+      
+      const liveVehicleSpecs = await response.json();
+      setVehicle(liveVehicleSpecs);
+    } catch (error) {
+      console.error("❌ Live vehicle telemetry network connection timeout:", error);
+      alert("⚠️ Network Failure: Could not reach the serverless transport registry node.");
+      setVehicle(null);
+    } finally {
+      setRegoLoading(false);
+      setScanning(false);
+    }
   };
 
   const handleVin = async (vinStr, region) => {
@@ -3341,13 +3361,34 @@ const handleAcceptTerms = () => {
     if (v) setVehicle(v);
   };
 
-  // ── Parts search ──
+   // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
+    if (!query || !query.trim()) return;
+    
     setPartsLoading(true);
-    const r = await processPartsQuery(query);
-    setPartsLoading(false);
-    setResults(r);
+    // Initialize with safe default empty arrays so your components never hit a runtime exception wall
+    setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+    
+    try {
+      console.log(`📡 Shipping search parameter over the wire to cloud routes: "${query}"`);
+      const liveData = await processPartsQuery(query);
+      
+      // Rigidly map incoming Vercel backend payload columns directly to your layout tables
+      setResults({
+        local: liveData.localWholesalers || [],
+        national: [],
+        trans_tasman: [],
+        global_direct: [],
+        facebook: liveData.facebookMarketplace || []
+      });
+    } catch (err) {
+      console.error("❌ Live search bridge pipeline failure:", err);
+      setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+    } finally {
+      setPartsLoading(false);
+    }
   };
+
 
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
 
@@ -4109,10 +4150,11 @@ return (
                 <Store className="h-3.5 w-3.5" style={{ color: C.orange }} /> Automotive Store Catalogs
               </div>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={LUBRICANTS_CATALOG.length} onClick={() => setCatalogWindow('lubricants')} />
-                <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={CONSUMABLES_CATALOG_FLAT.length} onClick={() => setCatalogWindow('consumables')} />
-                <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={ACCESSORIES_CATALOG.length} onClick={() => setCatalogWindow('accessories')} />
-                <StoreCatalogButton label="Specialty Shop Tools" icon={<Wrench className="h-4 w-4" />} accent={C.orange} count={SPECIALTY_TOOLS_CATALOG.length} onClick={() => setCatalogWindow('tools')} />
+                                <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={results.local?.filter(item => item.title?.toLowerCase().includes('oil') || item.title?.toLowerCase().includes('fluid') || item.title?.toLowerCase().includes('lubricant')).length || 0} onClick={() => setCatalogWindow('lubricants')} />
+                <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={results.local?.filter(item => item.title?.toLowerCase().includes('cleaner') || item.title?.toLowerCase().includes('spray') || item.title?.toLowerCase().includes('wipe')).length || 0} onClick={() => setCatalogWindow('consumables')} />
+                <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={results.local?.filter(item => item.title?.toLowerCase().includes('glove') || item.title?.toLowerCase().includes('mat') || item.title?.toLowerCase().includes('tape')).length || 0} onClick={() => setCatalogWindow('accessories')} />
+                <StoreCatalogButton label="Specialty Shop Tools" icon={<Wrench className="h-4 w-4" />} accent={C.orange} count={results.local?.filter(item => item.title?.toLowerCase().includes('scanner') || item.title?.toLowerCase().includes('wrench') || item.title?.toLowerCase().includes('socket')).length || 0} onClick={() => setCatalogWindow('tools')} />
+
               </div>
             </div>
           )}
