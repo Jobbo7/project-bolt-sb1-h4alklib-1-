@@ -65,6 +65,11 @@ export const COURIER_BASE_FEE = 15.00;
 export const TAX_RATE = 0.10;
 export const CONSUMABLES_MARKUP = 0.15;
 
+// Required Logistics Pricing & Token Footprints
+export const PLATFORM_LOGISTICS_MARKUP = 0.10;
+export const TRANS_TASMAN_FREIGHT_SURCHARGE = 45.00;
+export const GLOBAL_DIRECT_FREIGHT_SURCHARGE = 85.00;
+
 // Required Mock Function Wrappers to Maintain Layout UI Drawers
 export const processFreeRegoLookup = async () => ({ make: "STANDBY", model: "AWAITING LOOKUP", year: 2026 });
 export const processVinLookup = async () => ({ make: "STANDBY", model: "AWAITING LOOKUP", year: 2026 });
@@ -77,3 +82,5 @@ export const compileCustomerInvoice = () => ({ total: 0 });
 export const dispatchInvoicePaymentRequest = async () => true;
 export const streamInvoiceToLedger = async () => true;
 export const connectAccountingSoftware = async () => true;
+export const dispatchUberDirectDrivers = async () => true;
+export const dispatchConsolidatedFreight = async () => true;
