@@ -3281,15 +3281,14 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-   // ── True Live Vehicle Registration Gateway Connection ──
-  const handleRego = async (plate, region) => {
+    const handleRego = async (plate, region) => {
     if (!plate || !plate.trim()) return;
     
     setRegoLoading(true);
-    setVehicle(null); // Instantly clears out layout cache
+    setVehicle(null); // Instantly flushes your display's old layout cache memory
     
     try {
-      console.log(`📡 Dispatched query to live Transport Data Broker for plate: ${plate}`);
+      console.log(`📡 Shipping query to live Transport Data Broker for plate: ${plate}`);
       const response = await fetch('/api/vehicle-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3307,6 +3306,7 @@ const handleAcceptTerms = () => {
       setScanning(false);
     }
   };
+
 
 
   const handleVin = async (vinStr, region) => {
