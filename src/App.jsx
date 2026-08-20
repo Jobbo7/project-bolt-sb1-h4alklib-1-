@@ -1,5 +1,5 @@
 import React, { useState, Component } from 'react';
-import { SellerConsole } from './components/SellerConsole';
+import SellerConsole from './components/SellerConsole';
 import { TableGrid } from './components/TableGrid';
 import { NavBar } from './components/NavBar';
 import { Hero } from './components/Hero';
