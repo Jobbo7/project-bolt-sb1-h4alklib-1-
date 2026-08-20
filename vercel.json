@@ -1,13 +1,22 @@
 {
   "version": 2,
+  "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/vehicle-lookup",
+      "destination": "/api/vehicle-lookup.js"
+    },
+    {
+      "source": "/api/parts-search",
+      "destination": "/api/parts-search.js"
+    },
+    {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "/api/$1.js"
     },
     {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": "/index.html"
     }
   ]
 }
