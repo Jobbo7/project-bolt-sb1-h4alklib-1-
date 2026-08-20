@@ -1,4 +1,3 @@
-// 🟢 PERFECT INLINE STRUCTURE BYPASSES THE MISSING FILE
 const tables = { offers: [], localWholesalers: [], facebookMarketplace: [] };
 
 import { KeyRound, Link2, Hash } from 'lucide-react';
