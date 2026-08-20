@@ -3361,12 +3361,65 @@ const handleAcceptTerms = () => {
     if (v) setVehicle(v);
   };
 
-   // ── True Live Search Aggregator Mapping ──
+    // ── True Live Vehicle Registration Gateway Connection ──
+  const handleRego = async (plate, region) => {
+    if (!plate || !plate.trim()) return;
+    
+    setRegoLoading(true);
+    setVehicle(null); // Instantly clears out layout cache
+    
+    try {
+      console.log(`📡 Dispatched query to live Transport Data Broker for plate: ${plate}`);
+      const response = await fetch('/api/vehicle-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plate: plate.trim().toUpperCase(), type: 'rego', region: region || 'AU_VIC' })
+      });
+      
+      const liveVehicleSpecs = await response.json();
+      setVehicle(liveVehicleSpecs);
+    } catch (error) {
+      console.error("❌ Live vehicle telemetry network connection timeout:", error);
+      alert("⚠️ Network Failure: Could not reach the serverless transport registry node.");
+      setVehicle(null);
+    } finally {
+      setRegoLoading(false);
+      setScanning(false);
+    }
+  };
+
+  // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
     
     setPartsLoading(true);
-    // Initialize with safe default empty arrays so your components never hit a runtime exception wall
+    setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+    
+    try {
+      console.log(`📡 Shipping search parameter over the wire to cloud routes: "${query}"`);
+      const liveData = await processPartsQuery(query);
+      
+      // Rigidly map incoming Vercel backend payload columns directly to your layout tables
+      setResults({
+        local: liveData.localWholesalers || [],
+        national: [],
+        trans_tasman: [],
+        global_direct: [],
+        facebook: liveData.facebookMarketplace || []
+      });
+    } catch (err) {
+      console.error("❌ Live search bridge pipeline failure:", err);
+      setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+    } finally {
+      setPartsLoading(false);
+    }
+  };
+
+  // ── True Live Search Aggregator Mapping ──
+  const handleSearch = async (query) => {
+    if (!query || !query.trim()) return;
+    
+    setPartsLoading(true);
     setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     
     try {
