@@ -11,7 +11,7 @@ import {
   Globe, Server, Database, Shield, Activity, ClipboardList,
   Radio, DollarSign, Rocket, Download, Inbox,
   QrCode, Users, UserPlus, Link2, Smartphone, CheckCircle, XCircle,
-  Navigation, MapPin as MapPinIcon, ClipboardCheck, PackageCheck, UserCheck,
+  NavigFation, MapPin as MapPinIcon, ClipboardCheck, PackageCheck, UserCheck,
 } from 'lucide-react';
 import {
   processFreeRegoLookup, processVinLookup, processPartsQuery,
@@ -3361,33 +3361,6 @@ const handleAcceptTerms = () => {
     if (v) setVehicle(v);
   };
 
-    // ── True Live Vehicle Registration Gateway Connection ──
-  const handleRego = async (plate, region) => {
-    if (!plate || !plate.trim()) return;
-    
-    setRegoLoading(true);
-    setVehicle(null); // Instantly clears out layout cache
-    
-    try {
-      console.log(`📡 Dispatched query to live Transport Data Broker for plate: ${plate}`);
-      const response = await fetch('/api/vehicle-lookup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plate: plate.trim().toUpperCase(), type: 'rego', region: region || 'AU_VIC' })
-      });
-      
-      const liveVehicleSpecs = await response.json();
-      setVehicle(liveVehicleSpecs);
-    } catch (error) {
-      console.error("❌ Live vehicle telemetry network connection timeout:", error);
-      alert("⚠️ Network Failure: Could not reach the serverless transport registry node.");
-      setVehicle(null);
-    } finally {
-      setRegoLoading(false);
-      setScanning(false);
-    }
-  };
-
   // ── True Live Search Aggregator Mapping ──
   const handleSearch = async (query) => {
     if (!query || !query.trim()) return;
@@ -3414,35 +3387,7 @@ const handleAcceptTerms = () => {
       setPartsLoading(false);
     }
   };
-
-  // ── True Live Search Aggregator Mapping ──
-  const handleSearch = async (query) => {
-    if (!query || !query.trim()) return;
-    
-    setPartsLoading(true);
-    setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
-    
-    try {
-      console.log(`📡 Shipping search parameter over the wire to cloud routes: "${query}"`);
-      const liveData = await processPartsQuery(query);
-      
-      // Rigidly map incoming Vercel backend payload columns directly to your layout tables
-      setResults({
-        local: liveData.localWholesalers || [],
-        national: [],
-        trans_tasman: [],
-        global_direct: [],
-        facebook: liveData.facebookMarketplace || []
-      });
-    } catch (err) {
-      console.error("❌ Live search bridge pipeline failure:", err);
-      setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
-    } finally {
-      setPartsLoading(false);
-    }
-  };
-
-
+ 
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
 
   const handleAddToCart = (item, tier, qty = 1, explicitClassification = null) => {
