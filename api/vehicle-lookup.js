@@ -48,8 +48,9 @@ export default async function handler(req, res) {
       if (targetState === 'TEXAS') targetState = 'TX';
     }
 
-    // 🟢 FIXED STRING INTERPOLATION SYNTAX: ALL CHARACTERS ARE FULLY ESCAPED AND MAPPED
-    let targetUrl = "http://carregistrationapi.com.au" + endpointMethod + "?RegistrationNumber=" + encodeURIComponent(plateText) + "&username=" + apiUsername;
+        // 🟢 FIXED WEB DOMAIN GATEWAY RESOLVES THE DOCKER SERVER ENOTFOUND WALL
+    let targetUrl = "https://www.carregistrationapi.com/api/reg.asmx/" + endpointMethod + "?RegistrationNumber=" + encodeURIComponent(plateText) + "&username=" + apiUsername;
+
 
     
     // Append the state flag field parameter only if scanning the USA or Australian cluster networks
@@ -71,9 +72,10 @@ export default async function handler(req, res) {
     };
 
     // Universal multi-country schema parsing translation map
-    const make = extractField('CarMake') || extractField('Make') || extractField('VehicleMake') || extractField('makeDescription');
+        const make = extractField('CarMake') || extractField('Make') || extractField('VehicleMake') || extractField('makeDescription');
     const model = extractField('CarModel') || extractField('Model') || extractField('VehicleModel') || extractField('modelDescription');
     const year = extractField('RegistrationYear') || extractField('YearOfManufacture') || extractField('Year') || extractField('modelYear');
+
     const engine = extractField('EngineSize') || extractField('EngineDescription') || extractField('CcRating') || "4.0L";
     const vin = extractField('Vin') || extractField('ChassisNumber') || extractField('Chassis') || extractField('vin');
 
