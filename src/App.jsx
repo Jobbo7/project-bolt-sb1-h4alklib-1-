@@ -22,16 +22,16 @@ import {
   settleInvoiceViaCustomerPortal, connectOpenBankingFeed, simulateInboundDeposit,
   startBasiqBankFeedListener, triggerXeroAccountantSync, linkAtoSbr,
   connectAccountingSoftware, inviteAccountant, streamInvoiceToLedger,
-  // 🟢 CLEANED IMPORT LINE REMOVES SYSTEM FRICTION:
 connectAccountingSoftware, inviteAccountant, streamInvoiceToLedger,
-executeStripeSplitPayouts,
-  // ── Universal local components safely shield front-end dashboard rows ──
+executeStripeSplitPayouts, dispatchUberDirectDrivers, PLATFORM_LOGISTICS_MARKUP,
+TRANS_TASMAN_FREIGHT_SURCHARGE, GLOBAL_DIRECT_FREIGHT_SURCHARGE,
+dispatchConsolidatedFreight,
+} from './mockBackend.js';
+
+// ── Universal local components safely shield front-end dashboard rows ──
 const WORKSHOP_BUSINESS = { name: "PartsForge Verified Workshop Partner", abn: "00 000 000 000", tier: "MECHANIC_GOLD" };
 const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, provider: "Uber Direct Logistics" });
-  dispatchUberDirectDrivers, PLATFORM_LOGISTICS_MARKUP,
-  TRANS_TASMAN_FREIGHT_SURCHARGE, GLOBAL_DIRECT_FREIGHT_SURCHARGE,
-  dispatchConsolidatedFreight,
-} from './mockBackend.js';
+
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
 
