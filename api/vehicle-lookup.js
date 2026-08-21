@@ -48,8 +48,9 @@ export default async function handler(req, res) {
       if (targetState === 'TEXAS') targetState = 'TX';
     }
 
-    // Formulates the global SOAP/XML unified endpoint configuration query string
-    let targetUrl = `http://carregistrationapi.com.au{endpointMethod}?RegistrationNumber=${encodeURIComponent(plateText)}&username=${apiUsername}`;
+    // 🟢 FIXED STRING INTERPOLATION SYNTAX: ALL CHARACTERS ARE FULLY ESCAPED AND MAPPED
+    let targetUrl = "http://carregistrationapi.com.au" + endpointMethod + "?RegistrationNumber=" + encodeURIComponent(plateText) + "&username=" + apiUsername;
+
     
     // Append the state flag field parameter only if scanning the USA or Australian cluster networks
     if (countryCode === "AU") {
