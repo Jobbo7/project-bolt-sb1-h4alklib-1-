@@ -11,7 +11,7 @@ import {
   Globe, Server, Database, Shield, Activity, ClipboardList,
   Radio, DollarSign, Rocket, Download, Inbox,
   QrCode, Users, UserPlus, Link2, Smartphone, CheckCircle, XCircle,
-  NavigFation, MapPin as MapPinIcon, ClipboardCheck, PackageCheck, UserCheck,
+  Navigation, MapPin as MapPinIcon, ClipboardCheck, PackageCheck, UserCheck,
 } from 'lucide-react';
 import {
   processFreeRegoLookup, processVinLookup, processPartsQuery,
