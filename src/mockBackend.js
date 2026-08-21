@@ -93,3 +93,6 @@ export const startBasiqBankFeedListener = async () => true;
 export const triggerXeroAccountantSync = async () => true;
 export const linkAtoSbr = async () => true;
 export const inviteAccountant = async () => true;
+// Required Workshop Business & Courier Logistics Compliance Footprints
+export const WORKSHOP_BUSINESS = { name: "PartsForge Verified Workshop Partner", abn: "00 000 000 000", tier: "MECHANIC_GOLD" };
+export const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, provider: "Uber Direct Logistics" });
