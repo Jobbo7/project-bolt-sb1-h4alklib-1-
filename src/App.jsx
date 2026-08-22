@@ -4410,4 +4410,3 @@ return (
       </div>
     </AppErrorBoundary>
   );
-}
