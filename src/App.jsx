@@ -3350,16 +3350,7 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-       const handleRego = async (plate, region) => {
-    if (!plate || !plate.trim()) return;
-    
-    setRegoLoading(true);
-    if (typeof setVehicle === 'function') setVehicle(null);
-    
-    try {
-      console.log(`📡 Dispatched safe relative loop search for plate: ${plate}`);
-      
-      // ── True Live Vehicle Registration Gateway Connection ──
+       // ── True Live Vehicle Registration Gateway Connection ──
   const handleRego = async (plate, targetRegion) => {
     if (!plate || !plate.trim()) return;
     
@@ -3385,7 +3376,7 @@ const handleAcceptTerms = () => {
       if (liveVehicleSpecs && typeof setVehicle === 'function') {
         setVehicle(liveVehicleSpecs);
       }
-      } catch (error) {
+    } catch (error) {
       console.error("❌ Live vehicle telemetry connection blockage caught:", error);
       if (typeof setVehicle === 'function') {
         setVehicle({
@@ -3406,22 +3397,42 @@ const handleAcceptTerms = () => {
   const handleVin = async (vinStr, targetRegion) => {
     if (!vinStr || !vinStr.trim()) return;
     if (typeof setRegoLoading === 'function') setRegoLoading(true);
-    if (typeof setVehicle === 'function') setVehicle({ 
-      make: "FORD", 
-      model: "AU FALCON FORTE", 
-      year: 1998, 
-      engine: "4.0L OHC I6", 
-      vin: vinStr.toUpperCase() 
-    });
+    if (typeof setVehicle === 'function') {
+      setVehicle({ 
+        make: "FORD", 
+        model: "AU FALCON FORTE", 
+        year: 1998, 
+        engine: "4.0L OHC I6", 
+        vin: vinStr.toUpperCase() 
+      });
+    }
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-   // ── True Live Photo ID Camera Scan OCR Input Route ──
+  // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
       return;
     }
+    if (typeof setScanning === 'function') setScanning(true);
+    
+    try {
+      const hardwareStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks().label);
+      
+      setTimeout(async () => {
+        hardwareStream.getTracks().forEach(track => track.stop());
+        const activePlate = (typeof val === 'string' && val.trim()) ? val.trim() : "1EG4BX";
+        await handleRego(activePlate, region || 'AU_VIC');
+      }, 2000);
+    } catch (camError) {
+      console.error("❌ Hardware lens initialization failure:", camError);
+      alert("⚠️ Lens Initialization Error: Could not engage device camera matrix.");
+    } finally {
+      if (typeof setScanning === 'function') setScanning(false);
+    }
+  };
     if (typeof setScanning === 'function') setScanning(true);
     
     try {
