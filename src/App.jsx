@@ -3409,7 +3409,7 @@ const handleAcceptTerms = () => {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-     // ── True Live Vehicle Registration Gateway Connection ──
+       // ── True Live Vehicle Registration Gateway Connection ──
   const handleRego = async (plate, targetRegion) => {
     if (!plate || !plate.trim()) return;
     
@@ -3478,7 +3478,7 @@ const handleAcceptTerms = () => {
     
     try {
       const hardwareStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks()[0]?.label || "Rear Lens");
+      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks()?.label || "Rear Lens");
       
       setTimeout(async () => {
         hardwareStream.getTracks().forEach(track => track.stop());
@@ -3492,6 +3492,7 @@ const handleAcceptTerms = () => {
       if (typeof setScanning === 'function') setScanning(false);
     }
   };
+};
 
 
   // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
