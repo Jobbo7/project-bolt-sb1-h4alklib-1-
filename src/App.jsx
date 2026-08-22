@@ -4399,15 +4399,8 @@ return (
           region={region}
         />
 
-        {/* Customer Checkout Portal */}
-        {checkoutInvoice && (
-          <CustomerCheckoutPortal
-            invoice={checkoutInvoice}
-            onSettle={handleSettleInvoice}
-            onExit={() => setCheckoutInvoice(null)}
-            region={region}
-          />
-        )}
+               )}
       </div>
     </AppErrorBoundary>
   );
+}
