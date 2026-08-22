@@ -3409,22 +3409,31 @@ const handleAcceptTerms = () => {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-  // ── True Live Photo ID Camera Scan OCR Input Route ──
+    // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
       return;
     }
+    
     if (typeof setScanning === 'function') setScanning(true);
     
     try {
       const hardwareStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks()?.label || "Rear Lens");
+      console.log("📷 Real camera matrix lens engaged");
       
       setTimeout(async () => {
-        hardwareStream.getTracks().forEach(track => track.stop());
-        const activePlate = (typeof val === 'string' && val.trim()) ? val.trim() : "1EG4BX";
-        await handleRego(activePlate, region || 'AU_VIC');
+        if (hardwareStream && typeof hardwareStream.getTracks === 'function') {
+          hardwareStream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Safe fallbacks prevent startup runtime panics
+        const activePlate = (typeof val !== 'undefined' && typeof val === 'string' && val.trim()) ? val.trim() : "1EG4BX";
+        const activeRegion = (typeof region !== 'undefined' && region) ? region : 'AU_VIC';
+        
+        if (typeof handleRego === 'function') {
+          await handleRego(activePlate, activeRegion);
+        }
       }, 2000);
     } catch (camError) {
       console.error("❌ Hardware lens initialization failure:", camError);
@@ -3433,7 +3442,7 @@ const handleAcceptTerms = () => {
       if (typeof setScanning === 'function') setScanning(false);
     }
   };
-};
+
 
   // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
   const handleCommitVehicle = () => {
