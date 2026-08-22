@@ -3350,66 +3350,7 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-       // ── True Live Vehicle Registration Gateway Connection ──
-  const handleRego = async (plate, targetRegion) => {
-    if (!plate || !plate.trim()) return;
-    
-    if (typeof setRegoLoading === 'function') setRegoLoading(true);
-    if (typeof setVehicle === 'function') setVehicle(null);
-    
-    try {
-      const cleanPlate = plate.trim().toUpperCase();
-      const cleanRegion = (targetRegion || 'VIC').trim().toUpperCase().replace('AU_', '');
-      
-      console.log(`📡 Shipping secure query down to live backend proxy for plate: ${cleanPlate} (${cleanRegion})`);
-      const response = await fetch(`/api/vehicle-lookup?plate=${encodeURIComponent(cleanPlate)}&region=${cleanRegion}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) throw new Error(`Gateway returned error status: ${response.status}`);
-      const liveVehicleSpecs = await response.json();
-      
-      if (liveVehicleSpecs && typeof setVehicle === 'function') {
-        setVehicle(liveVehicleSpecs);
-      }
-    } catch (error) {
-      console.error("❌ Live vehicle telemetry connection blockage caught:", error);
-      if (typeof setVehicle === 'function') {
-        setVehicle({
-          make: "FORD",
-          model: "AU FALCON FORTE",
-          year: 1998,
-          engine: "4.0L INLINE-6 INTEGRATED BARRA INCEPTION",
-          vin: "6FPAAAJGJW1A12345",
-          rego: plate.trim().toUpperCase()
-        });
-      }
-    } finally {
-      if (typeof setRegoLoading === 'function') setRegoLoading(false);
-      if (typeof setScanning === 'function') setScanning(false);
-    }
-  };
-
-  const handleVin = async (vinStr, targetRegion) => {
-    if (!vinStr || !vinStr.trim()) return;
-    if (typeof setRegoLoading === 'function') setRegoLoading(true);
-    if (typeof setVehicle === 'function') {
-      setVehicle({ 
-        make: "FORD", 
-        model: "AU FALCON FORTE", 
-        year: 1998, 
-        engine: "4.0L OHC I6", 
-        vin: vinStr.toUpperCase() 
-      });
-    }
-    if (typeof setRegoLoading === 'function') setRegoLoading(false);
-  };
-
-       // ── True Live Vehicle Registration Gateway Connection ──
+         // ── True Live Vehicle Registration Gateway Connection ──
   const handleRego = async (plate, targetRegion) => {
     if (!plate || !plate.trim()) return;
     
@@ -3493,7 +3434,6 @@ const handleAcceptTerms = () => {
     }
   };
 };
-
 
   // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
   const handleCommitVehicle = () => {
