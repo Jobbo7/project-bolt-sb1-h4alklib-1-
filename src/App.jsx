@@ -3409,7 +3409,7 @@ const handleAcceptTerms = () => {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-  // ── True Live Photo ID Camera Scan OCR Input Route ──
+   // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
@@ -3418,8 +3418,9 @@ const handleAcceptTerms = () => {
     if (typeof setScanning === 'function') setScanning(true);
     
     try {
+      // 🎥 FORCING ASYNC HARDWARE HANDSHAKE UNLOCKS THE REAR CAMERA LENS 
       const hardwareStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks().label);
+      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks()[0]?.label || "Rear Lens");
       
       setTimeout(async () => {
         hardwareStream.getTracks().forEach(track => track.stop());
@@ -3433,8 +3434,8 @@ const handleAcceptTerms = () => {
       if (typeof setScanning === 'function') setScanning(false);
     }
   };
-    if (typeof setScanning === 'function') setScanning(true);
-    
+
+
     try {
       // 🎥 ENGAGES THE TABLET'S PHYSICAL REAR-FACING CAMERA LENS OVER THE INTERNET
       const hardwareStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
