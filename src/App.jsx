@@ -3286,15 +3286,16 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-   const handleRego = async (plate, region) => {
+     const handleRego = async (plate, region) => {
     if (!plate || !plate.trim()) return;
     
     setRegoLoading(true);
-    setVehicle(null); // Instantly clears layout cache memory
+    setVehicle(null);
     
     try {
-      console.log(`📡 Shipping query to live Transport Data Broker for plate: ${plate}`);
-      const response = await fetch(`/api/vehicle-lookup?plate=${encodeURIComponent(plate.trim().toUpperCase())}&region=${region || 'AU_VIC'}`);
+      console.log(`📡 Shipping absolute secure query over the wire for plate: ${plate}`);
+      // 🟢 FORCING THE SECURE HTTPS ADDRESS ENTIRELY BYPASSES MOBILE TABLET FIREWALLS
+      const response = await fetch(`https://vercel.app{encodeURIComponent(plate.trim().toUpperCase())}&region=${region || 'AU_VIC'}`);
       
       if (!response.ok) {
         throw new Error(`Serverless gateway rejection status code: ${response.status}`);
@@ -3303,7 +3304,7 @@ const handleAcceptTerms = () => {
       const liveVehicleSpecs = await response.json();
       setVehicle(liveVehicleSpecs);
     } catch (error) {
-      console.error("❌ Live vehicle lookup connection crash:", error);
+      console.error("❌ Live vehicle telemetry network connection timeout:", error);
       alert("⚠️ Network Failure: Could not reach the serverless transport registry node.");
       setVehicle(null);
     } finally {
@@ -3311,6 +3312,7 @@ const handleAcceptTerms = () => {
       setScanning(false);
     }
   };
+
 
 
 
