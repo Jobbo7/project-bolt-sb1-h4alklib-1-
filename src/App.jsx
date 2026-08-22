@@ -3416,17 +3416,18 @@ const handleAcceptTerms = () => {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-  // ── True Live Photo ID Camera Scan OCR Input Route ──
+   // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
       return;
     }
     if (typeof setScanning === 'function') setScanning(true);
+    
     try {
       // 🎥 ENGAGES THE TABLET'S PHYSICAL REAR-FACING CAMERA LENS OVER THE INTERNET
       const hardwareStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks().label);
+      console.log("📷 Real camera matrix lens engaged: ", hardwareStream.getVideoTracks()[0].label);
       
       setTimeout(async () => {
         hardwareStream.getTracks().forEach(track => track.stop()); // Releases the hardware lens securely
@@ -3438,9 +3439,11 @@ const handleAcceptTerms = () => {
     } catch (camError) {
       console.error("❌ Hardware lens initialization failure:", camError);
       alert("⚠️ Lens Initialization Error: Could not engage device camera matrix.");
+    } finally {
       if (typeof setScanning === 'function') setScanning(false);
     }
   };
+
 
   // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
   const handleCommitVehicle = () => {
