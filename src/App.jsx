@@ -4072,7 +4072,6 @@ const handleAcceptTerms = () => {
       }
       setSaveToast(`Bank feed matched: ${invoice.invoiceNo} — ${fmt(invoice.grandTotal, region)} via OSKO`);
       setTimeout(() => setSaveToast(null), 4000);
-    }
   };
 
   const handleConnectBankFeed = async () => {
@@ -4135,6 +4134,7 @@ const handleAcceptTerms = () => {
 
   // ── Render gates (auth → waiver → app) ──
   if (!userSession) return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
+  
   // ADMIN role bypasses safety shield → straight to enterprise monitoring terminal
   if (userSession.role === 'ADMIN') {
     return (
@@ -4154,6 +4154,7 @@ const handleAcceptTerms = () => {
       </AppErrorBoundary>
     );
   }
+  
   if (!accepted) return <SafetyShield onAccept={handleAcceptTerms} />;
 
   // ── Seller role: exclusive B2B Industrial Transport & Logistics Command Terminal ──
@@ -4169,7 +4170,7 @@ const handleAcceptTerms = () => {
           setCorpProfile={setCorpProfile}
           regionCode={regionCode}
           onRegionChange={handleRegionChange}
-          usStates={REGIONS.US.usStates || []}
+          usStates={REGIONS?.US?.usStates || []}
           onUsStateChange={handleUsStateChange}
           onConnectLedger={handleConnectLedger}
           onConnectBankFeed={handleConnectBankFeed}
