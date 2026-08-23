@@ -457,7 +457,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
   const [vin, setVin] = useState('');
   const [region, setRegion] = useState('AU_VIC');
   const [mode, setMode] = useState('rego');
-  const submit = async () => {
+    const submit = () => {
     const activePlate = (mode === 'vin' ? vin : plate) || '';
     if (!activePlate.trim()) {
       alert("⚠️ Please enter a registration number sequence first.");
@@ -465,18 +465,24 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
     }
 
     if (mode === 'vin') {
-      if (vin.trim() && typeof onVin === 'function') onVin(vin.trim(), region);
+      if (vin.trim() && typeof onVin === 'function') {
+        onVin(vin.trim(), region);
+      }
     } else {
       const cleanPlate = activePlate.trim().toUpperCase();
       const cleanRegion = (region || 'VIC').trim().toUpperCase().replace('AU_', '');
       
-      console.log(`📡 Dispatched active network search for plate: ${cleanPlate} (${cleanRegion})`);
+      console.log(`📡 Dispatched active background network search for plate: ${cleanPlate}`);
       
+      // 🟢 SAFE NON-BLOCKING TRIGGER PREVENTS REACT STARTUP PANICS
       if (typeof onRego === 'function') {
-        await onRego(cleanPlate, cleanRegion);
+        Promise.resolve(onRego(cleanPlate, cleanRegion)).catch(err => {
+          console.error("Background lookup promise error handled:", err);
+        });
       }
     }
   };
+
 
   return (
     <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
