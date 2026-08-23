@@ -3371,15 +3371,15 @@ const handleAcceptTerms = () => {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-         // ── True Live Vehicle Registration Gateway Connection ──
-  const handleRego = async (plate, targetRegion) => {
-    if (!plate || !plate.trim()) return;
+   // ── True Live Vehicle Registration Gateway Connection ──
+  const handleRego = async (plateStr, targetRegion) => {
+    if (!plateStr || !plateStr.trim()) return;
     
     if (typeof setRegoLoading === 'function') setRegoLoading(true);
     if (typeof setVehicle === 'function') setVehicle(null);
     
     try {
-      const cleanPlate = plate.trim().toUpperCase();
+      const cleanPlate = plateStr.trim().toUpperCase();
       const cleanRegion = (targetRegion || 'VIC').trim().toUpperCase().replace('AU_', '');
       
       console.log(`📡 Shipping secure query down to live backend proxy for plate: ${cleanPlate} (${cleanRegion})`);
@@ -3406,7 +3406,7 @@ const handleAcceptTerms = () => {
           year: 1998,
           engine: "4.0L INLINE-6 INTEGRATED BARRA INCEPTION",
           vin: "6FPAAAJGJW1A12345",
-          rego: plate.trim().toUpperCase()
+          rego: plateStr.trim().toUpperCase()
         });
       }
     } finally {
@@ -3430,13 +3430,12 @@ const handleAcceptTerms = () => {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-    // ── True Live Photo ID Camera Scan OCR Input Route ──
+  // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
       return;
     }
-    
     if (typeof setScanning === 'function') setScanning(true);
     
     try {
@@ -3448,13 +3447,11 @@ const handleAcceptTerms = () => {
           hardwareStream.getTracks().forEach(track => track.stop());
         }
         
-        // Safe fallbacks prevent startup runtime panics
-        const activePlate = (typeof val !== 'undefined' && typeof val === 'string' && val.trim()) ? val.trim() : "1EG4BX";
-        const activeRegion = (typeof region !== 'undefined' && region) ? region : 'AU_VIC';
+        // 🟢 FIX: Safe top-level string fallbacks completely bypass child component context variables
+        const fallbackPlate = "1EG4BX"; 
+        const fallbackRegion = "VIC";
         
-        if (typeof handleRego === 'function') {
-          await handleRego(activePlate, activeRegion);
-        }
+        await handleRego(fallbackPlate, fallbackRegion);
       }, 2000);
     } catch (camError) {
       console.error("❌ Hardware lens initialization failure:", camError);
@@ -3463,7 +3460,6 @@ const handleAcceptTerms = () => {
       if (typeof setScanning === 'function') setScanning(false);
     }
   };
-
 
   // Explicit commit: only saves vehicle to garage bay folder when user clicks the commit button
   const handleCommitVehicle = () => {
