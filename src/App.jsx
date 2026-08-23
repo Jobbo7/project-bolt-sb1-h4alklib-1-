@@ -4080,7 +4080,8 @@ const handleAcceptTerms = () => {
         }
       }
       setSaveToast(`Bank feed matched: ${invoice.invoiceNo} — ${fmt(invoice.grandTotal, region)} via OSKO`);
-      setTimeout(() => setSaveToast(null), 4000);
+            setTimeout(() => setSaveToast(null), 4000);
+    }
   };
 
   const handleConnectBankFeed = async () => {
@@ -4399,7 +4400,7 @@ return (
           region={region}
         />
 
-        {/* PartsForge Live Freight Arrival Manifest Modal */}
+               {/* PartsForge Live Freight Arrival Manifest Modal */}
         <FreightArrivalManifestModal
           open={freightManifestOpen}
           onClose={() => setFreightManifestOpen(false)}
@@ -4412,4 +4413,4 @@ return (
   );
 }
 
-
+export default App;
