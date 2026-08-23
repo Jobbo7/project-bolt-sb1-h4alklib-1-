@@ -4399,7 +4399,7 @@ return (
           region={region}
         />
 
-                {/* PartsForge Live Freight Arrival Manifest Modal */}
+        {/* PartsForge Live Freight Arrival Manifest Modal */}
         <FreightArrivalManifestModal
           open={freightManifestOpen}
           onClose={() => setFreightManifestOpen(false)}
