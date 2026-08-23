@@ -559,15 +559,15 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
       className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 transition hover:opacity-90" 
       style={{ background: C.orange }}
     >
-      <Plus className="h-4 w-4" /> Commit and Add Vehicle to Garage Bay Folder
-    </button>
-  </div>
-)}
-
+                 <Plus className="h-4 w-4" /> Commit and Add Vehicle to Garage Bay Folder
+          </button>
+        </div>
       )}
     </div>
   );
 }
+
+
 
 // ─── Parts Search ────────────────────────────────────────────────────────────
 function PartsSearch({ onSearch, loading }) {
@@ -4399,7 +4399,7 @@ return (
           region={region}
         />
 
-        {/* PartsForge Live Freight Arrival Manifest Modal */}
+                {/* PartsForge Live Freight Arrival Manifest Modal */}
         <FreightArrivalManifestModal
           open={freightManifestOpen}
           onClose={() => setFreightManifestOpen(false)}
@@ -4407,11 +4407,9 @@ return (
           onConfirmRouting={handleConfirmFreightRouting}
           region={region}
         />
-
-               )}
-             </div>
-      </AppErrorBoundary>
-    );
-  }
+      </div>
+    </AppErrorBoundary>
+  );
 }
+
 
