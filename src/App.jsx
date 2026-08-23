@@ -4412,5 +4412,3 @@ return (
     </AppErrorBoundary>
   );
 }
-
-export default App;
