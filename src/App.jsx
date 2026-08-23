@@ -457,11 +457,26 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
   const [vin, setVin] = useState('');
   const [region, setRegion] = useState('AU_VIC');
   const [mode, setMode] = useState('rego');
-  const submit = () => {
-    if (mode === 'vin') { if (vin.trim()) onVin(vin.trim(), region); }
-    else { if (plate.trim()) onRego(plate.trim(), region); }
+  const submit = async () => {
+    const activePlate = (mode === 'vin' ? vin : plate) || '';
+    if (!activePlate.trim()) {
+      alert("⚠️ Please enter a registration number sequence first.");
+      return;
+    }
+
+    if (mode === 'vin') {
+      if (vin.trim() && typeof onVin === 'function') onVin(vin.trim(), region);
+    } else {
+      const cleanPlate = activePlate.trim().toUpperCase();
+      const cleanRegion = (region || 'VIC').trim().toUpperCase().replace('AU_', '');
+      
+      console.log(`📡 Dispatched active network search for plate: ${cleanPlate} (${cleanRegion})`);
+      
+      if (typeof onRego === 'function') {
+        await onRego(cleanPlate, cleanRegion);
+      }
+    }
   };
-  const val = mode === 'vin' ? vin : plate;
 
   return (
     <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
