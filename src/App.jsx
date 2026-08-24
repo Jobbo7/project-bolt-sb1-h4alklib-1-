@@ -635,18 +635,18 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
               </div>
             </div>
           );
-        })}
+               })}
       </div>
 
-                {results.video && (
-                  <a href={`https://www.youtube.com/watch?v=${results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
-                    <ExternalLink className="h-3.5 w-3.5" /> {results.videoTitle || 'Watch Repair Video'}
-                  </a>
-                )}
-              </div>
-            </details>
-          )}
-          {results.tools?.length > 0 && (
+      {results.video && (
+        <div className="mt-3">
+          <a href={`https://www.youtube.com/watch?v=${results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
+            <ExternalLink className="h-3.5 w-3.5" /> {results.videoTitle || 'Watch Repair Video'}
+          </a>
+        </div>
+      )}
+      
+      {results.tools?.length > 0 && (
             <details className="rounded-lg border p-3" style={{ borderColor: `${C.orange}20`, background: C.panel2 }}>
               <summary className="cursor-pointer text-xs font-bold" style={{ color: C.orange }}>Required Tools ({results.tools.length})</summary>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
