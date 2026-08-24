@@ -666,27 +666,31 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
               </div>
             </details>
           )}
-           {results.consumables?.length > 0 && (
-    <details className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}20`, background: C.panel2 }}>
-      <summary className="cursor-pointer text-xs font-bold" style={{ color: C.emerald }}>Lubricants & Consumables ({results.consumables.length})</summary>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {results.consumables.map(con => {
-          const price = role === 'pro' ? con.trade : con.retail;
-          return (
-            <div key={con.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
-              <div className="flex items-start justify-between gap-2">
-                <div><h4 className="text-xs font-bold text-slate-100">{con.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{con.brand} · {con.shop}</p></div>
-                <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
-                           <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(con.id) ? C.emerald : C.orange, border: `1px solid ${inCart(con.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </details>
-  )}
-</div>
+      
+            {results.consumables?.length > 0 && (
+            <details className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}20`, background: C.panel2 }}>
+              <summary className="cursor-pointer text-xs font-bold" style={{ color: C.emerald }}>Lubricants & Consumables ({results.consumables.length})</summary>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {results.consumables.map((con) => {
+                  const price = role === 'pro' ? con.trade : con.retail;
+                  return (
+                    <div key={con.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div><h4 className="text-xs font-bold text-slate-100">{con.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{con.brand} · {con.shop}</p></div>
+                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
+                      </div>
+                      <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(con.id) ? C.emerald : C.orange, border: `1px solid ${inCart(con.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
+                        {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
