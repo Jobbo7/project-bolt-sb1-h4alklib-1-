@@ -626,69 +626,66 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
                         <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
                       </div>
                       <button onClick={() => onAdd(item, tier)} disabled={inCart(item.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(item.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(item.id) ? C.emerald : C.orange, border: `1px solid ${inCart(item.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                        {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-                      </button>
-                    </div>
+                      {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                   </div>
                   );
                 })}
               </div>
             </div>
           );
-               })}
+        })}
       </div>
 
       {results.video && (
         <div className="mt-3">
-          <a href={`https://www.youtube.com/watch?v=${results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
+          <a href={`https://youtube.com{results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
             <ExternalLink className="h-3.5 w-3.5" /> {results.videoTitle || 'Watch Repair Video'}
           </a>
         </div>
       )}
-      
+
       {results.tools?.length > 0 && (
-            <details className="rounded-lg border p-3" style={{ borderColor: `${C.orange}20`, background: C.panel2 }}>
-              <summary className="cursor-pointer text-xs font-bold" style={{ color: C.orange }}>Required Tools ({results.tools.length})</summary>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {results.tools.map(tool => {
-                  const price = role === 'pro' ? tool.trade : tool.retail;
-                  return (
-                    <div key={tool.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div><h4 className="text-xs font-bold text-slate-100">{tool.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{tool.brand} · {tool.shop}</p></div>
-                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
-                      </div>
-                      <button onClick={() => onAdd(tool, 'local')} disabled={inCart(tool.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(tool.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(item ? item.id : tool.id) ? C.emerald : C.orange, border: `1px solid ${inCart(tool.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                        {inCart(tool.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          )}
-      
-            {results.consumables?.length > 0 && (
-            <details className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}20`, background: C.panel2 }}>
-              <summary className="cursor-pointer text-xs font-bold" style={{ color: C.emerald }}>Lubricants & Consumables ({results.consumables.length})</summary>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {results.consumables.map((con) => {
-                  const price = role === 'pro' ? con.trade : con.retail;
-                  return (
-                    <div key={con.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div><h4 className="text-xs font-bold text-slate-100">{con.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{con.brand} · {con.shop}</p></div>
-                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
-                      </div>
-                      <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(con.id) ? C.emerald : C.orange, border: `1px solid ${inCart(con.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                        {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          )}
-        </div>
+        <details className="rounded-lg border p-3" style={{ borderColor: `${C.orange}20`, background: C.panel2 }}>
+          <summary className="cursor-pointer text-xs font-bold" style={{ color: C.orange }}>Required Tools ({results.tools.length})</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {results.tools.map(tool => {
+              const price = role === 'pro' ? tool.trade : tool.retail;
+              return (
+                <div key={tool.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div><h4 className="text-xs font-bold text-slate-100">{tool.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{tool.brand} · {tool.shop}</p></div>
+                    <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
+                  </div>
+                  <button onClick={() => onAdd(tool, 'local')} disabled={inCart(tool.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(tool.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(tool.id) ? C.emerald : C.orange, border: `1px solid ${inCart(tool.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
+                    {inCart(tool.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      )}
+
+      {results.consumables?.length > 0 && (
+        <details className="rounded-lg border p-3" style={{ borderColor: `${C.emerald}20`, background: C.panel2 }}>
+          <summary className="cursor-pointer text-xs font-bold" style={{ color: C.emerald }}>Lubricants & Consumables ({results.consumables.length})</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {results.consumables.map(con => {
+              const price = role === 'pro' ? con.trade : con.retail;
+              return (
+                <div key={con.id} className="rounded border p-2" style={{ borderColor: C.border, background: C.bg }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div><h4 className="text-xs font-bold text-slate-100">{con.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{con.brand} · {con.shop}</p></div>
+                    <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
+                  </div>
+                  <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(con.id) ? C.emerald : C.orange, border: `1px solid ${inCart(con.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
+                    {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </details>
       )}
     </div>
   );
