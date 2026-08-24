@@ -4159,8 +4159,10 @@ const handleAcceptTerms = () => {
     try { localStorage.removeItem('partsforge_session'); localStorage.removeItem('partsforge_safety_agreed'); } catch {}
   };
 
-  // ── Render gates (auth → waiver → app) ──
-  if (!userSession) return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
+   // ── Render gates (auth → waiver → app) ──
+  if (!userSession) {
+    return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
+  }
   
   // ADMIN role bypasses safety shield → straight to enterprise monitoring terminal
   if (userSession.role === 'ADMIN') {
@@ -4168,36 +4170,38 @@ const handleAcceptTerms = () => {
       <AppErrorBoundary>
         <AdminConsole
           session={userSession}
-          region={region}
-          regionCode={regionCode}
+          region={region || 'VIC'}
+          regionCode={regionCode || 'AU_VIC'}
           onRegionChange={handleRegionChange}
           usStateCode={usStateCode}
           onUsStateChange={handleUsStateChange}
-          bankFeedEntries={bankFeedEntries}
-          ledgerEntries={ledgerEntries}
-          paidInvoices={paidInvoices}
+          bankFeedEntries={bankFeedEntries || []}
+          ledgerEntries={ledgerEntries || []}
+          paidInvoices={paidInvoices || []}
           onSignOut={handleSignOut}
         />
       </AppErrorBoundary>
     );
   }
   
-  if (!accepted) return <SafetyShield onAccept={handleAcceptTerms} />;
+  if (!accepted) {
+    return <SafetyShield onAccept={handleAcceptTerms} />;
+  }
 
   // ── Seller role: exclusive B2B Industrial Transport & Logistics Command Terminal ──
   if (userSession.role === 'SELLER') {
     return (
       <AppErrorBoundary>
         <SellerConsole
-          region={region}
+          region={region || 'VIC'}
           usStateCode={usStateCode}
           onDispatchToBankFeed={dispatchToBankFeed}
           onSignOut={handleSignOut}
-          corpProfile={corpProfile}
+          corpProfile={corpProfile || {}}
           setCorpProfile={setCorpProfile}
-          regionCode={regionCode}
+          regionCode={regionCode || 'AU_VIC'}
           onRegionChange={handleRegionChange}
-          usStates={REGIONS?.US?.usStates || []}
+          usStates={(typeof REGIONS !== 'undefined' && REGIONS?.US?.usStates) ? REGIONS.US.usStates : []}
           onUsStateChange={handleUsStateChange}
           onConnectLedger={handleConnectLedger}
           onConnectBankFeed={handleConnectBankFeed}
@@ -4206,6 +4210,7 @@ const handleAcceptTerms = () => {
       </AppErrorBoundary>
     );
   }
+
 
 return (
     <AppErrorBoundary>
