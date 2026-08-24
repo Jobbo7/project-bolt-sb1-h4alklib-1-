@@ -4341,7 +4341,7 @@ export default function App() {
           region={regionCode}
         />
 
-             {/* PartsForge Live Freight Arrival Manifest Modal */}
+        {/* PartsForge Live Freight Arrival Manifest Modal */}
         <FreightArrivalManifestModal
           open={freightManifestOpen}
           onClose={() => setFreightManifestOpen(false)}
@@ -4353,3 +4353,4 @@ export default function App() {
     </AppErrorBoundary>
   );
 }
+
