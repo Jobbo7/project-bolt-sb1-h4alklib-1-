@@ -4338,6 +4338,7 @@ export default function App() {
           onCourierHandshakeComplete={handleBayDoorScanComplete}
           region={regionCode}
         />
+        
         {/* PartsForge Live Freight Arrival Manifest Modal */}
         <FreightArrivalManifestModal
           open={freightManifestOpen}
@@ -4350,3 +4351,5 @@ export default function App() {
     </AppErrorBoundary>
   );
 }
+}
+
