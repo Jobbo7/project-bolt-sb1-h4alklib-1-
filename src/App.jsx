@@ -683,8 +683,8 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
                         {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
                     </button>
                   </div>
-                );
-              })}
+                </details>
+              )}
             </div>
           )}
         </div>
@@ -692,6 +692,7 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
     </div>
   );
 }
+
 
 // ─── Per-item shipping surcharge calculator ──────────────────────────────────
 function itemShipping(item, region) {
@@ -4338,7 +4339,7 @@ export default function App() {
           region={regionCode}
         />
 
-                {/* PartsForge Live Freight Arrival Manifest Modal */}
+             {/* PartsForge Live Freight Arrival Manifest Modal */}
         <FreightArrivalManifestModal
           open={freightManifestOpen}
           onClose={() => setFreightManifestOpen(false)}
@@ -4350,4 +4351,3 @@ export default function App() {
     </AppErrorBoundary>
   );
 }
-
