@@ -679,16 +679,18 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
                     <div><h4 className="text-xs font-bold text-slate-100">{con.title}</h4><p className="text-[10px]" style={{ color: C.textDim }}>{con.brand} · {con.shop}</p></div>
                     <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
                   </div>
-                      <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(con.id) ? C.emerald : C.orange, border: `1px solid ${inCart(con.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                        {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-                      </button>
-                            })}
-        </div>
+                  <button onClick={() => onAddConsumable(con)} disabled={inCart(con.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(con.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(con.id) ? C.emerald : C.orange, border: `1px solid ${inCart(con.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
+                    {inCart(con.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </details>
       )}
     </div>
   );
 }
-
 
 // ─── Per-item shipping surcharge calculator ──────────────────────────────────
 function itemShipping(item, region) {
