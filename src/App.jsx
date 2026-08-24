@@ -513,7 +513,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
         </div>
       </div>
       
-           <button 
+              <button 
         onClick={(e) => {
           e.preventDefault();
           if (typeof onPhoto === 'function') onPhoto();
