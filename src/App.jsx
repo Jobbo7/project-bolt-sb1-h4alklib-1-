@@ -3390,7 +3390,7 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-      // ── True Live Photo ID Camera Scan OCR Input Route ──
+       // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
@@ -3403,24 +3403,23 @@ export default function App() {
     cameraOverlay.id = 'pf-live-lens-overlay';
     cameraOverlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; background:#000; display:flex; flex-direction:column; justify-content:space-between; padding:16px;';
     cameraOverlay.innerHTML = `
-      <div style="display:flex; justify-between; align-items:center; width:100%;">
-        <div style="color:#FF5A00; font-size:12px; font-weight:bold; text-transform:uppercase; tracking-wider:0.1em;">Live Lens Viewfinder Engaged</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <div style="color:#FF5A00; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:0.1em;">Live Lens Viewfinder Engaged</div>
         <button id="pf-lens-close-btn" style="background:#101524; color:#fff; border:1px solid #1E2A42; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:bold; cursor:pointer;">Close Lens</button>
       </div>
       <div style="position:relative; width:100%; flex:1; margin:16px 0; background:#070A12; border-radius:12px; overflow:hidden; border:1px solid #1E2A42; display:flex; align-items:center; justify-content:center;">
         <video id="pf-lens-stream-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
-        <div style="position:absolute; top:25%; left:24px; right:26px; bottom:25%; border:2px dashed rgba(255,90,0,0.6); border-radius:8px; pointer-events:none; display:flex; align-items:center; justify-content:center;">
-          <div style="color:#FF5A00; font-size:10px; font-weight:bold; background:rgba(7,10,18,0.75); padding:4px 8px; border-radius:4px; tracking-wider:0.1em; text-transform:uppercase;">Center Registration Plate Frame</div>
+        <div style="position:absolute; top:35%; left:24px; right:26px; bottom:35%; border:2px dashed rgba(255,90,0,0.7); border-radius:8px; pointer-events:none; display:flex; align-items:center; justify-content:center;">
+          <div id="pf-ocr-loading-hud" style="color:#FF5A00; font-size:10px; font-weight:bold; background:rgba(7,10,18,0.85); padding:6px 12px; border-radius:4px; letter-spacing:0.1em; text-transform:uppercase; text-align:center;">ALIGN LICENSE PLATE IN BOX</div>
         </div>
       </div>
       <div style="width:100%; padding-bottom:12px;">
-        <button id="pf-lens-capture-btn" style="width:100%; background:#FF5A00; color:#000; border:none; border-radius:12px; padding:14px; font-size:14px; font-weight:extrabold; cursor:pointer; text-transform:uppercase;">Capture Snapshot</button>
+        <button id="pf-lens-capture-btn" style="width:100%; background:#FF5A00; color:#000; border:none; border-radius:12px; padding:14px; font-size:14px; font-weight:extrabold; cursor:pointer; text-transform:uppercase; tracking-spacing:0.05em;">CAPTURE LICENSE PLATE</button>
       </div>
     `;
     document.body.appendChild(cameraOverlay);
 
     try {
-      // Force hardware parameters to query the environment camera matrix lens array explicitly
       const hardwareStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
       });
@@ -3437,24 +3436,63 @@ export default function App() {
 
       // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
+        const hud = document.getElementById('pf-ocr-loading-hud');
+        if (hud) hud.innerHTML = "⏳ RUNNING AUTOMATED OCR LENS SCANNERS...";
+
         const canvas = document.createElement('canvas');
         canvas.width = videoElement.videoWidth || 640;
         canvas.height = videoElement.videoHeight || 480;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
         
+        // Stop the camera streams safely
         hardwareStream.getTracks().forEach(track => track.stop());
-        cameraOverlay.remove();
-        if (typeof setScanning === 'function') setScanning(false);
 
-        // Dispatches to local state parsing
-        alert("📷 Frame Data Slipped Over the Wire! OCR parsing token complete.");
-        await handleRego("1EG4BX", "VIC");
+        try {
+          // 📡 Dynamic script injection pulls down Tesseract OCR engines straight over the internet edge cache network
+          if (typeof window.Tesseract === 'undefined') {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = 'https://jsdelivr.net';
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+
+          // Convert canvas image matrix data to a base64 processing string stream
+          const imageFrameData = canvas.toDataURL('image/png');
+          
+          // Execute optical machine character recognition over the text characters
+          const ocrResult = await window.Tesseract.recognize(imageFrameData, 'eng', {
+            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+          });
+          
+          const rawScannedText = ocrResult?.data?.text || '';
+          const cleanPlateString = rawScannedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+
+          cameraOverlay.remove();
+          if (typeof setScanning === 'function') setScanning(false);
+
+          if (cleanPlateString.length >= 2) {
+            alert(`🟢 TEXT RECOGNIZED: "${cleanPlateString}"\nDispatching string straight to live authority lookups.`);
+            await handleRego(cleanPlateString, regionCode || "VIC");
+          } else {
+            alert("⚠️ OCR READ EXCEPTION: Characters unclear or blurred. Defaulting to safe manual text mirror link.");
+            await handleRego("REGO-SCAN", regionCode || "VIC");
+          }
+
+        } catch (ocrError) {
+          console.error("Optical character alignment failure:", ocrError);
+          cameraOverlay.remove();
+          if (typeof setScanning === 'function') setScanning(false);
+          await handleRego("REGO-ERR", regionCode || "VIC");
+        }
       };
 
     } catch (hardwareError) {
       console.error("❌ Tablet device lens lock exception:", hardwareError);
-      alert("⚠️ Camera Access Denied: Please check your tablet browser safety preferences and allow camera hardware permissions for this website URL.");
+      alert("⚠️ Camera Access Denied: Check browser permissions.");
       cameraOverlay.remove();
       if (typeof setScanning === 'function') setScanning(false);
     }
