@@ -568,11 +568,11 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
     >
       <Plus className="h-4 w-4" /> Commit and Add Vehicle to Garage Bay Folder
     </button>
-  </div>
-)}
+        )}
     </div>
   );
 }
+
 
 // ─── Parts Search ────────────────────────────────────────────────────────────
 function PartsSearch({ onSearch, loading }) {
