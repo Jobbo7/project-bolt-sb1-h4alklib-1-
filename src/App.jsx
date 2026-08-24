@@ -697,13 +697,7 @@ function itemShipping(item, regionCode) {
   const tier = item.tier || 'local';
   const info = typeof SOURCING_TIERS !== 'undefined' ? SOURCING_TIERS[tier] : null;
   if (info && info.freightSurcharge > 0) return info.freightSurcharge;
-  if (tier === 'facebook') return 15.00; // Safe flat base fallback fee
-
-  // Protects the courier calculations against undefined object property lookups
-  const isUS = regionCode === 'US' || regionCode === 'US_CA' || regionCode === 'US_NY' || regionCode === 'US_TX';
-  if (isUS) {
-    return tier === 'global_direct' ? 25.00 : tier === 'national' ? 12.00 : 0;
-  }
+  if (tier === 'facebook') return 15.00;
 
   const hash = String(item.id || item.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const distanceKm = 5 + (hash % 30);
