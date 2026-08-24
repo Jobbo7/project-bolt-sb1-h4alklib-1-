@@ -693,20 +693,25 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
 }
 
 // ─── Per-item shipping surcharge calculator ──────────────────────────────────
-function itemShipping(item, region) {
-
+function itemShipping(item, regionCode) {
   const tier = item.tier || 'local';
-  const info = SOURCING_TIERS[tier];
+  const info = typeof SOURCING_TIERS !== 'undefined' ? SOURCING_TIERS[tier] : null;
   if (info && info.freightSurcharge > 0) return info.freightSurcharge;
-  if (tier === 'facebook') return COURIER_BASE_FEE;
-  const r = region || REGIONS.AU;
-  const networks = r.courierNetworks || [];
-  if (networks.length === 0) return 0;
+  if (tier === 'facebook') return 15.00; // Safe flat base fallback fee
+
+  // Protects the courier calculations against undefined object property lookups
+  const isUS = regionCode === 'US' || regionCode === 'US_CA' || regionCode === 'US_NY' || regionCode === 'US_TX';
+  if (isUS) {
+    return tier === 'global_direct' ? 25.00 : tier === 'national' ? 12.00 : 0;
+  }
+
   const hash = String(item.id || item.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const distanceKm = 5 + (hash % 30);
-  const inRange = networks.filter(n => distanceKm <= n.maxKm);
-  const network = (inRange.length > 0 ? inRange : networks)[0];
-  const fee = network.baseFee + (distanceKm * network.perKmRate) + network.bookingFee;
+  const baseFee = 8.50;
+  const perKmRate = 1.20;
+  const bookingFee = 3.50;
+  
+  const fee = baseFee + (distanceKm * perKmRate) + bookingFee;
   return +fee.toFixed(2);
 }
 
