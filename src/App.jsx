@@ -521,7 +521,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
         {scanning ? (<><ScanLine className="h-4 w-4 animate-pulse" style={{ color: C.orange }} /> Analyzing photo...</>) : (<><Camera className="h-4 w-4" /> Photo ID Scan</>)}
       </button>
       
-      {vehicle && !scanning && (
+            {vehicle && !scanning && (
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
           <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.emerald }}><BadgeCheck className="h-4 w-4" /> Vehicle Matched</div>
           <div className="mt-1.5 text-sm font-bold text-slate-100">{vehicle.year} {vehicle.make} {vehicle.model}</div>
@@ -532,20 +532,21 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
           </button>
         </div>
       )}
+      
+      <button
+        disabled={scanning} 
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium text-slate-300 transition" 
+        style={{ borderColor: C.border, background: C.panel2 }}
+      >
+        {scanning ? (
+          <><ScanLine className="h-4 w-4 animate-pulse" style={{ color: C.orange }} /> Engaging Lens...</>
+        ) : (
+          <><Camera className="h-4 w-4" /> Photo ID Scan</>
+        )}
+      </button>
     </div>
   );
 }
-
-  disabled={scanning} 
-  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium text-slate-300 transition" 
-  style={{ borderColor: C.border, background: C.panel2 }}
->
-  {scanning ? (
-    <><ScanLine className="h-4 w-4 animate-pulse" style={{ color: C.orange }} /> Engaging Lens...</>
-  ) : (
-    <><Camera className="h-4 w-4" /> Photo ID Scan</>
-  )}
-</button>
 
 {vehicle && !scanning && (
   <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
