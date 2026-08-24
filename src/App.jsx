@@ -53,7 +53,11 @@ const C = {
 };
 
 const uid = () => `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-const fmt = (n, region) => formatCurrency(n, region || REGIONS.AU);
+const fmt = (n, regionCode) => {
+  const activeCode = typeof regionCode === 'string' ? regionCode : 'AU_VIC';
+  const targetRegion = (typeof REGIONS !== 'undefined' && REGIONS[activeCode]) ? REGIONS[activeCode] : { locale: 'en-AU', currency: 'AUD' };
+  return typeof formatCurrency === 'function' ? formatCurrency(n, targetRegion) : new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n || 0);
+};
 
 const REGO_REGIONS = [
   { value: 'AU_VIC', label: 'AU — Victoria' }, { value: 'AU_NSW', label: 'AU — New South Wales' },
@@ -475,7 +479,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
       const cleanPlate = activePlate.trim().toUpperCase();
       const cleanRegion = (region || 'VIC').trim().toUpperCase().replace('AU_', '');
       
-      console.log(`📡 Dispatched active background network search for plate: ${cleanPlate}`);
+      console.log(`Dispatched active background network search for plate: ${cleanPlate}`);
       if (typeof onRego === 'function') {
         Promise.resolve(onRego(cleanPlate, cleanRegion)).catch(err => {
           console.error("Background lookup promise error handled:", err);
@@ -532,43 +536,6 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
           </button>
         </div>
       )}
-      
-      <button
-        disabled={scanning} 
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium text-slate-300 transition" 
-        style={{ borderColor: C.border, background: C.panel2 }}
-      >
-        {scanning ? (
-          <><ScanLine className="h-4 w-4 animate-pulse" style={{ color: C.orange }} /> Engaging Lens...</>
-        ) : (
-          <><Camera className="h-4 w-4" /> Photo ID Scan</>
-        )}
-      </button>
-    </div>
-  );
-}
-
-{vehicle && !scanning && (
-  <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
-    <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.emerald }}><BadgeCheck className="h-4 w-4" /> Vehicle Matched</div>
-    <div className="mt-1.5 text-sm font-bold text-slate-100">
-      {(vehicle.year || 1998)} {(vehicle.make || 'FORD').toUpperCase()} {(vehicle.model || 'FALCON AU').toUpperCase()}
-    </div>
-    <div className="mt-0.5 text-xs" style={{ color: C.textDim }}>{(vehicle.engine || '4.0L OHC I6').toUpperCase()}</div>
-    <div className="mt-1 font-mono text-xs" style={{ color: C.textDimmer }}>VIN: {(vehicle.vin || '6FPAAA-SECURE-NODE').toUpperCase()}</div>
-    <div className="mt-0.5 font-mono text-xs uppercase" style={{ color: C.orange }}>Plate Ref: {vehicle.rego || 'LIVE'}</div>
-    
-    <button 
-      onClick={(e) => { 
-        e.preventDefault(); 
-        if (typeof onCommit === 'function') onCommit(); 
-      }} 
-      className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 transition hover:opacity-90" 
-      style={{ background: C.orange }}
-    >
-      <Plus className="h-4 w-4" /> Commit and Add Vehicle to Garage Bay Folder
-    </button>
-        )}
     </div>
   );
 }
