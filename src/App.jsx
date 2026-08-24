@@ -626,8 +626,9 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
                         <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
                       </div>
                       <button onClick={() => onAdd(item, tier)} disabled={inCart(item.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(item.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(item.id) ? C.emerald : C.orange, border: `1px solid ${inCart(item.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                      {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-                   </div>
+                        {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
