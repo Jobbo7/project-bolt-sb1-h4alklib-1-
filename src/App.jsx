@@ -3605,15 +3605,60 @@ export default function App() {
     setTimeout(() => setSaveToast(null), 4000);
   };
 
-  // Freight Arrival Manifest confirmation → segregated routing
+   // Freight Arrival Manifest confirmation → segregated routing
   const handleConfirmFreightRouting = () => {
     if (!dispatchJob) return;
     const items = dispatchJob.items || [];
     const line2Items = items.filter(c => (typeof classifyItem === 'function' ? classifyItem(c) : 'LINE2_BAY_ALLOCATION') === 'LINE2_BAY_ALLOCATION');
     const line1Items = items.filter(c => (typeof classifyItem === 'function' ? classifyItem(c) : 'LINE2_BAY_ALLOCATION') === 'LINE1_INTERNAL_EXPENSE');
     const employeeSource = dispatchJob.employeeSource || null;
-     
-    // ── Employee purchase gating: block checkout, route to approval queue ──
+
+    if (line2Items.length > 0) {
+      const partsTotal = line2Items.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
+      const invoiceNo = `INV-FRG-${Date.now().toString(36).toUpperCase()}`;
+      setPaidInvoices(prev => [...prev, {
+        invoiceNo,
+        customer: custName || 'Internal Stock Order',
+        vehicle: 'Workshop Inventory',
+        vehicleRego: '',
+        date: new Date().toLocaleDateString(),
+        settledAt: new Date().toISOString(),
+        paymentStatus: 'PAID',
+        grandTotal: partsTotal,
+        partsTotal,
+        laborTotal: 0,
+        laborHours: 0,
+        gst: 0,
+        cart: line2Items.map(c => ({ brand: c.brand, title: c.title, qty: c.qty, unitPrice: c.unitPrice || 0 })),
+        consumables: [],
+        diagnosticNotes: 'Consolidated freight arrival routing.',
+        technicianLogs: employeeSource || 'Master Root Handshake',
+      }]);
+    }
+
+    if (line1Items.length > 0) {
+      const newExpenses = line1Items.map(c => ({
+        id: uid(),
+        title: c.title,
+        brand: c.brand,
+        category: c.category || c.source || 'workshop',
+        receiptId: `FRG-${dispatchJob.consignmentId}`,
+        unitPrice: c.unitPrice || 0,
+        qty: c.qty,
+        purchasedAt: new Date().toISOString(),
+        purchasedByEmployee: employeeSource,
+        exported: false,
+      }));
+      setWorkshopExpenses(prev => [...prev, ...newExpenses]);
+    }
+
+    setDispatchJob(null);
+    setFreightManifestOpen(false);
+    setSaveToast('Freight delivery routed successfully.');
+    setTimeout(() => setSaveToast(null), 3000);
+  };
+
+  // ── Employee purchase gating: block checkout, route to approval queue ──
   const handleEmployeePurchaseAttempt = (cartItems, employeeInfo) => {
     const total = cartItems.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
     const approval = {
@@ -3690,20 +3735,7 @@ export default function App() {
       setWorkshopExpenses(prev => [...prev, ...newExpenses]);
     }
 
-      // 3. Build dispatch job for physical courier routing (assets follow after QR handshake)
-  const handleApproveEmployeePurchase = (approvalId) => {
-    const req = pendingApprovals.find(a => a.id === approvalId);
-    if (!req) return;
-
-    // 1. Process Stripe payment telemetry logs safely into existing states
-    const paymentDescription = `Employee purchase approved: ${req.employeeName} (${req.items.length} items)`;
-    setBankFeedEntries(prev => [{ id: uid(), description: paymentDescription, amount: req.total, channel: 'Stripe', status: 'SETTLED', timestamp: new Date().toISOString() }, ...prev]);
-    setLedgerEntries(prev => [{ id: uid(), ledgerId: `EMP-${approvalId}`, description: `Employee purchase: ${req.employeeName}`, amount: req.total, accountCode: '500-PURCH', status: 'POSTED', timestamp: new Date().toISOString() }, ...prev]);
-
-    const employeeSource = `Purchased by Employee: ${req.employeeName} / ${req.employeeCode}`;
-    const line2Items = req.items.filter(c => (typeof classifyItem === 'function' ? classifyItem(c) : 'LINE2_BAY_ALLOCATION') === 'LINE2_BAY_ALLOCATION');
-    const line1Items = req.items.filter(c => (typeof classifyItem === 'function' ? classifyItem(c) : 'LINE2_BAY_ALLOCATION') === 'LINE1_INTERNAL_EXPENSE');
-
+    // 3. Build dispatch job for physical courier routing (assets follow after QR handshake)
     const consignmentId = `CON-${Date.now().toString(36).toUpperCase()}`;
     const suppliers = buildSupplierLegs(req.items);
     setDispatchJob({
