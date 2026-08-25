@@ -3428,10 +3428,10 @@ export default function App() {
       const videoElement = document.getElementById('pf-lens-stream-video');
       if (videoElement) videoElement.srcObject = hardwareStream;
 
-                  // Capture snapshot action
+           // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
-        if (hud) hud.innerHTML = "⏳ RUNNING NATIVE LENS OCR SCANNERS...";
+        if (hud) hud.innerHTML = "⏳ DISPATCHING IMAGE PACKETS TO CLOUD LOGISTICS NODE...";
 
         const canvas = document.createElement('canvas');
         const captureWidth = videoElement.videoWidth || 1280;
@@ -3448,46 +3448,35 @@ export default function App() {
           hardwareStream.getTracks().forEach(track => track.stop());
         }
 
+        const imageFrameData = canvas.toDataURL('image/png');
+        cameraOverlay.remove();
+
         try {
-          if (!window.Tesseract) {
-            throw new Error("TESSERACT_LIBRARY_NOT_INITIALIZED_IN_WINDOW");
-          }
+          // 📡 Push raw data arrays directly over the internet to your Vercel serverless cloud processor
+          const cloudResponse = await fetch('/api/ocr-scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imageFrameData })
+          });
 
-          const imageFrameData = canvas.toDataURL('image/png');
-          
-          // 🟢 MOBILE FIX: Directly use high-level recognize while passing explicit CDN asset pathways
-          const ocrResult = await window.Tesseract.recognize(
-            imageFrameData,
-            'eng',
-            {
-              corePath: 'https://unpkg.com',
-              workerPath: 'https://unpkg.com',
-              langPath: 'https://unpkg.com', // High-availability mirror bypasses GitHub thread locks
-              logger: m => console.log(`📋 OCR Progress: ${Math.round(m.progress * 100)}%`)
-            }
-          );
+          if (!cloudResponse.ok) throw new Error("CLOUD_GATEWAY_REJECTION");
+          const resultData = await cloudResponse.json();
+          const cleanPlateString = resultData.plate || '';
 
-          const rawScannedText = ocrResult?.data?.text || '';
-          const cleanPlateString = rawScannedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
-
-          cameraOverlay.remove();
           if (typeof setScanning === 'function') setScanning(false);
 
           if (cleanPlateString.length >= 2) {
-            alert(`🟢 TEXT RECOGNIZED: "${cleanPlateString}"\nDispatching string straight to live authority lookups.`);
+            alert(`🟢 CLOUD TEXT RECOGNIZED: "${cleanPlateString}"\nDispatching string straight to live authority lookups.`);
             await handleRego(cleanPlateString, regionCode || "VIC");
           } else {
-            alert("⚠️ OCR READ EXCEPTION: Characters unclear or blurred. Defaulting to safe manual text mirror link.");
+            alert("⚠️ OCR READ EXCEPTION: Characters unclear. Defaulting to safe manual text mirror link.");
             await handleRego("REGO-SCAN", regionCode || "VIC");
           }
 
         } catch (ocrError) {
-          console.error("Optical character alignment failure:", ocrError);
-          if (cameraOverlay && typeof cameraOverlay.remove === 'function') cameraOverlay.remove();
+          console.error("Cloud processing pipeline handshake failure:", ocrError);
           if (typeof setScanning === 'function') setScanning(false);
-          
-          // Fallback parsing handles user input errors by redirecting cleanly into manual text mirror inputs
-          alert("⚠️ Mobile thread exception caught. Routing directly to manual plate reference capture module.");
+          alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
           await handleRego("REGO-ERR", regionCode || "VIC");
         }
       };
