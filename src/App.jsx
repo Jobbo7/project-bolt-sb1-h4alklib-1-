@@ -3390,7 +3390,7 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-      // ── True Live Photo ID Camera Scan OCR Input Route ──
+       // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
@@ -3428,12 +3428,19 @@ export default function App() {
       const videoElement = document.getElementById('pf-lens-stream-video');
       if (videoElement) videoElement.srcObject = hardwareStream;
 
-           // Capture snapshot action
+      // Close button action
+      document.getElementById('pf-lens-close-btn').onclick = () => {
+        hardwareStream.getTracks().forEach(track => track.stop());
+        cameraOverlay.remove();
+        if (typeof setScanning === 'function') setScanning(false);
+      };
+
+      // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
-        if (hud) hud.innerHTML = "⏳ DISPATCHING IMAGE PACKETS TO CLOUD LOGISTICS NODE...";
+        if (hud) hud.innerHTML = "⏳ PROCESSING AUTOMATED OCR LENS SCANNERS...";
 
-                const canvas = document.createElement('canvas');
+        const canvas = document.createElement('canvas');
         const captureWidth = videoElement.videoWidth || 1280;
         const captureHeight = videoElement.videoHeight || 720;
         
@@ -3448,13 +3455,11 @@ export default function App() {
           hardwareStream.getTracks().forEach(track => track.stop());
         }
 
-        // 🟢 CRITICAL SPEED FIXED: Compresses raw pixels into a lightweight JPEG file to slash network payload size by 90%
         const imageFrameData = canvas.toDataURL('image/jpeg', 0.6);
         cameraOverlay.remove();
 
-
-                try {
-          // 🟢 FIXED NATIVE ROUTING: Forces the mobile network layer to use absolute origin paths, resolving relative proxy blocks
+        try {
+          // FIXED NATIVE ROUTING: Forces the mobile network layer to use absolute origin paths, resolving relative proxy blocks
           const targetOrigin = window.location.origin;
           const cloudResponse = await fetch(`${targetOrigin}/api/ocr-scan`, {
             method: 'POST',
@@ -3478,13 +3483,6 @@ export default function App() {
             alert("⚠️ OCR READ EXCEPTION: Characters unclear. Defaulting to safe manual text mirror link.");
             await handleRego("REGO-SCAN", regionCode || "VIC");
           }
-
-        } catch (ocrError) {
-          console.error("Cloud processing pipeline handshake failure:", ocrError);
-          if (typeof setScanning === 'function') setScanning(false);
-          alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
-          await handleRego("REGO-ERR", regionCode || "VIC");
-        }
 
         } catch (ocrError) {
           console.error("Cloud processing pipeline handshake failure:", ocrError);
