@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     const response = await fetch('https://ocr.space', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `base64Image=${encodeURIComponent(base64Payload)}&language=eng&apikey=helloworld`
+      body: `base64Image=${encodeURIComponent(base64Payload)}&language=eng&apikey=K85324564888957``
     });
 
     if (!response.ok) throw new Error(`External OCR engine returned status: ${response.status}`);
