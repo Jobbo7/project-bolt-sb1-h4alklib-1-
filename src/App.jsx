@@ -3390,49 +3390,7 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-       // ── True Live Photo ID Camera Scan OCR Input Route ──
-  const handlePhoto = async () => {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
-      return;
-    }
-    if (typeof setScanning === 'function') setScanning(true);
-    
-    // Create a native modal overlay that locks to your tablet layout display viewport
-    const cameraOverlay = document.createElement('div');
-    cameraOverlay.id = 'pf-live-lens-overlay';
-    cameraOverlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; background:#000; display:flex; flex-direction:column; justify-content:space-between; padding:16px;';
-    cameraOverlay.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-        <div style="color:#FF5A00; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:0.1em;">Live Lens Viewfinder Engaged</div>
-        <button id="pf-lens-close-btn" style="background:#101524; color:#fff; border:1px solid #1E2A42; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:bold; cursor:pointer;">Close Lens</button>
-      </div>
-      <div style="position:relative; width:100%; flex:1; margin:16px 0; background:#070A12; border-radius:12px; overflow:hidden; border:1px solid #1E2A42; display:flex; align-items:center; justify-content:center;">
-        <video id="pf-lens-stream-video" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
-        <div style="position:absolute; top:35%; left:24px; right:26px; bottom:35%; border:2px dashed rgba(255,90,0,0.7); border-radius:8px; pointer-events:none; display:flex; align-items:center; justify-content:center;">
-          <div id="pf-ocr-loading-hud" style="color:#FF5A00; font-size:10px; font-weight:bold; background:rgba(7,10,18,0.85); padding:6px 12px; border-radius:4px; letter-spacing:0.1em; text-transform:uppercase; text-align:center;">ALIGN LICENSE PLATE IN BOX</div>
-        </div>
-      </div>
-      <div style="width:100%; padding-bottom:12px;">
-        <button id="pf-lens-capture-btn" style="width:100%; background:#FF5A00; color:#000; border:none; border-radius:12px; padding:14px; font-size:14px; font-weight:extrabold; cursor:pointer; text-transform:uppercase; tracking-spacing:0.05em;">CAPTURE LICENSE PLATE</button>
-      </div>
-    `;
-    document.body.appendChild(cameraOverlay);
-
-    try {
-      const hardwareStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-      
-      const videoElement = document.getElementById('pf-lens-stream-video');
-      if (videoElement) videoElement.srcObject = hardwareStream;
-
-      // Close button action
-      document.getElementById('pf-lens-close-btn').onclick = () => {
-        hardwareStream.getTracks().forEach(track => track.stop());
-        cameraOverlay.remove();
-        if (typeof setScanning === 'function') setScanning(false);
-      };  // ── True Live Photo ID Camera Scan OCR Input Route ──
+      // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
@@ -3484,7 +3442,7 @@ export default function App() {
 
         const canvas = document.createElement('canvas');
         
-        // 🟢 FIX: Force reliable mobile dimension fallbacks if hardware streams read 0
+        // Force reliable mobile dimension fallbacks if hardware streams read 0
         const captureWidth = videoElement.videoWidth || 1280;
         const captureHeight = videoElement.videoHeight || 720;
         
@@ -3500,7 +3458,7 @@ export default function App() {
         }
 
         try {
-          // 🟢 FIX: Read directly from pre-instantiated window variable without runtime script injection
+          // Read directly from pre-instantiated window variable without runtime script injection
           const ocrEngine = window.Tesseract;
           if (!ocrEngine) {
             throw new Error("TESSERACT_LIBRARY_NOT_FOUND_IN_WINDOW_CONTEXT");
