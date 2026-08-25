@@ -3390,15 +3390,70 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-          // ── True Live Photo ID Camera Scan OCR Input Route ──
+           // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
-      return;
-    }
     if (typeof setScanning === 'function') setScanning(true);
     
-    // Create a native modal overlay that locks to your tablet layout display viewport
+    // Fallback Helper: Triggers a native system camera overlay if browser hardware permissions fail
+    const triggerNativeFileCameraFallback = () => {
+      const fallbackInput = document.createElement('input');
+      fallbackInput.type = 'file';
+      fallbackInput.accept = 'image/*';
+      fallbackInput.capture = 'environment'; // Forces mobile devices to open their rear camera application directly
+      
+      fallbackInput.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+          if (typeof setScanning === 'function') setScanning(false);
+          return;
+        }
+        
+        // Convert the captured picture file cleanly into a base64 string for the cloud
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          await processImageOnCloud(reader.result);
+        };
+        reader.readAsDataURL(file);
+      };
+      fallbackInput.click();
+    };
+
+    // Unified Cloud Processing Pipeline Request
+    const processImageOnCloud = async (imageDataUrl) => {
+      try {
+        const targetOrigin = window.location.origin;
+        const cloudResponse = await fetch(`${targetOrigin}/api/vehicle-lookup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ image: imageDataUrl, region: regionCode || "VIC" })
+        });
+
+        if (!cloudResponse.ok) throw new Error("CLOUD_GATEWAY_REJECTION");
+        const resultData = await cloudResponse.json();
+
+        if (typeof setScanning === 'function') setScanning(false);
+
+        if (resultData && resultData.make) {
+          alert(`🟢 CLOUD LOOKUP RENDERED: "${resultData.rego || 'MATCHED'}"\nMapping genuine vehicle metrics straight to dashboard cards.`);
+          if (typeof setVehicle === 'function') setVehicle(resultData);
+        } else {
+          alert("⚠️ OCR READ EXCEPTION: Custom text unclear. Running manual plate fallback stream.");
+          await handleRego("REGO-SCAN", regionCode || "VIC");
+        }
+      } catch (ocrError) {
+        console.error("Cloud processing pipeline handshake failure handled:", ocrError);
+        if (typeof setScanning === 'function') setScanning(false);
+        alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
+        await handleRego("REGO-ERR", regionCode || "VIC");
+      }
+    };
+
+    // Attempt to open the custom in-app live video overlay stream view
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      triggerNativeFileCameraFallback();
+      return;
+    }
+
     const cameraOverlay = document.createElement('div');
     cameraOverlay.id = 'pf-live-lens-overlay';
     cameraOverlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; background:#000; display:flex; flex-direction:column; justify-content:space-between; padding:16px;';
@@ -3427,22 +3482,19 @@ export default function App() {
       const videoElement = document.getElementById('pf-lens-stream-video');
       if (videoElement) videoElement.srcObject = hardwareStream;
 
-      // Close button action
       document.getElementById('pf-lens-close-btn').onclick = () => {
         hardwareStream.getTracks().forEach(track => track.stop());
         cameraOverlay.remove();
         if (typeof setScanning === 'function') setScanning(false);
       };
 
-      // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
-        if (hud) hud.innerHTML = "⏳ RUNNING AUTOMATED CHARACTER ANALYSERS...";
+        if (hud) hud.innerHTML = "⏳ PROCESSING AUTOMATED OCR LENS SCANNERS...";
 
         const canvas = document.createElement('canvas');
         const captureWidth = videoElement.videoWidth || 1280;
         const captureHeight = videoElement.videoHeight || 720;
-        
         canvas.width = captureWidth;
         canvas.height = captureHeight;
         
@@ -3456,40 +3508,14 @@ export default function App() {
         const imageFrameData = canvas.toDataURL('image/jpeg', 0.6);
         cameraOverlay.remove();
 
-        try {
-          if (hud) hud.innerHTML = "📡 DISPATCHING LIVE CODES TO SERVERLESS NODES...";
-          const targetOrigin = window.location.origin;
-          
-          // 🟢 BYPASS BULK TRAINDATA ERRORS: Direct network call pipes base64 bytes straight to your secure vehicle-lookup cloud handler
-          const cloudResponse = await fetch(`${targetOrigin}/api/vehicle-lookup`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({ image: imageFrameData, region: regionCode || "VIC" })
-          });
-
-          if (!cloudResponse.ok) throw new Error("CLOUD_GATEWAY_REJECTION");
-          const resultData = await cloudResponse.json();
-
-          if (typeof setScanning === 'function') setScanning(false);
-
-          if (resultData && resultData.make) {
-            alert(`🟢 CLOUD LOOKUP RENDERED: "${resultData.rego || 'MATCHED'}"\nMapping genuine vehicle metrics straight to dashboard cards.`);
-            if (typeof setVehicle === 'function') setVehicle(resultData);
-          } else {
-            alert("⚠️ OCR READ EXCEPTION: Custom text unclear. Running manual plate fallback stream.");
-            await handleRego("REGO-SCAN", regionCode || "VIC");
-          }
-
-        } catch (ocrError) {
-          console.error("Cloud processing pipeline handshake failure handled:", ocrError);
-          if (typeof setScanning === 'function') setScanning(false);
-          alert("⚠️ Camera capture exception caught. Routing directly to manual plate reference capture module.");
-          await handleRego("REGO-ERR", regionCode || "VIC");
-        }
+        await processImageOnCloud(imageFrameData);
       };
+    } catch (hardwareError) {
+      console.warn("⚠️ Custom inline viewfinder blocked. Engaging automatic device camera selector proxy layer.");
+      cameraOverlay.remove();
+      triggerNativeFileCameraFallback();
+    }
+  };
 
     } catch (hardwareError) {
       console.error("❌ Tablet device lens lock exception:", hardwareError);
