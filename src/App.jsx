@@ -3428,10 +3428,10 @@ export default function App() {
       const videoElement = document.getElementById('pf-lens-stream-video');
       if (videoElement) videoElement.srcObject = hardwareStream;
 
-            // Capture snapshot action
+                  // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
-        if (hud) hud.innerHTML = "⏳ OPTICAL ANALYSIS ENGINE INITIALISING...";
+        if (hud) hud.innerHTML = "⏳ RUNNING NATIVE LENS OCR SCANNERS...";
 
         const canvas = document.createElement('canvas');
         const captureWidth = videoElement.videoWidth || 1280;
@@ -3453,29 +3453,21 @@ export default function App() {
             throw new Error("TESSERACT_LIBRARY_NOT_INITIALIZED_IN_WINDOW");
           }
 
-          if (hud) hud.innerHTML = "⏳ RUNNING NATIVE VECTOR OCR CRAWL...";
           const imageFrameData = canvas.toDataURL('image/png');
           
-          // 🟢 FIXED CONFIG: Force the engine to source core components directly from high-availability unpkg mirrors
-          const worker = await window.Tesseract.createWorker({
-            corePath: 'https://unpkg.com',
-            workerPath: 'https://unpkg.com',
-            logger: m => console.log(`📋 OCR Progress: ${Math.round(m.progress * 100)}%`),
-            errorHandler: err => console.error("Worker Core Exception:", err)
-          });
+          // 🟢 MOBILE FIX: Directly use high-level recognize while passing explicit CDN asset pathways
+          const ocrResult = await window.Tesseract.recognize(
+            imageFrameData,
+            'eng',
+            {
+              corePath: 'https://unpkg.com',
+              workerPath: 'https://unpkg.com',
+              langPath: 'https://unpkg.com', // High-availability mirror bypasses GitHub thread locks
+              logger: m => console.log(`📋 OCR Progress: ${Math.round(m.progress * 100)}%`)
+            }
+          );
 
-          await worker.loadLanguage('eng');
-          await worker.initialize('eng');
-
-          // Strict alphanumeric constraint dictionaries block blurred background noise characters
-          await worker.setParameters({
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-          });
-
-          const { data } = await worker.recognize(imageFrameData);
-          await worker.terminate(); // Permanently flush memory arrays from cache heaps
-
-          const rawScannedText = data?.text || '';
+          const rawScannedText = ocrResult?.data?.text || '';
           const cleanPlateString = rawScannedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
 
           cameraOverlay.remove();
