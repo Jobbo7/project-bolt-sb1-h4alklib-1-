@@ -3390,7 +3390,7 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-         // ── True Live Photo ID Camera Scan OCR Input Route ──
+          // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
@@ -3420,7 +3420,6 @@ export default function App() {
     document.body.appendChild(cameraOverlay);
 
     try {
-      // Force hardware parameters to query the environment camera matrix lens array explicitly
       const hardwareStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
       });
@@ -3438,7 +3437,7 @@ export default function App() {
       // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
-        if (hud) hud.innerHTML = "⏳ PROCESSING AUTOMATED OCR LENS SCANNERS...";
+        if (hud) hud.innerHTML = "⏳ RUNNING AUTOMATED CHARACTER ANALYSERS...";
 
         const canvas = document.createElement('canvas');
         const captureWidth = videoElement.videoWidth || 1280;
@@ -3450,7 +3449,6 @@ export default function App() {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
         
-        // Stop the camera streams safely to prevent background battery drain
         if (hardwareStream && typeof hardwareStream.getTracks === 'function') {
           hardwareStream.getTracks().forEach(track => track.stop());
         }
@@ -3459,15 +3457,17 @@ export default function App() {
         cameraOverlay.remove();
 
         try {
-          // FIXED NATIVE ROUTING: Forces the mobile network layer to use absolute origin paths, resolving relative proxy blocks
+          if (hud) hud.innerHTML = "📡 DISPATCHING LIVE CODES TO SERVERLESS NODES...";
           const targetOrigin = window.location.origin;
+          
+          // 🟢 BYPASS BULK TRAINDATA ERRORS: Direct network call pipes base64 bytes straight to your secure vehicle-lookup cloud handler
           const cloudResponse = await fetch(`${targetOrigin}/api/vehicle-lookup`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
-            body: JSON.stringify({ plate: "1EG4BX", region: regionCode || "VIC" })
+            body: JSON.stringify({ image: imageFrameData, region: regionCode || "VIC" })
           });
 
           if (!cloudResponse.ok) throw new Error("CLOUD_GATEWAY_REJECTION");
@@ -3479,14 +3479,14 @@ export default function App() {
             alert(`🟢 CLOUD LOOKUP RENDERED: "${resultData.rego || 'MATCHED'}"\nMapping genuine vehicle metrics straight to dashboard cards.`);
             if (typeof setVehicle === 'function') setVehicle(resultData);
           } else {
-            alert("⚠️ OCR READ EXCEPTION: Characters unclear. Defaulting to safe manual text mirror link.");
+            alert("⚠️ OCR READ EXCEPTION: Custom text unclear. Running manual plate fallback stream.");
             await handleRego("REGO-SCAN", regionCode || "VIC");
           }
 
         } catch (ocrError) {
-          console.error("Cloud processing pipeline handshake failure:", ocrError);
+          console.error("Cloud processing pipeline handshake failure handled:", ocrError);
           if (typeof setScanning === 'function') setScanning(false);
-          alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
+          alert("⚠️ Camera capture exception caught. Routing directly to manual plate reference capture module.");
           await handleRego("REGO-ERR", regionCode || "VIC");
         }
       };
