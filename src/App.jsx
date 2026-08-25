@@ -3435,7 +3435,7 @@ export default function App() {
         if (typeof setScanning === 'function') setScanning(false);
       };
 
-            // Capture snapshot action
+           // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
         if (hud) hud.innerHTML = "⏳ OPTICAL ANALYSIS ENGINE INITIALISING...";
@@ -3463,20 +3463,24 @@ export default function App() {
           if (hud) hud.innerHTML = "⏳ RUNNING MAIN-THREAD MATRIX OCR CRAWL...";
           const imageFrameData = canvas.toDataURL('image/png');
           
-          // 🟢 MOBILE FIXED: Forces the engine to evaluate inside the local thread loop to clear sandbox rules
-          const worker = await window.Tesseract.createWorker('eng', 1, {
-            workerBlobURL: false,
+          // 🟢 FIXED V5 INITIALIZATION: Instantiate the worker without breaking modern parameter type rules
+          const worker = await window.Tesseract.createWorker({
+            workerBlobURL: false, // Forces evaluation entirely within the primary local thread context
             logger: m => console.log(`📋 OCR Progress: ${Math.round(m.progress * 100)}%`),
             errorHandler: err => console.error("Worker Core Exception:", err)
           });
 
-          // Set specific optical character matching parameters
+          // Explicitly load English training parameters and match vectors step-by-step
+          await worker.loadLanguage('eng');
+          await worker.initialize('eng');
+
+          // Set strict alphanumeric constraint dictionaries to block blurry background noise characters
           await worker.setParameters({
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
           });
 
           const { data } = await worker.recognize(imageFrameData);
-          await worker.terminate(); // Safely clear memory vectors
+          await worker.terminate(); // Permanently flush memory arrays from cache heaps
 
           const rawScannedText = data?.text || '';
           const cleanPlateString = rawScannedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
@@ -3494,11 +3498,11 @@ export default function App() {
 
         } catch (ocrError) {
           console.error("Optical character alignment failure:", ocrError);
-          cameraOverlay.remove();
+          if (cameraOverlay && typeof cameraOverlay.remove === 'function') cameraOverlay.remove();
           if (typeof setScanning === 'function') setScanning(false);
           
-          // Fallback parsing gracefully captures standard manual input strings to protect user context
-          alert("⚠️ Mobile thread bypass active. Extracting plate data natively.");
+          // Fallback parsing handles user input errors by redirecting cleanly into manual text mirror inputs
+          alert("⚠️ Mobile thread exception caught. Routing directly to manual plate reference capture module.");
           await handleRego("REGO-ERR", regionCode || "VIC");
         }
       };
