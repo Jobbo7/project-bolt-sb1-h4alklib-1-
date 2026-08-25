@@ -3390,7 +3390,7 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-       // ── True Live Photo ID Camera Scan OCR Input Route ──
+         // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       alert("⚠️ Camera hardware access blocked by browser privacy settings. Ensure your link is secure HTTPS.");
@@ -3459,7 +3459,7 @@ export default function App() {
         cameraOverlay.remove();
 
         try {
-          // 🟢 FIXED ENDPOINT: Points the tablet directly to your active, live server lookup route instead of a missing file
+          // FIXED NATIVE ROUTING: Forces the mobile network layer to use absolute origin paths, resolving relative proxy blocks
           const targetOrigin = window.location.origin;
           const cloudResponse = await fetch(`${targetOrigin}/api/vehicle-lookup`, {
             method: 'POST',
@@ -3472,8 +3472,7 @@ export default function App() {
 
           if (!cloudResponse.ok) throw new Error("CLOUD_GATEWAY_REJECTION");
           const resultData = await cloudResponse.json();
-          
-          // Extracts the active vehicle dataset returned straight from your live server proxy file
+
           if (typeof setScanning === 'function') setScanning(false);
 
           if (resultData && resultData.make) {
@@ -3490,6 +3489,7 @@ export default function App() {
           alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
           await handleRego("REGO-ERR", regionCode || "VIC");
         }
+      };
 
     } catch (hardwareError) {
       console.error("❌ Tablet device lens lock exception:", hardwareError);
