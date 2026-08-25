@@ -3434,37 +3434,40 @@ export default function App() {
         if (typeof setScanning === 'function') setScanning(false);
       };
 
-      // Capture snapshot action
+            // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
-        if (hud) hud.innerHTML = "⏳ RUNNING AUTOMATED OCR LENS SCANNERS...";
+        if (hud) hud.innerHTML = "⏳ PROCESSING AUTOMATED OCR LENS SCANNERS...";
 
         const canvas = document.createElement('canvas');
-        canvas.width = videoElement.videoWidth || 640;
-        canvas.height = videoElement.videoHeight || 480;
+        
+        // 🟢 FIX: Force reliable mobile dimension fallbacks if hardware streams read 0
+        const captureWidth = videoElement.videoWidth || 1280;
+        const captureHeight = videoElement.videoHeight || 720;
+        
+        canvas.width = captureWidth;
+        canvas.height = captureHeight;
+        
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
         
-        // Stop the camera streams safely
-        hardwareStream.getTracks().forEach(track => track.stop());
+        // Stop the camera streams safely to prevent background battery drain
+        if (hardwareStream && typeof hardwareStream.getTracks === 'function') {
+          hardwareStream.getTracks().forEach(track => track.stop());
+        }
 
         try {
-          // 📡 Dynamic script injection pulls down Tesseract OCR engines straight over the internet edge cache network
-          if (typeof window.Tesseract === 'undefined') {
-            await new Promise((resolve, reject) => {
-              const script = document.createElement('script');
-              script.src = 'https://jsdelivr.net';
-              script.onload = resolve;
-              script.onerror = reject;
-              document.head.appendChild(script);
-            });
+          // 🟢 FIX: Read directly from pre-instantiated window variable without runtime script injection
+          const ocrEngine = window.Tesseract;
+          if (!ocrEngine) {
+            throw new Error("TESSERACT_LIBRARY_NOT_FOUND_IN_WINDOW_CONTEXT");
           }
 
           // Convert canvas image matrix data to a base64 processing string stream
           const imageFrameData = canvas.toDataURL('image/png');
           
           // Execute optical machine character recognition over the text characters
-          const ocrResult = await window.Tesseract.recognize(imageFrameData, 'eng', {
+          const ocrResult = await ocrEngine.recognize(imageFrameData, 'eng', {
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
           });
           
@@ -3484,6 +3487,7 @@ export default function App() {
 
         } catch (ocrError) {
           console.error("Optical character alignment failure:", ocrError);
+          alert("⚠️ Mobile OCR Worker Thread Halted. Using fallback plate data.");
           cameraOverlay.remove();
           if (typeof setScanning === 'function') setScanning(false);
           await handleRego("REGO-ERR", regionCode || "VIC");
