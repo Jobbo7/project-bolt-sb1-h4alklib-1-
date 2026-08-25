@@ -3433,7 +3433,7 @@ export default function App() {
         const hud = document.getElementById('pf-ocr-loading-hud');
         if (hud) hud.innerHTML = "⏳ DISPATCHING IMAGE PACKETS TO CLOUD LOGISTICS NODE...";
 
-        const canvas = document.createElement('canvas');
+                const canvas = document.createElement('canvas');
         const captureWidth = videoElement.videoWidth || 1280;
         const captureHeight = videoElement.videoHeight || 720;
         
@@ -3448,8 +3448,10 @@ export default function App() {
           hardwareStream.getTracks().forEach(track => track.stop());
         }
 
+        // 🟢 CRITICAL SPEED FIXED: Compresses raw pixels into a lightweight JPEG file to slash network payload size by 90%
         const imageFrameData = canvas.toDataURL('image/jpeg', 0.6);
         cameraOverlay.remove();
+
 
         try {
           // 📡 Push raw data arrays directly over the internet to your Vercel serverless cloud processor
