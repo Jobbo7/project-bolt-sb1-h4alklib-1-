@@ -3390,7 +3390,7 @@ export default function App() {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
   };
 
-           // ── True Live Photo ID Camera Scan OCR Input Route ──
+  // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof setScanning === 'function') setScanning(true);
     
@@ -3512,16 +3512,8 @@ export default function App() {
       };
     } catch (hardwareError) {
       console.warn("⚠️ Custom inline viewfinder blocked. Engaging automatic device camera selector proxy layer.");
-      cameraOverlay.remove();
+      if (cameraOverlay && typeof cameraOverlay.remove === 'function') cameraOverlay.remove();
       triggerNativeFileCameraFallback();
-    }
-  };
-
-    } catch (hardwareError) {
-      console.error("❌ Tablet device lens lock exception:", hardwareError);
-      alert("⚠️ Camera Access Denied: Check browser permissions.");
-      cameraOverlay.remove();
-      if (typeof setScanning === 'function') setScanning(false);
     }
   };
 
