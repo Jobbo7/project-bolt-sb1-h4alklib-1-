@@ -3453,11 +3453,15 @@ export default function App() {
         cameraOverlay.remove();
 
 
-        try {
-          // 📡 Push raw data arrays directly over the internet to your Vercel serverless cloud processor
-          const cloudResponse = await fetch('/api/ocr-scan', {
+                try {
+          // 🟢 FIXED NATIVE ROUTING: Forces the mobile network layer to use absolute origin paths, resolving relative proxy blocks
+          const targetOrigin = window.location.origin;
+          const cloudResponse = await fetch(`${targetOrigin}/api/ocr-scan`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
             body: JSON.stringify({ image: imageFrameData })
           });
 
@@ -3474,6 +3478,13 @@ export default function App() {
             alert("⚠️ OCR READ EXCEPTION: Characters unclear. Defaulting to safe manual text mirror link.");
             await handleRego("REGO-SCAN", regionCode || "VIC");
           }
+
+        } catch (ocrError) {
+          console.error("Cloud processing pipeline handshake failure:", ocrError);
+          if (typeof setScanning === 'function') setScanning(false);
+          alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
+          await handleRego("REGO-ERR", regionCode || "VIC");
+        }
 
         } catch (ocrError) {
           console.error("Cloud processing pipeline handshake failure:", ocrError);
