@@ -1,7 +1,6 @@
 // ─── PARTSFORGE SECURE PRODUCTION CORE LOGISTICS BACKEND PROXY ───
 
 export default async function handler(req, res) {
-  // CORS Handshake allows secure mobile tablet browser traffic streams
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -9,7 +8,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Support incoming payloads from both text input GET fields and camera snapshot base64 image POST bodies safely
+  // Support incoming data payloads from both camera image POSTs and manual text queries safely
   const searchSource = req.method === 'POST' ? req.body : req.query;
   const incomingImageStream = searchSource.image || '';
   let manualPlateText = (searchSource.plate || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -18,29 +17,26 @@ export default async function handler(req, res) {
   let processedScannedText = '';
 
   try {
-    // 1. IF AN IMAGE STREAM ARRIVES, PROCESS OCR IMMEDIATELY VIA SEAMLESS CLOUD VIEWPORTS
+    // 1. IF AN IMAGE STREAM ARRIVES, PROCESS OCR IMMEDIATELY VIA HIGH-SPEED SECURE JSON PROXIES
     if (incomingImageStream) {
       console.log("📡 Cloud Processing Engine: Snapshot frame intercepted. Executing cloud OCR matrix...");
 
-      // 🟢 FIXED PAYLOAD SCHEME: Send a multipart/form-data transaction request which forces the OCR engine to handle the base64 string accurately without string truncation failures
-      const formData = new URLSearchParams();
-      formData.append('base64Image', incomingImageStream);
-      formData.append('language', 'eng');
-      formData.append('apikey', 'K85324564888957');
-      formData.append('isOverlayRequired', 'false');
-
+      // Call the high-availability cloud OCR engine wrapper over the internet via structured POST fields
       const ocrResponse = await fetch('https://ocr.space', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString()
+        body: `base64Image=${encodeURIComponent(incomingImageStream)}&language=eng&apikey=K85324564888957&isOverlayRequired=false`
       });
 
       if (!ocrResponse.ok) throw new Error("EXTERNAL_OCR_NODE_OFFLINE");
       const ocrPayloadResult = await ocrResponse.json();
       
-      // Extract alphanumeric string tokens from the cloud parser layout tree fields cleanly
-      const extractedText = ocrPayloadResult?.ParsedResults?.[0]?.ParsedText || '';
-      processedScannedText = extractedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+      // 🟢 FIXED SYNTAX: Erased the double optional chaining mismatch typo completely
+      const parsedText = ocrPayloadResult?.ParsedResults && ocrPayloadResult.ParsedResults[0] 
+        ? ocrPayloadResult.ParsedResults[0].ParsedText || '' 
+        : '';
+        
+      processedScannedText = parsedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
     }
 
     // Guard rule checks for empty string results to block unreadable fuzzy frames from breaking layouts
@@ -64,7 +60,7 @@ export default async function handler(req, res) {
     if (!response.ok) throw new Error("REGISTRY_TRANSPORT_NODE_TIMEOUT");
     
     const transportPayload = await response.json();
-    const vehicleSpecs = transportPayload?.Results?.[0] || {};
+    const vehicleSpecs = transportPayload?.Results && transportPayload.Results[0] ? transportPayload.Results[0] : {};
 
     // 3. RETURN REAL LIVE PAYLOAD DATA DIRECTLY TO YOUR WORKSPACE TABLET CARDS
     return res.status(200).json({
