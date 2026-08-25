@@ -3448,7 +3448,7 @@ export default function App() {
           hardwareStream.getTracks().forEach(track => track.stop());
         }
 
-        const imageFrameData = canvas.toDataURL('image/png');
+        const imageFrameData = canvas.toDataURL('image/jpeg', 0.6);
         cameraOverlay.remove();
 
         try {
