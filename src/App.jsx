@@ -3428,14 +3428,7 @@ export default function App() {
       const videoElement = document.getElementById('pf-lens-stream-video');
       if (videoElement) videoElement.srcObject = hardwareStream;
 
-      // Close button action
-      document.getElementById('pf-lens-close-btn').onclick = () => {
-        hardwareStream.getTracks().forEach(track => track.stop());
-        cameraOverlay.remove();
-        if (typeof setScanning === 'function') setScanning(false);
-      };
-
-           // Capture snapshot action
+            // Capture snapshot action
       document.getElementById('pf-lens-capture-btn').onclick = async () => {
         const hud = document.getElementById('pf-ocr-loading-hud');
         if (hud) hud.innerHTML = "⏳ OPTICAL ANALYSIS ENGINE INITIALISING...";
@@ -3460,21 +3453,21 @@ export default function App() {
             throw new Error("TESSERACT_LIBRARY_NOT_INITIALIZED_IN_WINDOW");
           }
 
-          if (hud) hud.innerHTML = "⏳ RUNNING MAIN-THREAD MATRIX OCR CRAWL...";
+          if (hud) hud.innerHTML = "⏳ RUNNING NATIVE VECTOR OCR CRAWL...";
           const imageFrameData = canvas.toDataURL('image/png');
           
-          // 🟢 FIXED V5 INITIALIZATION: Instantiate the worker without breaking modern parameter type rules
+          // 🟢 FIXED CONFIG: Force the engine to source core components directly from high-availability unpkg mirrors
           const worker = await window.Tesseract.createWorker({
-            workerBlobURL: false, // Forces evaluation entirely within the primary local thread context
+            corePath: 'https://unpkg.com',
+            workerPath: 'https://unpkg.com',
             logger: m => console.log(`📋 OCR Progress: ${Math.round(m.progress * 100)}%`),
             errorHandler: err => console.error("Worker Core Exception:", err)
           });
 
-          // Explicitly load English training parameters and match vectors step-by-step
           await worker.loadLanguage('eng');
           await worker.initialize('eng');
 
-          // Set strict alphanumeric constraint dictionaries to block blurry background noise characters
+          // Strict alphanumeric constraint dictionaries block blurred background noise characters
           await worker.setParameters({
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
           });
