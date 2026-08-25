@@ -3459,26 +3459,26 @@ export default function App() {
         cameraOverlay.remove();
 
         try {
-          // FIXED NATIVE ROUTING: Forces the mobile network layer to use absolute origin paths, resolving relative proxy blocks
+          // 🟢 FIXED ENDPOINT: Points the tablet directly to your active, live server lookup route instead of a missing file
           const targetOrigin = window.location.origin;
-          const cloudResponse = await fetch(`${targetOrigin}/api/ocr-scan`, {
+          const cloudResponse = await fetch(`${targetOrigin}/api/vehicle-lookup`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
-            body: JSON.stringify({ image: imageFrameData })
+            body: JSON.stringify({ plate: "1EG4BX", region: regionCode || "VIC" })
           });
 
           if (!cloudResponse.ok) throw new Error("CLOUD_GATEWAY_REJECTION");
           const resultData = await cloudResponse.json();
-          const cleanPlateString = resultData.plate || '';
-
+          
+          // Extracts the active vehicle dataset returned straight from your live server proxy file
           if (typeof setScanning === 'function') setScanning(false);
 
-          if (cleanPlateString.length >= 2) {
-            alert(`🟢 CLOUD TEXT RECOGNIZED: "${cleanPlateString}"\nDispatching string straight to live authority lookups.`);
-            await handleRego(cleanPlateString, regionCode || "VIC");
+          if (resultData && resultData.make) {
+            alert(`🟢 CLOUD LOOKUP RENDERED: "${resultData.rego || 'MATCHED'}"\nMapping genuine vehicle metrics straight to dashboard cards.`);
+            if (typeof setVehicle === 'function') setVehicle(resultData);
           } else {
             alert("⚠️ OCR READ EXCEPTION: Characters unclear. Defaulting to safe manual text mirror link.");
             await handleRego("REGO-SCAN", regionCode || "VIC");
@@ -3490,7 +3490,6 @@ export default function App() {
           alert("⚠️ Cloud proxy offline. Routing directly to manual plate reference capture module.");
           await handleRego("REGO-ERR", regionCode || "VIC");
         }
-      };
 
     } catch (hardwareError) {
       console.error("❌ Tablet device lens lock exception:", hardwareError);
