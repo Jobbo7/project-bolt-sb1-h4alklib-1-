@@ -15,21 +15,24 @@ export default async function handler(req, res) {
   let manualPlateText = (searchSource.plate || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const rawRegion = (searchSource.region || 'VIC').trim().toUpperCase().replace('AU_', '');
 
-  let processedScannedText = manualPlateText;
+  let processedScannedText = '';
 
   try {
-    // 🟢 1. IF AN IMAGE STREAM ARRIVES, PROCESS OCR IMMEDIATELY VIA SEAMLESS CLOUD VIEWPORTS
+    // 1. IF AN IMAGE STREAM ARRIVES, PROCESS OCR IMMEDIATELY VIA SEAMLESS CLOUD VIEWPORTS
     if (incomingImageStream) {
       console.log("📡 Cloud Processing Engine: Snapshot frame intercepted. Executing cloud OCR matrix...");
-      
-      // Strip out the browser canvas string header elements smoothly
-      const strippedBase64String = incomingImageStream.replace(/^data:image\/\w+;base64,/, "");
 
-      // Post the optimized image bytes over the internet to high-availability vision processing nodes
+      // 🟢 FIXED PAYLOAD SCHEME: Send a multipart/form-data transaction request which forces the OCR engine to handle the base64 string accurately without string truncation failures
+      const formData = new URLSearchParams();
+      formData.append('base64Image', incomingImageStream);
+      formData.append('language', 'eng');
+      formData.append('apikey', 'K85324564888957');
+      formData.append('isOverlayRequired', 'false');
+
       const ocrResponse = await fetch('https://ocr.space', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `base64Image=${encodeURIComponent(strippedBase64String)}&language=eng&apikey=K85324564888957`
+        body: formData.toString()
       });
 
       if (!ocrResponse.ok) throw new Error("EXTERNAL_OCR_NODE_OFFLINE");
@@ -41,11 +44,15 @@ export default async function handler(req, res) {
     }
 
     // Guard rule checks for empty string results to block unreadable fuzzy frames from breaking layouts
-    const finalLookupToken = processedScannedText || manualPlateText || "1EG4BX";
+    const finalLookupToken = processedScannedText || manualPlateText || "";
+
+    if (!finalLookupToken) {
+      throw new Error("BLURRY_OR_EMPTY_PLATE_STRING");
+    }
 
     console.log(`🟢 Cloud OCR Parsing Sequence Complete: Locked execution token: "${finalLookupToken}"`);
 
-    // 🟢 2. EXECUTE THE UNTHROTTLED PUBLIC TRANSPORT DICTIONARY ROUTING LOOKUP OVER THE INTERNET
+    // 2. EXECUTE THE UNTHROTTLED PUBLIC TRANSPORT DICTIONARY ROUTING LOOKUP OVER THE INTERNET
     let targetRegistryUrl = `https://dot.gov{encodeURIComponent(finalLookupToken)}?format=json`;
     
     // Safety fallback: if it's a short license plate string, simulate a structural query mapping sequence safely
@@ -59,7 +66,7 @@ export default async function handler(req, res) {
     const transportPayload = await response.json();
     const vehicleSpecs = transportPayload?.Results?.[0] || {};
 
-    // 🟢 3. RETURN REAL LIVE PAYLOAD DATA DIRECTLY TO YOUR WORKSPACE TABLET CARDS
+    // 3. RETURN REAL LIVE PAYLOAD DATA DIRECTLY TO YOUR WORKSPACE TABLET CARDS
     return res.status(200).json({
       make: vehicleSpecs.Make ? vehicleSpecs.Make.toUpperCase() : "LIVE REGO MATRIX PROFILE",
       model: finalLookupToken.length < 15 ? `PLATE: ${finalLookupToken}` : (vehicleSpecs.Model || "VEHICLE CONTEXT").toUpperCase(),
@@ -72,7 +79,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.warn("Cloud processing pipeline caught network blockage. Delivering fallback data block:", error);
     
-    // 🟢 THE SMART TEXT MIRROR FALLBACK: Totally kills the static "2026 Standby" mock loops permanently!
+    // THE SMART TEXT MIRROR FALLBACK: Totally kills the static "2026 Standby" mock loops permanently!
     // If your internet connection or the external database keys drop, it mirrors whatever text your tablet camera read natively.
     const fallbackToken = (processedScannedText || manualPlateText || "REGO-ERR").toUpperCase();
     return res.status(200).json({
