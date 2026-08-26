@@ -533,11 +533,74 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
           <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.emerald }}><BadgeCheck className="h-4 w-4" /> Vehicle Matched</div>
           <div className="mt-1.5 text-sm font-bold text-slate-100">
-            {(vehicle.year || 1998)} {(vehicle.make || 'FORD').toUpperCase()} {(vehicle.model || 'FALCON AU').toUpperCase()}
-          </div>
-          <div className="mt-0.5 text-xs" style={{ color: C.textDim }}>{(vehicle.engine || '4.0L OHC I6').toUpperCase()}</div>
-          <div className="mt-1 font-mono text-xs" style={{ color: C.textDimmer }}>VIN: {(vehicle.vin || '6FPAAA-SECURE-NODE').toUpperCase()}</div>
-          {vehicle.rego && <div className="mt-0.5 font-mono text-xs uppercase" style={{ color: C.orange }}>Plate Ref: {vehicle.rego}</div>}
+  {(vehicle.year || 'YEAR UNKNOWN')} {(vehicle.make || 'UNKNOWN MAKE').toUpperCase()} {(vehicle.model || 'UNKNOWN MODEL').toUpperCase()}
+</div>
+
+<div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Engine
+    </div>
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {(vehicle.engine || 'Not supplied').toUpperCase()}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Body
+    </div>
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {(vehicle.body || 'Not supplied').toUpperCase()}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Year Range
+    </div>
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {vehicle.yearRange || 'Not supplied'}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Registration
+    </div>
+    <div className="mt-0.5 font-mono font-semibold" style={{ color: C.orange }}>
+      {(vehicle.rego || 'Not supplied').toUpperCase()}
+    </div>
+  </div>
+
+</div>
+
+{vehicle.description && (
+  <div className="mt-2 rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Vehicle Description
+    </div>
+    <div className="mt-0.5 text-xs font-medium text-slate-200">
+      {vehicle.description}
+    </div>
+  </div>
+)}
+
+{vehicle.detailedDescription && (
+  <div className="mt-2 rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Detailed Specification
+    </div>
+    <div className="mt-0.5 text-xs leading-relaxed text-slate-200">
+      {vehicle.detailedDescription}
+    </div>
+  </div>
+)}
+
+<div className="mt-2 font-mono text-xs" style={{ color: C.textDimmer }}>
+  VIN: {vehicle.vin ? vehicle.vin.toUpperCase() : 'NOT SUPPLIED BY REGISTRATION PROVIDER'}
+</div>
           
           <button 
             onClick={(e) => { 
