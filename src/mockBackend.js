@@ -31,15 +31,15 @@ export const processFreeRegoLookup = async (plate, region) => {
     const response = await fetch(`${getOrigin()}/api/vehicle-lookup?plate=${encodeURIComponent(plate.trim())}&region=${encodeURIComponent(region || 'AU_VIC')}`);
     if (!response.ok) throw new Error(`Gateway Error: ${response.status}`);
     return await response.json();
-  } catch (err) {
+   } catch (err) {
     console.error("❌ Live rego lookup connection failure:", err);
+
     return {
-      make: "LIVE REGISTRY",
-      model: "PROCESSING ERROR",
-      year: new Date().getFullYear(),
-      engine: "CHECKING TRANSPORT APIS",
-      vin: `SVR-ERR-${plate.toUpperCase()}`,
-      rego: plate.toUpperCase()
+      success: false,
+      error: err.message || "Vehicle lookup failed.",
+      code: "VEHICLE_LOOKUP_FAILED",
+      rego: plate.toUpperCase(),
+      region: region || "AU_VIC"
     };
   }
 };
