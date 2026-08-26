@@ -1,10 +1,12 @@
-// ─── PARTSFORGE SECURE INTEGRATED PARTS SOURCING BROKER ───
+// ─── PARTSFORGE VEHICLE-AWARE PARTS SOURCING BROKER ───
 // FILE: api/parts-search.js
 
 import { createClient } from '@supabase/supabase-js';
 
-// Initializes backend Supabase connection securely using hidden environment variables
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,89 +14,385 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  const searchParam = req.query.q || req.query.query || (req.body && req.body.query) || '';
-  
-  if (!searchParam || !searchParam.trim()) {
-    return res.status(200).json({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
   try {
-    // Standardize query text to lower-case for robust pattern filtering matches
-    const cleanQuery = searchParam.trim().toLowerCase();
-    console.log(`📡 Querying multi-source database matrix for lower-case string: "%${cleanQuery}%"`);
+    const query = req.query || {};
+    const body = req.body || {};
 
-    // 🏢 PIPELINE 1: Query Supabase PostgreSQL Wholesaler Listings
+    const searchParam =
+      query.q ||
+      query.query ||
+      body.query ||
+      '';
+
+    if (!String(searchParam).trim()) {
+      return res.status(200).json({
+        local: [],
+        national: [],
+        trans_tasman: [],
+        global_direct: [],
+        facebook: []
+      });
+    }
+
+    const cleanQuery = String(searchParam)
+      .trim()
+      .toLowerCase();
+
+    // Vehicle context supplied by PartsForge.
+    const vehicle = {
+      vin: String(query.vin || body.vin || '')
+        .trim()
+        .toUpperCase(),
+
+      make: String(query.make || body.make || '')
+        .trim()
+        .toLowerCase(),
+
+      model: String(query.model || body.model || '')
+        .trim()
+        .toLowerCase(),
+
+      year: Number(query.year || body.year || 0) || null,
+
+      engine: String(query.engine || body.engine || '')
+        .trim()
+        .toLowerCase(),
+
+      engineCode: String(
+        query.engineCode ||
+        body.engineCode ||
+        ''
+      )
+        .trim()
+        .toLowerCase(),
+
+      series: String(query.series || body.series || '')
+        .trim()
+        .toLowerCase(),
+
+      variant: String(query.variant || body.variant || '')
+        .trim()
+        .toLowerCase()
+    };
+
+    console.log(
+      `📡 PartsForge parts search: "${cleanQuery}" for ${vehicle.year || ''} ${vehicle.make} ${vehicle.model}`
+    );
+
+    // Search by part description first.
     const { data: dbMatches, error: dbError } = await supabase
       .from('seller_offers')
       .select('*')
-      .ilike('part', `%${cleanQuery}%`); // Case-insensitive wildcard pattern matching
+      .ilike('part', `%${cleanQuery}%`);
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      throw dbError;
+    }
 
-    const wholesaleItems = (dbMatches || []).map((item, idx) => {
-      const parsedPrice = parseFloat(item.price) || 85.00;
+    const scoreFitment = (item) => {
+      let score = 0;
+      const reasons = [];
+
+      // VIN-specific match: strongest possible database match.
+      if (
+        vehicle.vin &&
+        item.vin &&
+        String(item.vin).toUpperCase() === vehicle.vin
+      ) {
+        score += 100;
+        reasons.push('VIN_MATCH');
+      }
+
+      // Engine code.
+      if (
+        vehicle.engineCode &&
+        item.engine_code &&
+        String(item.engine_code).toLowerCase() === vehicle.engineCode
+      ) {
+        score += 40;
+        reasons.push('ENGINE_CODE_MATCH');
+      }
+
+      // Make.
+      if (
+        vehicle.make &&
+        item.make &&
+        String(item.make).toLowerCase() === vehicle.make
+      ) {
+        score += 20;
+        reasons.push('MAKE_MATCH');
+      }
+
+      // Model.
+      if (
+        vehicle.model &&
+        item.model &&
+        String(item.model).toLowerCase() === vehicle.model
+      ) {
+        score += 25;
+        reasons.push('MODEL_MATCH');
+      }
+
+      // Series.
+      if (
+        vehicle.series &&
+        item.series &&
+        String(item.series).toLowerCase() === vehicle.series
+      ) {
+        score += 20;
+        reasons.push('SERIES_MATCH');
+      }
+
+      // Variant.
+      if (
+        vehicle.variant &&
+        item.variant &&
+        String(item.variant).toLowerCase() === vehicle.variant
+      ) {
+        score += 20;
+        reasons.push('VARIANT_MATCH');
+      }
+
+      // Engine description.
+      if (
+        vehicle.engine &&
+        item.engine &&
+        String(item.engine).toLowerCase().includes(vehicle.engine)
+      ) {
+        score += 20;
+        reasons.push('ENGINE_MATCH');
+      }
+
+      // Year-range compatibility.
+      if (
+        vehicle.year &&
+        item.year_from != null &&
+        item.year_to != null &&
+        vehicle.year >= Number(item.year_from) &&
+        vehicle.year <= Number(item.year_to)
+      ) {
+        score += 20;
+        reasons.push('YEAR_MATCH');
+      } else if (
+        vehicle.year &&
+        item.year_from != null &&
+        item.year_to == null &&
+        vehicle.year >= Number(item.year_from)
+      ) {
+        score += 15;
+        reasons.push('YEAR_FROM_MATCH');
+      }
+
       return {
-        id: item.id ? `SKU-DB-${item.id}` : `SKU-DB-${idx}-${Date.now()}`,
-        title: (item.part || 'WHOLESALE AUTO COMPONENT').toUpperCase(),
-        brand: (item.brand || 'VERIFIED WHOLESALE NETWORK').toUpperCase(),
-        shop: item.wholesaler_business_name || 'Registered Partner Node',
-        price: parsedPrice,
-        trade: +(parsedPrice * 0.85).toFixed(2), // Enforces 15% trade margin discount rules for garages
-        retail: parsedPrice,
-        distanceKm: parseFloat(item.distance) || 4.2,
-        stock: parseInt(item.stock) || 6,
-        loc: item.location || 'Main Warehouse Space',
-        category: 'part'
+        score,
+        reasons
       };
-    });
+    };
 
-    // 🌐 PIPELINE 2: Query Live Social Marketplace Crawlers (Facebook Proxy)
+    const wholesaleItems = (dbMatches || [])
+      .map((item, idx) => {
+        const fitment = scoreFitment(item);
+
+        const parsedPrice =
+          item.price != null
+            ? Number(item.price)
+            : null;
+
+        return {
+          id:
+            item.id
+              ? `SKU-DB-${item.id}`
+              : `SKU-DB-${idx}`,
+
+          title:
+            item.part
+              ? String(item.part).toUpperCase()
+              : 'AUTO COMPONENT',
+
+          brand:
+            item.brand
+              ? String(item.brand).toUpperCase()
+              : null,
+
+          partNumber:
+            item.part_number || null,
+
+          oemNumber:
+            item.oem_number || null,
+
+          shop:
+            item.wholesaler_business_name || null,
+
+          price: parsedPrice,
+
+          trade:
+            parsedPrice != null
+              ? +(parsedPrice * 0.85).toFixed(2)
+              : null,
+
+          retail: parsedPrice,
+
+          distanceKm:
+            item.distance != null
+              ? Number(item.distance)
+              : null,
+
+          stock:
+            item.stock != null
+              ? Number(item.stock)
+              : null,
+
+          loc:
+            item.location || null,
+
+          category: 'part',
+
+          fitmentScore:
+            fitment.score,
+
+          fitmentReasons:
+            fitment.reasons,
+
+          fitmentVerified:
+            fitment.score >= 60,
+
+          vehicleFitment: {
+            make: item.make || null,
+            model: item.model || null,
+            series: item.series || null,
+            variant: item.variant || null,
+            yearFrom: item.year_from || null,
+            yearTo: item.year_to || null,
+            engine: item.engine || null,
+            engineCode: item.engine_code || null,
+            transmission: item.transmission || null,
+            drivetrain: item.drivetrain || null,
+            body: item.body || null,
+            vin: item.vin || null
+          },
+
+          fitmentNotes:
+            item.fitment_notes || null
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.fitmentScore - a.fitmentScore
+      );
+
+    // Keep social search generic for now.
     let facebookItems = [];
+
     if (process.env.SOCIALCRAWL_API_KEY) {
       try {
-        const proxyResponse = await fetch(`https://socialcrawl.dev`, {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${process.env.SOCIALCRAWL_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ searchKeyword: cleanQuery, location: "Melbourne, Australia", radiusKm: 50 })
-        });
+        const proxyResponse = await fetch(
+          'https://socialcrawl.dev',
+          {
+            method: 'POST',
+            headers: {
+              Authorization:
+                `Bearer ${process.env.SOCIALCRAWL_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              searchKeyword: cleanQuery,
+              location: 'Melbourne, Australia',
+              radiusKm: 50
+            })
+          }
+        );
 
         if (proxyResponse.ok) {
-          const scraped = await proxyResponse.json();
-          facebookItems = (scraped || []).slice(0, 3).map((item, idx) => ({
-            id: item.id || `CRAWL-${idx}-${Date.now()}`,
-            title: `[FB MARKETPLACE] ${item.title?.toUpperCase()}`,
-            brand: 'USED CONSUMER LISTING',
-            shop: item.sellerName || 'Private Individual Seller',
-            price: parseFloat(item.price) || 120.00,
-            retail: parseFloat(item.price) || 120.00,
-            trade: parseFloat(item.price) || 120.00,
-            distanceKm: item.distanceKm || 14,
-            stock: 1,
-            loc: item.location || 'Local Pickup Area',
-            category: 'part'
-          }));
+          const scraped =
+            await proxyResponse.json();
+
+          facebookItems = (scraped || [])
+            .slice(0, 3)
+            .map((item, idx) => {
+              const price =
+                item.price != null
+                  ? Number(item.price)
+                  : null;
+
+              return {
+                id:
+                  item.id ||
+                  `CRAWL-${idx}`,
+
+                title:
+                  `[FB MARKETPLACE] ${String(
+                    item.title || 'AUTO PART'
+                  ).toUpperCase()}`,
+
+                brand:
+                  'USED CONSUMER LISTING',
+
+                shop:
+                  item.sellerName ||
+                  'Private Seller',
+
+                price,
+
+                retail: price,
+                trade: price,
+
+                distanceKm:
+                  item.distanceKm ?? null,
+
+                stock: 1,
+
+                loc:
+                  item.location || null,
+
+                category: 'part',
+
+                fitmentScore: 0,
+                fitmentReasons: [],
+                fitmentVerified: false
+              };
+            });
         }
       } catch (crawlErr) {
-        console.warn("⚠️ Facebook Marketplace proxy bypass active:", crawlErr);
+        console.warn(
+          '⚠️ Social marketplace provider unavailable:',
+          crawlErr
+        );
       }
     }
 
-    // 🟢 FIXED: All keys return perfectly flat array tiers to prevent App.jsx layout map crashes
     return res.status(200).json({
+      vehicleContext: vehicle,
+
       local: wholesaleItems,
-      national: wholesaleItems.slice(2),
+
+      national: [],
+
       trans_tasman: [],
-      global_direct: wholesaleItems,
+
+      global_direct: [],
+
       facebook: facebookItems
     });
 
   } catch (error) {
-    console.error("❌ Critical parts search broker collapse:", error);
-    return res.status(200).json({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
+    console.error(
+      '❌ Parts search broker failure:',
+      error
+    );
+
+    return res.status(500).json({
+      error: 'Parts search infrastructure failure.',
+      code: 'PARTS_SEARCH_FAILED',
+
+      local: [],
+      national: [],
+      trans_tasman: [],
+      global_direct: [],
+      facebook: []
+    });
   }
 }
