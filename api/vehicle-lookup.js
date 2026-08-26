@@ -84,16 +84,18 @@ if (regResponse.ok) {
     });
   }
 }
-    // 4. Smart Text Mirror Fallback (Fires safely only if the registration API credentials reject the request)
-    return res.status(200).json({
-      make: "REGO NOT FOUND",
-      model: `PLATE ID: ${cleanPlateText}`,
-      year: new Date().getFullYear(),
-      engine: "MANUAL WORKSHOP ENTRIES ACTIVE",
-      vin: `PF-FAIL-${cleanPlateText}-${stateSelector}`,
-      rego: cleanPlateText
-    });
+   // A failed upstream registry lookup must not be presented
+// to the workshop as a successful vehicle lookup.
+console.error(
+  `❌ RegCheck lookup failed for ${cleanPlateText} (${stateSelector}). HTTP ${regResponse.status}`
+);
 
+return res.status(502).json({
+  error: 'Vehicle registry lookup failed.',
+  code: 'REGISTRY_UNAVAILABLE',
+  rego: cleanPlateText,
+  region
+});
   } catch (err) {
     console.error('❌ Registry broker operation error:', err);
     return res.status(500).json({ error: 'Internal vehicle indexing infrastructure crash.' });
