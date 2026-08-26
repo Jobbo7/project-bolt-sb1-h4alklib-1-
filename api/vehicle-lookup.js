@@ -1,111 +1,280 @@
-// ─── PARTSFORGE SECURE MULTI-REGION VEHICLE REGISTRY BROKER ───
+// ─── PARTSFORGE MULTI-REGION VEHICLE REGISTRY BROKER ───
 // FILE: api/vehicle-lookup.js
 
-import { XMLParser } from 'fast-xml-parser';
-
 export default async function handler(req, res) {
-  // CORS Handshake security headers enable cross-platform tablet connections
+  // CORS headers for workshop tablets
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
   try {
     let cleanPlateText = '';
-    const region = (req.query.region || req.body.region || 'AU_VIC').toUpperCase();
 
-    // 1. Handle Post Payloads (Raw Tablet Camera base64 Snapshot Slices)
+    const query = req.query || {};
+    const body = req.body || {};
+
+    const region = String(
+      query.region || body.region || 'AU_VIC'
+    ).toUpperCase();
+
+    // 1. Handle POST payloads from the tablet camera
     if (req.method === 'POST') {
-      const { image } = req.body;
-      if (!image) return res.status(400).json({ error: 'Missing raw image byte stream data.' });
+      const { image } = body;
 
-      const cleanBase64 = image.includes(',') ? image.split(',') : image;
+      if (!image) {
+        return res.status(400).json({
+          error: 'Missing raw image byte stream data.',
+          code: 'IMAGE_MISSING'
+        });
+      }
 
-      // Call your Vercel-internal cloud OCR proxy to parse the raw image
-      const originUrl = typeof window !== 'undefined' ? window.location.origin : `https://${req.headers.host}`;
+      // Preserve the base64 payload as a string.
+      const cleanBase64 = String(image);
+
+      // Call the internal OCR endpoint.
+      const originUrl =
+        typeof window !== 'undefined'
+          ? window.location.origin
+          : `https://${req.headers.host}`;
+
       const ocrResponse = await fetch(`${originUrl}/api/cloud-ocr`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: cleanBase64 })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          image: cleanBase64
+        })
       });
-      
+
+      if (!ocrResponse.ok) {
+        console.error(
+          `❌ OCR service failed. HTTP ${ocrResponse.status}`
+        );
+
+        return res.status(502).json({
+          error: 'Vehicle plate OCR service unavailable.',
+          code: 'OCR_UNAVAILABLE'
+        });
+      }
+
       const ocrData = await ocrResponse.json();
-      cleanPlateText = (ocrData.plate || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+      cleanPlateText = String(
+        ocrData.plate || ''
+      )
+        .replace(/[^A-Z0-9]/gi, '')
+        .toUpperCase();
     } else {
-      // 2. Handle Get Payloads (Manual Alphanumeric Keyboard Typing)
-      const { plate, vin } = req.query;
-      cleanPlateText = (plate || vin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      // 2. Handle GET payloads from manual registration entry
+      const { plate, vin } = query;
+
+      cleanPlateText = String(
+        plate || vin || ''
+      )
+        .replace(/[^A-Z0-9]/gi, '')
+        .toUpperCase();
     }
 
     if (!cleanPlateText) {
-      return res.status(422).json({ error: 'Failed to extract distinct registration details.' });
+      return res.status(422).json({
+        error: 'Failed to extract distinct registration details.',
+        code: 'REGISTRATION_MISSING'
+      });
     }
 
-    // 3. Live Australian Transport Registry Interception (RegCheck / CarRegistration API)
-   const usernameKey = process.env.CARREGISTRATION_USERNAME;
+    // 3. Australia provider
+    // AU_VIC → VIC
+    // AU_NSW → NSW
+    // AU_QLD → QLD
+    // etc.
+    const stateSelector =
+      region.includes('_')
+        ? region.split('_')[1]
+        : 'VIC';
 
-if (!usernameKey) {
-  console.error('❌ CARREGISTRATION_USERNAME is not configured.');
-  return res.status(500).json({
-    error: 'Vehicle registry credentials are not configured.',
-    code: 'REGISTRY_CONFIG_MISSING'
-  });
-}
-    
-    // FIXED: Correctly grab index 1 to map 'AU_VIC' straight onto a clean 'VIC' primitive string
-    const stateSelector = region.includes('_') ? region.split('_')[1] : 'VIC';
+    const australianStates = [
+      'ACT',
+      'NSW',
+      'NT',
+      'QLD',
+      'SA',
+      'TAS',
+      'VIC',
+      'WA'
+    ];
 
-    console.log(`📡 Querying live state transport registry logs for: ${cleanPlateText} (State: ${stateSelector})`);
-    
-   // Live RegCheck Australia lookup.
-const regCheckUrl =
-  `https://www.regcheck.org.uk/api/reg.asmx/CheckAustralia` +
-  `?RegistrationNumber=${encodeURIComponent(cleanPlateText)}` +
-  `&State=${encodeURIComponent(stateSelector)}` +
-  `&username=${encodeURIComponent(usernameKey)}`;
+    if (!australianStates.includes(stateSelector)) {
+      return res.status(400).json({
+        error: 'Unsupported Australian state or territory.',
+        code: 'INVALID_REGION',
+        region
+      });
+    }
 
-console.log(`📡 RegCheck request: ${regCheckUrl.replace(usernameKey, '[REDACTED]')}`);
+    // 4. PlateAPI authentication
+    const plateApiKey = process.env.PLATE_API_KEY;
 
-const regResponse = await fetch(regCheckUrl);
+    if (!plateApiKey) {
+      console.error('❌ PLATE_API_KEY is not configured.');
 
-if (regResponse.ok) {
-  const rawXml = await regResponse.text();
-  
-  // Parse the returned XML envelope to extract the embedded vehicle data fields
-  const parser = new XMLParser();
-  const jsonObj = parser.parse(rawXml);
-  const xmlWrapper = jsonObj['soap:Envelope']?.['soap:Body']?.CheckAustraliaResponse?.CheckAustraliaResult || jsonObj?.CheckAustraliaResult;
-  
-  if (xmlWrapper && xmlWrapper.vehicleJson) {
-    const vehicle = JSON.parse(xmlWrapper.vehicleJson);
-    
-    console.log(`🟢 Live Registration Verified: Found ${vehicle.Make} ${vehicle.Model}`);
-    return res.status(200).json({
-      make: (vehicle.Make || 'GENUINE VEHICLE').toUpperCase(),
-      model: (vehicle.Model || 'REGO MATCH').toUpperCase(),
-      year: vehicle.RegistrationYear || vehicle.BuildYear || new Date().getFullYear(),
-      engine: vehicle.EngineDescription || `${vehicle.EngineSize || 'Multi-Point'} ${vehicle.FuelType || 'Petrol'}`.toUpperCase(),
-      vin: vehicle.Vin || vehicle.Chassis || `VIN-${cleanPlateText}`,
-      rego: cleanPlateText
+      return res.status(500).json({
+        error: 'Vehicle lookup provider is not configured.',
+        code: 'VEHICLE_PROVIDER_CONFIG_MISSING'
+      });
+    }
+
+    // 5. Live PlateAPI lookup
+    const lookupUrl = new URL(
+      'https://api.plateapi.com.au/api/v1/lookup'
+    );
+
+    lookupUrl.searchParams.set('plate', cleanPlateText);
+    lookupUrl.searchParams.set('state', stateSelector);
+    lookupUrl.searchParams.set('detailed', 'true');
+
+    console.log(
+      `📡 PlateAPI lookup: ${cleanPlateText} (${stateSelector})`
+    );
+
+    const plateResponse = await fetch(lookupUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'X-API-Key': plateApiKey,
+        'Accept': 'application/json'
+      }
     });
-  }
-}
-   // A failed upstream registry lookup must not be presented
-// to the workshop as a successful vehicle lookup.
-console.error(
-  `❌ RegCheck lookup failed for ${cleanPlateText} (${stateSelector}). HTTP ${regResponse.status}`
-);
 
-return res.status(502).json({
-  error: 'Vehicle registry lookup failed.',
-  code: 'REGISTRY_UNAVAILABLE',
-  rego: cleanPlateText,
-  region
-});
+    let plateData;
+
+    try {
+      plateData = await plateResponse.json();
+    } catch {
+      console.error(
+        `❌ PlateAPI returned invalid JSON. HTTP ${plateResponse.status}`
+      );
+
+      return res.status(502).json({
+        error: 'Vehicle lookup provider returned an invalid response.',
+        code: 'PROVIDER_INVALID_RESPONSE',
+        rego: cleanPlateText,
+        region
+      });
+    }
+
+    // 6. Authentication failure
+    if (plateResponse.status === 401) {
+      console.error('❌ PlateAPI authentication failed.');
+
+      return res.status(502).json({
+        error: 'Vehicle lookup provider authentication failed.',
+        code: 'PROVIDER_AUTH_FAILED'
+      });
+    }
+
+    // 7. Rate limit / free quota exhausted
+    if (plateResponse.status === 429) {
+      console.error('❌ PlateAPI rate or quota limit reached.');
+
+      return res.status(429).json({
+        error: 'Vehicle lookup service rate or quota limit reached.',
+        code: 'PROVIDER_RATE_LIMITED',
+        rego: cleanPlateText,
+        region
+      });
+    }
+
+    // 8. Other provider failure
+    if (!plateResponse.ok) {
+      console.error(
+        `❌ PlateAPI failed. HTTP ${plateResponse.status}`,
+        plateData
+      );
+
+      return res.status(502).json({
+        error: 'Vehicle lookup provider unavailable.',
+        code: 'PROVIDER_UNAVAILABLE',
+        rego: cleanPlateText,
+        region
+      });
+    }
+
+    // 9. PlateAPI successfully responded but did not find the plate
+    if (!plateData.success) {
+      console.log(
+        `⚠️ Vehicle not found: ${cleanPlateText} (${stateSelector})`
+      );
+
+      return res.status(404).json({
+        error: 'Vehicle registration was not found.',
+        code: plateData.code || 'VEHICLE_NOT_FOUND',
+        rego: cleanPlateText,
+        region,
+        source: 'plateapi'
+      });
+    }
+
+    // 10. Normalise the provider response into the PartsForge format
+    const vehicle = plateData.vehicle || {};
+
+    const alternatives = Array.isArray(plateData.alternatives)
+      ? plateData.alternatives
+      : [];
+
+    console.log(
+      `🟢 Live Vehicle Verified: ${vehicle.make || ''} ${vehicle.model || ''}`
+    );
+
+    return res.status(200).json({
+      success: true,
+
+      source: 'plateapi',
+
+      rego: cleanPlateText,
+
+      region,
+
+      country: 'AU',
+
+      make: String(vehicle.make || '').toUpperCase(),
+
+      model: String(vehicle.model || '').toUpperCase(),
+
+      year:
+        vehicle.lowest_year ||
+        vehicle.highest_year ||
+        null,
+
+      yearRange: vehicle.year_range || null,
+
+      body: vehicle.body || null,
+
+      engine: vehicle.engine || null,
+
+      description: vehicle.description || null,
+
+      detailedDescription:
+        vehicle.detailed_description || null,
+
+      alternatives,
+
+      sandbox: plateData.sandbox === true
+    });
+
   } catch (err) {
-    console.error('❌ Registry broker operation error:', err);
-    return res.status(500).json({ error: 'Internal vehicle indexing infrastructure crash.' });
+    console.error(
+      '❌ Vehicle registry broker operation error:',
+      err
+    );
+
+    return res.status(500).json({
+      error: 'Internal vehicle indexing infrastructure crash.',
+      code: 'VEHICLE_LOOKUP_INTERNAL_ERROR'
+    });
   }
 }
