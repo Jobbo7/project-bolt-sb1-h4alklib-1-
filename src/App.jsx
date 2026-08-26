@@ -3323,72 +3323,75 @@ export default function App() {
     try { localStorage.setItem('partsforge_safety_agreed', 'true'); } catch {}
   };
 
-    // ── True Live Vehicle Registration Gateway Connection ──
-  const handleRego = async (plateStr, targetRegion) => {
-    if (!plateStr || !plateStr.trim()) return;
-    
-    if (typeof setRegoLoading === 'function') setRegoLoading(true);
-    if (typeof setVehicle === 'function') setVehicle(null);
-    
-    const cleanPlate = plateStr.trim().toUpperCase();
-    const cleanRegion = (targetRegion || 'VIC').trim().toUpperCase().replace('AU_', '');
-    
-    try {
-      console.log(`📡 Shipping secure query down to public web routes for plate: ${cleanPlate} (${cleanRegion})`);
-      
-      // Pull real vehicle specifications dynamically from an open public automotive data dictionary API stream over the internet
-      const response = await fetch(`https://dot.gov`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `DATA=VIN:${cleanPlate}&format=json`
-      });
-      
-      if (!response.ok) throw new Error("API Route Blocked");
-      const liveData = await response.json();
-      
-      // Route real-world internet specs straight onto your visual data cards layout rows dynamically
-      if (liveData && liveData.Results && liveData.Results[0]) {
-        const car = liveData.Results[0];
-        setVehicle({
-          make: car.Make || "UNKNOWN MAKE",
-          model: car.Model || "VEHICLE ENGINE NODE",
-          year: car.ModelYear || "2024",
-          engine: car.EngineHP ? `${car.EngineHP}HP Integrated Motor` : "AUTOMOTIVE LIVE REGISTRY PROFILE ACTIVE",
-          vin: car.VIN || `VIN-${cleanPlate}-MATCHED`,
-          rego: cleanPlate
-        });
-      }
-    } catch (error) {
-      console.warn("Falling back onto native lookup data framework parser:", error);
-      // Clean open-market text transformation reads whatever you typed natively on your tablet browser instead of printing a fake Ford AU Falcon
-      setVehicle({
-        make: "LIVE AUTOMOTIVE TRANSIT PROFILE",
-        model: `PLATE INTERCEPT ACTIVE`,
-        year: new Date().getFullYear(),
-        engine: "REAL-TIME LOGISTICS INDEX ACTIVE",
-        vin: `SECURE-NODE-${cleanPlate}-AU`,
-        rego: cleanPlate
-      });
-    } finally {
-      if (typeof setRegoLoading === 'function') setRegoLoading(false);
-      if (typeof setScanning === 'function') setScanning(false);
-    }
-  };
+// ── Live Vehicle Registration Gateway Connection ──
+const handleRego = async (plateStr, targetRegion) => {
+  if (!plateStr || !plateStr.trim()) return;
 
-  const handleVin = async (vinStr, targetRegion) => {
-    if (!vinStr || !vinStr.trim()) return;
-    if (typeof setRegoLoading === 'function') setRegoLoading(true);
-    if (typeof setVehicle === 'function') {
-      setVehicle({ 
-        make: "FORD", 
-        model: "AU FALCON FORTE", 
-        year: 1998, 
-        engine: "4.0L OHC I6", 
-        vin: vinStr.toUpperCase() 
-      });
+  if (typeof setRegoLoading === 'function') setRegoLoading(true);
+  if (typeof setVehicle === 'function') setVehicle(null);
+
+  const cleanPlate = plateStr.trim().toUpperCase();
+
+  const cleanRegion = (targetRegion || 'VIC')
+    .trim()
+    .toUpperCase()
+    .replace('AU_', '');
+
+  try {
+    console.log(
+      `📡 PartsForge vehicle lookup: ${cleanPlate} (${cleanRegion})`
+    );
+
+    // Send the registration lookup through our own Vercel backend.
+    // The PlateAPI key remains safely server-side.
+    const response = await fetch(
+      `/api/vehicle-lookup?plate=${encodeURIComponent(cleanPlate)}&region=${encodeURIComponent(`AU_${cleanRegion}`)}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error || `Vehicle lookup failed (${response.status})`
+      );
     }
+
+    if (!data.success) {
+      throw new Error(
+        data?.error || 'Vehicle registration could not be matched.'
+      );
+    }
+
+    // Feed the real provider response into the existing PartsForge UI.
+    setVehicle({
+      ...data,
+      make: data.make || 'UNKNOWN MAKE',
+      model: data.model || 'UNKNOWN MODEL',
+      year: data.year || null,
+      engine: data.engine || 'SPECIFICATION NOT AVAILABLE',
+      rego: data.rego || cleanPlate
+    });
+
+    console.log(
+      `🟢 PartsForge vehicle matched: ${data.make} ${data.model} ${data.year || ''}`
+    );
+
+  } catch (error) {
+    console.error(
+      '❌ Live vehicle registration lookup failed:',
+      error
+    );
+
+    // Never manufacture a vehicle or VIN when the provider fails.
+    if (typeof setVehicle === 'function') {
+      setVehicle(null);
+    }
+
+  } finally {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
-  };
+    if (typeof setScanning === 'function') setScanning(false);
+  }
+};
 
   // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
