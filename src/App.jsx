@@ -3392,7 +3392,41 @@ const handleRego = async (plateStr, targetRegion) => {
     if (typeof setScanning === 'function') setScanning(false);
   }
 };
+  const handleVin = async (vinStr, targetRegion) => {
+    if (!vinStr || !vinStr.trim()) return;
 
+    if (typeof setRegoLoading === 'function') {
+      setRegoLoading(true);
+    }
+
+    try {
+      const cleanVin = vinStr.trim().toUpperCase();
+
+      console.log(`📡 PartsForge VIN lookup requested: ${cleanVin}`);
+
+      if (typeof setVehicle === 'function') {
+        setVehicle({
+          make: "VIN LOOKUP",
+          model: "READY",
+          year: null,
+          engine: "VIN SPECIFICATION LOOKUP PENDING",
+          vin: cleanVin,
+          rego: ""
+        });
+      }
+    } catch (error) {
+      console.error("❌ VIN lookup connection failure:", error);
+
+      if (typeof setVehicle === 'function') {
+        setVehicle(null);
+      }
+    } finally {
+      if (typeof setRegoLoading === 'function') {
+        setRegoLoading(false);
+      }
+    }
+  };
+  
   // ── True Live Photo ID Camera Scan OCR Input Route ──
   const handlePhoto = async () => {
     if (typeof setScanning === 'function') setScanning(true);
