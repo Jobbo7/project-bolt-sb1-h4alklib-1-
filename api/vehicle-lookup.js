@@ -259,20 +259,24 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!plateData.success) {
-      return res.status(404).json({
-        error: 'Vehicle registration was not found.',
-        code: plateData.code || 'VEHICLE_NOT_FOUND',
-        rego: cleanPlateText,
-        region
-      });
-    }
+   // PlateAPI may not recognise CarRegistrationAPI's free test plates.
+// If the registry provider already returned real vehicle data,
+// continue using that instead of failing the whole lookup.
+if (!plateData.success && !registryData) {
+  return res.status(404).json({
+    error: 'Vehicle registration was not found.',
+    code: plateData.code || 'VEHICLE_NOT_FOUND',
+    rego: cleanPlateText,
+    region
+  });
+}
 
     // ─────────────────────────────────────────────
     // 5. Merge both providers
     // ─────────────────────────────────────────────
-    const vehicle = plateData.vehicle || {};
-
+    const vehicle = plateData.success
+  ? (plateData.vehicle || {})
+  : {};
     const alternatives = Array.isArray(
       plateData.alternatives
     )
