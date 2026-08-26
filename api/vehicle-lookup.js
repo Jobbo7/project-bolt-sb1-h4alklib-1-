@@ -51,33 +51,39 @@ export default async function handler(req, res) {
 
     console.log(`📡 Querying live state transport registry logs for: ${cleanPlateText} (State: ${stateSelector})`);
     
-    // Connects straight to the commercial endpoint for live Australian registration records [source: 1.2.1]
-    const regCheckUrl = `https://regcheck.org.uk{encodeURIComponent(cleanPlateText)}&State=${encodeURIComponent(stateSelector)}&username=${encodeURIComponent(usernameKey)}`; [source: 1.2.1, 1.2.2]
-    const regResponse = await fetch(regCheckUrl);
+   // Live RegCheck Australia lookup.
+const regCheckUrl =
+  `https://www.regcheck.org.uk/api/reg.asmx/CheckAustralia` +
+  `?RegistrationNumber=${encodeURIComponent(cleanPlateText)}` +
+  `&State=${encodeURIComponent(stateSelector)}` +
+  `&username=${encodeURIComponent(usernameKey)}`;
 
-    if (regResponse.ok) {
-      const rawXml = await regResponse.text();
-      
-      // Parse the returned XML envelope to extract the embedded vehicle data fields [source: 1.2.1]
-      const parser = new XMLParser();
-      const jsonObj = parser.parse(rawXml);
-      const xmlWrapper = jsonObj['soap:Envelope']?.['soap:Body']?.CheckAustraliaResponse?.CheckAustraliaResult || jsonObj?.CheckAustraliaResult;
-      
-      if (xmlWrapper && xmlWrapper.vehicleJson) {
-        const vehicle = JSON.parse(xmlWrapper.vehicleJson);
-        
-        console.log(`🟢 Live Registration Verified: Found ${vehicle.Make} ${vehicle.Model}`);
-        return res.status(200).json({
-          make: (vehicle.Make || 'GENUINE VEHICLE').toUpperCase(),
-          model: (vehicle.Model || 'REGO MATCH').toUpperCase(),
-          year: vehicle.RegistrationYear || vehicle.BuildYear || new Date().getFullYear(),
-          engine: vehicle.EngineDescription || `${vehicle.EngineSize || 'Multi-Point'} ${vehicle.FuelType || 'Petrol'}`.toUpperCase(),
-          vin: vehicle.Vin || vehicle.Chassis || `VIN-${cleanPlateText}`,
-          rego: cleanPlateText
-        });
-      }
-    }
+console.log(`📡 RegCheck request: ${regCheckUrl.replace(usernameKey, '[REDACTED]')}`);
 
+const regResponse = await fetch(regCheckUrl);
+
+if (regResponse.ok) {
+  const rawXml = await regResponse.text();
+  
+  // Parse the returned XML envelope to extract the embedded vehicle data fields
+  const parser = new XMLParser();
+  const jsonObj = parser.parse(rawXml);
+  const xmlWrapper = jsonObj['soap:Envelope']?.['soap:Body']?.CheckAustraliaResponse?.CheckAustraliaResult || jsonObj?.CheckAustraliaResult;
+  
+  if (xmlWrapper && xmlWrapper.vehicleJson) {
+    const vehicle = JSON.parse(xmlWrapper.vehicleJson);
+    
+    console.log(`🟢 Live Registration Verified: Found ${vehicle.Make} ${vehicle.Model}`);
+    return res.status(200).json({
+      make: (vehicle.Make || 'GENUINE VEHICLE').toUpperCase(),
+      model: (vehicle.Model || 'REGO MATCH').toUpperCase(),
+      year: vehicle.RegistrationYear || vehicle.BuildYear || new Date().getFullYear(),
+      engine: vehicle.EngineDescription || `${vehicle.EngineSize || 'Multi-Point'} ${vehicle.FuelType || 'Petrol'}`.toUpperCase(),
+      vin: vehicle.Vin || vehicle.Chassis || `VIN-${cleanPlateText}`,
+      rego: cleanPlateText
+    });
+  }
+}
     // 4. Smart Text Mirror Fallback (Fires safely only if the registration API credentials reject the request)
     return res.status(200).json({
       make: "REGO NOT FOUND",
