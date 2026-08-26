@@ -716,7 +716,12 @@ function PartsSearch({ onSearch, loading }) {
 // ─── Parts Results ───────────────────────────────────────────────────────────
 function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }) {
   const tiers = ['local', 'national', 'trans_tasman', 'global_direct', 'facebook'];
+
+  const [detailItem, setDetailItem] = useState(null);
+  const [detailTier, setDetailTier] = useState(null);
+
   if (!results) return null;
+
   const inCart = (id) => (cartIds || []).includes(id);
 
   return (
@@ -734,30 +739,364 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
             <div key={tier} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
               <div className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.cyan }}>{label}</div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {items.map((item) => {
-                  const price = role === 'pro' ? (item.trade ?? item.price) : (item.retail ?? item.price);
-                  return (
-                    <div key={item.id} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.bg }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-100">{item.title}</h4>
-                          <p className="text-[10px]" style={{ color: C.textDim }}>{item.brand || 'Private'} · {item.shop || item.loc}</p>
-                          {item.distanceKm != null && <p className="mt-0.5 text-[10px]" style={{ color: C.textDimmer }}>{item.distanceKm} km away</p>}
-                        </div>
-                        <span className="font-mono text-xs" style={{ color: C.emerald }}>{fmt(price, region)}</span>
-                      </div>
-                      <button onClick={() => onAdd(item, tier)} disabled={inCart(item.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition" style={{ background: inCart(item.id) ? `${C.emerald}10` : `${C.orange}15`, color: inCart(item.id) ? C.emerald : C.orange, border: `1px solid ${inCart(item.id) ? `${C.emerald}30` : `${C.orange}40`}` }}>
-                        {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> In Cart</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
-                      </button>
-                    </div>
-                  );
-                })}
+               {items.map((item) => {
+  const price =
+    role === 'pro'
+      ? (item.trade ?? item.price)
+      : (item.retail ?? item.price);
+
+  return (
+    <div
+      key={item.id}
+      onClick={() => {
+        setDetailItem(item);
+        setDetailTier(tier);
+      }}
+      className="cursor-pointer rounded-lg border p-3 transition hover:opacity-90"
+      style={{
+        borderColor: C.border,
+        background: C.bg
+      }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h4 className="text-xs font-bold text-slate-100">
+            {item.title}
+          </h4>
+
+          <p className="text-[10px]" style={{ color: C.textDim }}>
+            {item.brand || 'Private'} · {item.shop || item.loc}
+          </p>
+
+          {item.distanceKm != null && (
+            <p
+              className="mt-0.5 text-[10px]"
+              style={{ color: C.textDimmer }}
+            >
+              {item.distanceKm} km away
+            </p>
+          )}
+
+          <div
+            className="mt-1 text-[9px] font-semibold"
+            style={{ color: C.cyan }}
+          >
+            Click for part information →
+          </div>
+        </div>
+
+        <span
+          className="font-mono text-xs"
+          style={{ color: C.emerald }}
+        >
+          {price != null ? fmt(price, region) : 'PRICE N/A'}
+        </span>
+      </div>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onAdd(item, tier);
+        }}
+        disabled={inCart(item.id)}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-bold transition"
+        style={{
+          background: inCart(item.id)
+            ? `${C.emerald}10`
+            : `${C.orange}15`,
+          color: inCart(item.id)
+            ? C.emerald
+            : C.orange,
+          border: `1px solid ${
+            inCart(item.id)
+              ? `${C.emerald}30`
+              : `${C.orange}40`
+          }`
+        }}
+      >
+        {inCart(item.id) ? (
+          <>
+            <CheckCircle2 className="h-3 w-3" />
+            In Cart
+          </>
+        ) : (
+          <>
+            <ShoppingCart className="h-3 w-3" />
+            PURCHASE
+          </>
+        )}
+      </button>
+    </div>
+  );
+})}
               </div>
             </div>
           );
         })}
       </div>
+      
+{detailItem && (
+  <div
+    className="mt-4 rounded-xl border p-4"
+    style={{
+      borderColor: `${C.cyan}40`,
+      background: C.panel2
+    }}
+  >
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: C.cyan }}
+        >
+          Part Information
+        </div>
 
+        <h3 className="mt-1 text-sm font-bold text-slate-100">
+          {detailItem.title}
+        </h3>
+
+        <div className="text-[10px]" style={{ color: C.textDim }}>
+          {detailItem.brand || 'Unknown Brand'} · {detailItem.shop || detailItem.loc || 'Unknown Supplier'}
+        </div>
+      </div>
+
+      <button
+        onClick={() => {
+          setDetailItem(null);
+          setDetailTier(null);
+        }}
+        className="rounded-lg border px-2.5 py-1.5 text-[10px] font-bold"
+        style={{
+          borderColor: C.border,
+          color: C.textDim
+        }}
+      >
+        CLOSE
+      </button>
+    </div>
+
+    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+
+      <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="text-[9px] uppercase" style={{ color: C.textDimmer }}>
+          Price
+        </div>
+        <div className="mt-0.5 font-mono font-bold" style={{ color: C.emerald }}>
+          {fmt(
+            role === 'pro'
+              ? (detailItem.trade ?? detailItem.price)
+              : (detailItem.retail ?? detailItem.price),
+            region
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="text-[9px] uppercase" style={{ color: C.textDimmer }}>
+          Stock
+        </div>
+        <div className="mt-0.5 font-semibold text-slate-200">
+          {detailItem.stock ?? 'NOT SUPPLIED'}
+        </div>
+      </div>
+
+      <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="text-[9px] uppercase" style={{ color: C.textDimmer }}>
+          Part Number
+        </div>
+        <div className="mt-0.5 font-mono text-slate-200">
+          {detailItem.partNumber || 'NOT SUPPLIED'}
+        </div>
+      </div>
+
+      <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="text-[9px] uppercase" style={{ color: C.textDimmer }}>
+          OEM Number
+        </div>
+        <div className="mt-0.5 font-mono text-slate-200">
+          {detailItem.oemNumber || 'NOT SUPPLIED'}
+        </div>
+      </div>
+
+      <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="text-[9px] uppercase" style={{ color: C.textDimmer }}>
+          Distance
+        </div>
+        <div className="mt-0.5 text-slate-200">
+          {detailItem.distanceKm != null
+            ? `${detailItem.distanceKm} km`
+            : 'NOT SUPPLIED'}
+        </div>
+      </div>
+
+      <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.bg }}>
+        <div className="text-[9px] uppercase" style={{ color: C.textDimmer }}>
+          Location
+        </div>
+        <div className="mt-0.5 text-slate-200">
+          {detailItem.loc || 'NOT SUPPLIED'}
+        </div>
+      </div>
+
+    </div>
+
+    <div
+      className="mt-3 rounded-md border p-3"
+      style={{
+        borderColor: C.border,
+        background: C.bg
+      }}
+    >
+      <div
+        className="text-[9px] font-bold uppercase tracking-wider"
+        style={{ color: C.textDimmer }}
+      >
+        Fitment Status
+      </div>
+
+      <div className="mt-1 text-xs font-bold">
+        {String(detailItem.fitmentNotes || '')
+          .toUpperCase()
+          .includes('DEVELOPMENT TEST') ? (
+          <span style={{ color: C.orange }}>
+            ⚠ DEVELOPMENT FITMENT TEST
+          </span>
+        ) : detailItem.fitmentScore >= 60 ? (
+          <span style={{ color: C.emerald }}>
+            ✓ HIGH CONFIDENCE VEHICLE MATCH
+          </span>
+        ) : (
+          <span style={{ color: C.textDim }}>
+            FITMENT UNVERIFIED
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 font-mono text-[10px]" style={{ color: C.textDim }}>
+        Fitment Score: {detailItem.fitmentScore ?? 0}
+      </div>
+    </div>
+
+    {detailItem.fitmentReasons?.length > 0 && (
+      <div
+        className="mt-3 rounded-md border p-3"
+        style={{
+          borderColor: C.border,
+          background: C.bg
+        }}
+      >
+        <div
+          className="text-[9px] font-bold uppercase tracking-wider"
+          style={{ color: C.textDimmer }}
+        >
+          Match Evidence
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-1">
+          {detailItem.fitmentReasons.map((reason) => (
+            <span
+              key={reason}
+              className="rounded px-1.5 py-0.5 text-[9px] font-bold"
+              style={{
+                background: `${C.cyan}10`,
+                color: C.cyan
+              }}
+            >
+              {String(reason).replaceAll('_', ' ')}
+            </span>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {detailItem.vehicleFitment && (
+      <div
+        className="mt-3 rounded-md border p-3"
+        style={{
+          borderColor: C.border,
+          background: C.bg
+        }}
+      >
+        <div
+          className="text-[9px] font-bold uppercase tracking-wider"
+          style={{ color: C.textDimmer }}
+        >
+          Vehicle Application
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+          <div style={{ color: C.textDim }}>
+            Make: <span className="text-slate-300">{detailItem.vehicleFitment.make || '—'}</span>
+          </div>
+
+          <div style={{ color: C.textDim }}>
+            Model: <span className="text-slate-300">{detailItem.vehicleFitment.model || '—'}</span>
+          </div>
+
+          <div style={{ color: C.textDim }}>
+            Year From: <span className="text-slate-300">{detailItem.vehicleFitment.yearFrom || '—'}</span>
+          </div>
+
+          <div style={{ color: C.textDim }}>
+            Year To: <span className="text-slate-300">{detailItem.vehicleFitment.yearTo || '—'}</span>
+          </div>
+
+          <div style={{ color: C.textDim }}>
+            Engine: <span className="text-slate-300">{detailItem.vehicleFitment.engine || '—'}</span>
+          </div>
+
+          <div style={{ color: C.textDim }}>
+            Engine Code: <span className="text-slate-300">{detailItem.vehicleFitment.engineCode || '—'}</span>
+          </div>
+
+          <div className="col-span-2" style={{ color: C.textDim }}>
+            VIN: <span className="font-mono text-slate-300">{detailItem.vehicleFitment.vin || '—'}</span>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {detailItem.fitmentNotes && (
+      <div
+        className="mt-3 rounded-md border p-3 text-[10px]"
+        style={{
+          borderColor: `${C.orange}30`,
+          background: `${C.orange}05`,
+          color: C.orange
+        }}
+      >
+        {detailItem.fitmentNotes}
+      </div>
+    )}
+
+    <button
+      onClick={() => onAdd(detailItem, detailTier || 'local')}
+      disabled={inCart(detailItem.id)}
+      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold"
+      style={{
+        background: inCart(detailItem.id)
+          ? `${C.emerald}10`
+          : C.orange,
+        color: inCart(detailItem.id)
+          ? C.emerald
+          : '#000'
+      }}
+    >
+      {inCart(detailItem.id) ? (
+        <>
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          In Cart
+        </>
+      ) : (
+        <>
+          <ShoppingCart className="h-3.5 w-3.5" />
+          PURCHASE THIS PART
+        </>
+      )}
+    </button>
+  </div>
+)}
       {results.video && (
         <div className="mt-3">
           <a href={`https://youtube.com{results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
