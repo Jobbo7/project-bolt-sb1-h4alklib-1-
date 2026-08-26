@@ -3729,52 +3729,75 @@ const handleRego = async (plateStr, targetRegion) => {
     if (v) setVehicle(v);
   };
 
-    // ── True Live Search Aggregator Mapping ──
-  const handleSearch = async (query) => {
-    if (!query || !query.trim()) return;
-    
-    setPartsLoading(true);
-    setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
-    
-    const cleanQuery = query.trim().toUpperCase();
-    console.log(`📡 Shipping search parameter over the wire to cloud routes: "${cleanQuery}"`);
-    
-    try {
-      // Pull real-world product rows dynamically from open global retail databases over the internet instead of static mockup text files
-      const response = await fetch(`https://crossref.org{encodeURIComponent(cleanQuery)}&rows=10`);
-      const data = await response.json();
-      
-      const realItems = (data?.message?.items || []).map((it, idx) => ({
-        id: `PART-LIVE-${idx}-${Date.now()}`,
-        title: `${cleanQuery} - ${it.title ? it.title[0].slice(0, 50) : 'PREMIUM MATCHED HARDWARE COMPONENT'}`,
-        brand: it.publisher ? it.publisher.split(' ')[0].toUpperCase() : "GENUINE OEM",
-        price: 85.00 + (idx * 15.50),
-        trade: 68.00 + (idx * 12.00),
-        retail: 85.00 + (idx * 15.50),
-        shop: "PartsForge Live Web Wholesaler Sync Center",
-        loc: "Regional Distribution Shard Node",
-        distanceKm: 3.4 + idx,
-        stock: 5 + idx,
-        category: "part"
-      }));
+   // ── Live Vehicle-Aware Parts Search ──
+const handleSearch = async (query) => {
+  if (!query || !query.trim()) return;
 
-      setResults({
-        local: realItems,
-        localWholesalers: realItems,
-        national: [],
-        trans_tasman: [],
-        global_direct: [],
-        facebook: [],
-        facebookMarketplace: []
-      });
-    } catch (err) {
-      console.error("❌ Live search bridge pipeline failure:", err);
-      setResults({ local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
-    } finally {
-      setPartsLoading(false);
-    }
-  };
+  setPartsLoading(true);
 
+  setResults({
+    local: [],
+    national: [],
+    trans_tasman: [],
+    global_direct: [],
+    facebook: []
+  });
+
+  const cleanQuery = query.trim();
+
+  console.log(
+    
+    `📡 PartsForge vehicle-aware search: "${cleanQuery}" | ` +
+    `${vehicle?.year || ''} ${vehicle?.make || ''} ${vehicle?.model || ''}`
+  );
+
+  try {
+    const data = await processPartsQuery(
+      cleanQuery,
+      regionCode || 'AU_VIC',
+      vehicle
+    );
+
+    setResults({
+      local: data?.local || [],
+      localWholesalers: data?.local || [],
+
+      national: data?.national || [],
+
+      trans_tasman:
+        data?.trans_tasman || [],
+
+      global_direct:
+        data?.global_direct || [],
+
+      facebook:
+        data?.facebook || [],
+
+      facebookMarketplace:
+        data?.facebook || [],
+
+      vehicleContext:
+        data?.vehicleContext || null
+    });
+
+  } catch (err) {
+    console.error(
+      '❌ Vehicle-aware parts search failed:',
+      err
+    );
+
+    setResults({
+      local: [],
+      national: [],
+      trans_tasman: [],
+      global_direct: [],
+      facebook: []
+    });
+
+  } finally {
+    setPartsLoading(false);
+  }
+};
   const cartIds = useMemo(() => cart.map(c => c.id), [cart]);
 
   const handleAddToCart = (item, tier, qty = 1, explicitClassification = null) => {
