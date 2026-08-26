@@ -533,10 +533,30 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
           <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.emerald }}><BadgeCheck className="h-4 w-4" /> Vehicle Matched</div>
           <div className="mt-1.5 text-sm font-bold text-slate-100">
-  {(vehicle.year || 'YEAR UNKNOWN')} {(vehicle.make || 'UNKNOWN MAKE').toUpperCase()} {(vehicle.model || 'UNKNOWN MODEL').toUpperCase()}
+  {(vehicle.year || 'YEAR UNKNOWN')}{' '}
+  {(vehicle.make || 'UNKNOWN MAKE').toUpperCase()}{' '}
+  {(vehicle.model || 'UNKNOWN MODEL').toUpperCase()}
 </div>
 
 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Registration
+    </div>
+    <div className="mt-0.5 font-mono font-semibold" style={{ color: C.orange }}>
+      {(vehicle.rego || 'Not supplied').toUpperCase()}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      VIN
+    </div>
+    <div className="mt-0.5 break-all font-mono font-semibold text-slate-200">
+      {vehicle.vin ? vehicle.vin.toUpperCase() : 'NOT SUPPLIED'}
+    </div>
+  </div>
 
   <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
     <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
@@ -544,6 +564,15 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
     </div>
     <div className="mt-0.5 font-semibold text-slate-200">
       {(vehicle.engine || 'Not supplied').toUpperCase()}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Engine Number
+    </div>
+    <div className="mt-0.5 font-mono font-semibold text-slate-200">
+      {vehicle.engineNumber ? vehicle.engineNumber.toUpperCase() : 'NOT SUPPLIED'}
     </div>
   </div>
 
@@ -567,17 +596,47 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
 
   <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
     <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
-      Registration
+      Colour
     </div>
-    <div className="mt-0.5 font-mono font-semibold" style={{ color: C.orange }}>
-      {(vehicle.rego || 'Not supplied').toUpperCase()}
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {(vehicle.colour || 'Not supplied').toUpperCase()}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Compliance Date
+    </div>
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {vehicle.complianceDate || 'Not supplied'}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Registration Expiry
+    </div>
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {vehicle.registrationExpiry || 'Not supplied'}
+    </div>
+  </div>
+
+  <div className="rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+    <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
+      Goods Vehicle
+    </div>
+    <div className="mt-0.5 font-semibold text-slate-200">
+      {(vehicle.goodsCarryingVehicle || 'Not supplied').toUpperCase()}
     </div>
   </div>
 
 </div>
 
 {vehicle.description && (
-  <div className="mt-2 rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+  <div
+    className="mt-2 rounded-md border p-2"
+    style={{ borderColor: C.border, background: C.panel2 }}
+  >
     <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
       Vehicle Description
     </div>
@@ -588,7 +647,10 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
 )}
 
 {vehicle.detailedDescription && (
-  <div className="mt-2 rounded-md border p-2" style={{ borderColor: C.border, background: C.panel2 }}>
+  <div
+    className="mt-2 rounded-md border p-2"
+    style={{ borderColor: C.border, background: C.panel2 }}
+  >
     <div className="text-[10px] uppercase tracking-wide" style={{ color: C.textDimmer }}>
       Detailed Specification
     </div>
@@ -598,9 +660,23 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
   </div>
 )}
 
-<div className="mt-2 font-mono text-xs" style={{ color: C.textDimmer }}>
-  VIN: {vehicle.vin ? vehicle.vin.toUpperCase() : 'NOT SUPPLIED BY REGISTRATION PROVIDER'}
-</div>
+{vehicle.stolen && (
+  <div
+    className="mt-2 rounded-md border p-2"
+    style={{ borderColor: C.border, background: C.panel2 }}
+  >
+    <div
+      className="text-[10px] uppercase tracking-wide"
+      style={{ color: C.textDimmer }}
+    >
+      Stolen Status
+    </div>
+
+    <div className="mt-0.5 text-xs font-semibold text-slate-200">
+      {String(vehicle.stolen).toUpperCase()}
+    </div>
+  </div>
+)}
           
           <button 
             onClick={(e) => { 
