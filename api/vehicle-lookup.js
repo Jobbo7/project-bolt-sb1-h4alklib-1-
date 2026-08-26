@@ -2,7 +2,6 @@
 // FILE: api/vehicle-lookup.js
 
 export default async function handler(req, res) {
-  // CORS headers for workshop tablets
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -22,7 +21,9 @@ export default async function handler(req, res) {
       query.region || body.region || 'AU_VIC'
     ).toUpperCase();
 
-    // 1. Handle POST payloads from the tablet camera
+    // ─────────────────────────────────────────────
+    // 1. Registration source
+    // ─────────────────────────────────────────────
     if (req.method === 'POST') {
       const { image } = body;
 
@@ -33,14 +34,9 @@ export default async function handler(req, res) {
         });
       }
 
-      // Preserve the base64 payload as a string.
       const cleanBase64 = String(image);
 
-      // Call the internal OCR endpoint.
-      const originUrl =
-        typeof window !== 'undefined'
-          ? window.location.origin
-          : `https://${req.headers.host}`;
+      const originUrl = `https://${req.headers.host}`;
 
       const ocrResponse = await fetch(`${originUrl}/api/cloud-ocr`, {
         method: 'POST',
@@ -53,10 +49,6 @@ export default async function handler(req, res) {
       });
 
       if (!ocrResponse.ok) {
-        console.error(
-          `❌ OCR service failed. HTTP ${ocrResponse.status}`
-        );
-
         return res.status(502).json({
           error: 'Vehicle plate OCR service unavailable.',
           code: 'OCR_UNAVAILABLE'
@@ -65,38 +57,29 @@ export default async function handler(req, res) {
 
       const ocrData = await ocrResponse.json();
 
-      cleanPlateText = String(
-        ocrData.plate || ''
-      )
+      cleanPlateText = String(ocrData.plate || '')
         .replace(/[^A-Z0-9]/gi, '')
         .toUpperCase();
-    } else {
-      // 2. Handle GET payloads from manual registration entry
-      const { plate, vin } = query;
 
-      cleanPlateText = String(
-        plate || vin || ''
-      )
+    } else {
+      cleanPlateText = String(query.plate || '')
         .replace(/[^A-Z0-9]/gi, '')
         .toUpperCase();
     }
 
     if (!cleanPlateText) {
       return res.status(422).json({
-        error: 'Failed to extract distinct registration details.',
+        error: 'Registration number is required.',
         code: 'REGISTRATION_MISSING'
       });
     }
 
-    // 3. Australia provider
-    // AU_VIC → VIC
-    // AU_NSW → NSW
-    // AU_QLD → QLD
-    // etc.
-    const stateSelector =
-      region.includes('_')
-        ? region.split('_')[1]
-        : 'VIC';
+    // ─────────────────────────────────────────────
+    // 2. Region normalisation
+    // ─────────────────────────────────────────────
+    const stateSelector = region.includes('_')
+      ? region.split('_')[1]
+      : 'VIC';
 
     const australianStates = [
       'ACT',
@@ -117,48 +100,132 @@ export default async function handler(req, res) {
       });
     }
 
-    // 4. PlateAPI authentication
+    // ─────────────────────────────────────────────
+    // 3. CarRegistrationAPI VIN enrichment
+    // ─────────────────────────────────────────────
+    let registryData = null;
+
+    const registryUsername =
+      process.env.CARREGISTRATION_USERNAME;
+
+    if (registryUsername) {
+      try {
+        const regUrl = new URL(
+          'https://www.regcheck.org.uk/api/reg.asmx/CheckAustralia'
+        );
+
+        regUrl.searchParams.set(
+          'RegistrationNumber',
+          cleanPlateText
+        );
+
+        regUrl.searchParams.set(
+          'State',
+          stateSelector
+        );
+
+        regUrl.searchParams.set(
+          'username',
+          registryUsername
+        );
+
+        console.log(
+          `📡 CarRegistrationAPI VIN lookup: ${cleanPlateText} (${stateSelector})`
+        );
+
+        const regResponse = await fetch(regUrl.toString());
+
+        if (regResponse.ok) {
+          const xmlText = await regResponse.text();
+
+          // Extract <vehicleJson>...</vehicleJson>
+          // without requiring XML parsing in the frontend.
+          const match = xmlText.match(
+            /<vehicleJson[^>]*>([\s\S]*?)<\/vehicleJson>/i
+          );
+
+          if (match?.[1]) {
+            const decodedJson = match[1]
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>');
+
+            try {
+              registryData = JSON.parse(decodedJson);
+
+              console.log(
+                `🟢 Registry enrichment received for ${cleanPlateText}`
+              );
+            } catch (parseError) {
+              console.warn(
+                '⚠️ Registry vehicleJson could not be parsed:',
+                parseError
+              );
+            }
+          }
+        }
+      } catch (registryError) {
+        // IMPORTANT:
+        // Registry failure must not break the working PlateAPI lookup.
+        console.warn(
+          '⚠️ VIN enrichment unavailable; continuing with PlateAPI:',
+          registryError
+        );
+      }
+    }
+
+    // ─────────────────────────────────────────────
+    // 4. PlateAPI vehicle identification
+    // ─────────────────────────────────────────────
     const plateApiKey = process.env.PLATE_API_KEY;
 
     if (!plateApiKey) {
-      console.error('❌ PLATE_API_KEY is not configured.');
-
       return res.status(500).json({
         error: 'Vehicle lookup provider is not configured.',
         code: 'VEHICLE_PROVIDER_CONFIG_MISSING'
       });
     }
 
-    // 5. Live PlateAPI lookup
     const lookupUrl = new URL(
       'https://api.plateapi.com.au/api/v1/lookup'
     );
 
-    lookupUrl.searchParams.set('plate', cleanPlateText);
-    lookupUrl.searchParams.set('state', stateSelector);
-    lookupUrl.searchParams.set('detailed', 'true');
+    lookupUrl.searchParams.set(
+      'plate',
+      cleanPlateText
+    );
+
+    lookupUrl.searchParams.set(
+      'state',
+      stateSelector
+    );
+
+    lookupUrl.searchParams.set(
+      'detailed',
+      'true'
+    );
 
     console.log(
       `📡 PlateAPI lookup: ${cleanPlateText} (${stateSelector})`
     );
 
-    const plateResponse = await fetch(lookupUrl.toString(), {
-      method: 'GET',
-      headers: {
-        'X-API-Key': plateApiKey,
-        'Accept': 'application/json'
+    const plateResponse = await fetch(
+      lookupUrl.toString(),
+      {
+        method: 'GET',
+        headers: {
+          'X-API-Key': plateApiKey,
+          Accept: 'application/json'
+        }
       }
-    });
+    );
 
     let plateData;
 
     try {
       plateData = await plateResponse.json();
     } catch {
-      console.error(
-        `❌ PlateAPI returned invalid JSON. HTTP ${plateResponse.status}`
-      );
-
       return res.status(502).json({
         error: 'Vehicle lookup provider returned an invalid response.',
         code: 'PROVIDER_INVALID_RESPONSE',
@@ -167,35 +234,23 @@ export default async function handler(req, res) {
       });
     }
 
-    // 6. Authentication failure
     if (plateResponse.status === 401) {
-      console.error('❌ PlateAPI authentication failed.');
-
       return res.status(502).json({
         error: 'Vehicle lookup provider authentication failed.',
         code: 'PROVIDER_AUTH_FAILED'
       });
     }
 
-    // 7. Rate limit / free quota exhausted
     if (plateResponse.status === 429) {
-      console.error('❌ PlateAPI rate or quota limit reached.');
-
       return res.status(429).json({
-        error: 'Vehicle lookup service rate or quota limit reached.',
+        error: 'Vehicle lookup service quota limit reached.',
         code: 'PROVIDER_RATE_LIMITED',
         rego: cleanPlateText,
         region
       });
     }
 
-    // 8. Other provider failure
     if (!plateResponse.ok) {
-      console.error(
-        `❌ PlateAPI failed. HTTP ${plateResponse.status}`,
-        plateData
-      );
-
       return res.status(502).json({
         error: 'Vehicle lookup provider unavailable.',
         code: 'PROVIDER_UNAVAILABLE',
@@ -204,36 +259,55 @@ export default async function handler(req, res) {
       });
     }
 
-    // 9. PlateAPI successfully responded but did not find the plate
     if (!plateData.success) {
-      console.log(
-        `⚠️ Vehicle not found: ${cleanPlateText} (${stateSelector})`
-      );
-
       return res.status(404).json({
         error: 'Vehicle registration was not found.',
         code: plateData.code || 'VEHICLE_NOT_FOUND',
         rego: cleanPlateText,
-        region,
-        source: 'plateapi'
+        region
       });
     }
 
-    // 10. Normalise the provider response into the PartsForge format
+    // ─────────────────────────────────────────────
+    // 5. Merge both providers
+    // ─────────────────────────────────────────────
     const vehicle = plateData.vehicle || {};
 
-    const alternatives = Array.isArray(plateData.alternatives)
+    const alternatives = Array.isArray(
+      plateData.alternatives
+    )
       ? plateData.alternatives
       : [];
 
-    console.log(
-      `🟢 Live Vehicle Verified: ${vehicle.make || ''} ${vehicle.model || ''}`
-    );
+    const registryMake =
+      registryData?.CarMake?.CurrentTextValue ||
+      registryData?.MakeDescription?.CurrentTextValue ||
+      null;
 
-    return res.status(200).json({
+    const registryModel =
+      registryData?.CarModel?.CurrentTextValue ||
+      registryData?.ModelDescription?.CurrentTextValue ||
+      null;
+
+    // NOTE:
+    // Their API deliberately spells this field
+    // "VechileIdentificationNumber".
+    const vin =
+      registryData?.VechileIdentificationNumber ||
+      registryData?.VIN ||
+      null;
+
+    const engineNumber =
+      registryData?.Engine ||
+      registryData?.EngineNumber ||
+      null;
+
+    const result = {
       success: true,
 
-      source: 'plateapi',
+      source: registryData
+        ? 'plateapi+carregistrationapi'
+        : 'plateapi',
 
       rego: cleanPlateText,
 
@@ -241,30 +315,92 @@ export default async function handler(req, res) {
 
       country: 'AU',
 
-      make: String(vehicle.make || '').toUpperCase(),
+      make: String(
+        vehicle.make ||
+        registryMake ||
+        ''
+      ).toUpperCase(),
 
-      model: String(vehicle.model || '').toUpperCase(),
+      model: String(
+        vehicle.model ||
+        registryModel ||
+        ''
+      ).toUpperCase(),
 
       year:
         vehicle.lowest_year ||
+        registryData?.RegistrationYear ||
         vehicle.highest_year ||
         null,
 
-      yearRange: vehicle.year_range || null,
+      yearRange:
+        vehicle.year_range ||
+        null,
 
-      body: vehicle.body || null,
+      body:
+        vehicle.body ||
+        registryData?.BodyStyle?.CurrentTextValue ||
+        registryData?.BodyStyle ||
+        null,
 
-      engine: vehicle.engine || null,
+      engine:
+        vehicle.engine ||
+        null,
 
-      description: vehicle.description || null,
+      vin,
+
+      engineNumber,
+
+      colour:
+        registryData?.Colour ||
+        null,
+
+      complianceDate:
+        registryData?.ComplianceDate ||
+        null,
+
+      registrationExpiry:
+        registryData?.Expiry ||
+        null,
+
+      registrationSerialNumber:
+        registryData?.RegistrationSerialNumber ||
+        null,
+
+      stolen:
+        registryData?.Stolen ||
+        null,
+
+      goodsCarryingVehicle:
+        registryData?.GoodsCarryingVehicle ||
+        null,
+
+      description:
+        vehicle.description ||
+        registryData?.Description ||
+        null,
 
       detailedDescription:
-        vehicle.detailed_description || null,
+        vehicle.detailed_description ||
+        null,
 
       alternatives,
 
-      sandbox: plateData.sandbox === true
-    });
+      sandbox:
+        plateData.sandbox === true,
+
+      registryMatched:
+        Boolean(registryData),
+
+      vinMatched:
+        Boolean(vin)
+    };
+
+    console.log(
+      `🟢 PartsForge vehicle: ${result.year || ''} ${result.make} ${result.model} VIN:${result.vinMatched ? 'YES' : 'NO'}`
+    );
+
+    return res.status(200).json(result);
 
   } catch (err) {
     console.error(
