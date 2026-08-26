@@ -752,6 +752,17 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
         setDetailItem(item);
         setDetailTier(tier);
       }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setDetailItem(item);
+          setDetailTier(tier);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`View part information for ${item.title}`}
       className="cursor-pointer rounded-lg border p-3 transition hover:opacity-90"
       style={{
         borderColor: C.border,
@@ -883,12 +894,16 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
           Price
         </div>
         <div className="mt-0.5 font-mono font-bold" style={{ color: C.emerald }}>
-          {fmt(
-            role === 'pro'
-              ? (detailItem.trade ?? detailItem.price)
-              : (detailItem.retail ?? detailItem.price),
-            region
-          )}
+          {(role === 'pro'
+            ? (detailItem.trade ?? detailItem.price)
+            : (detailItem.retail ?? detailItem.price)) != null
+            ? fmt(
+                role === 'pro'
+                  ? (detailItem.trade ?? detailItem.price)
+                  : (detailItem.retail ?? detailItem.price),
+                region
+              )
+            : 'PRICE N/A'}
         </div>
       </div>
 
@@ -1099,7 +1114,7 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
 )}
       {results.video && (
         <div className="mt-3">
-          <a href={`https://youtube.com{results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
+          <a href={`https://youtube.com${results.video}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-red-400 transition" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
             <ExternalLink className="h-3.5 w-3.5" /> {results.videoTitle || 'Watch Repair Video'}
           </a>
         </div>
