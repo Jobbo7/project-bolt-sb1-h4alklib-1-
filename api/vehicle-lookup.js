@@ -1,6 +1,10 @@
-// ─── PARTSFORGE SECURE CARREGISTRATIONAPI REST API PRODUCTION CONTROLLER ───
+// ─── PARTSFORGE SECURE MULTI-REGION VEHICLE REGISTRY BROKER ───
+// FILE: api/vehicle-lookup.js
+
+import { XMLParser } from 'fast-xml-parser';
 
 export default async function handler(req, res) {
+  // CORS Handshake security headers enable cross-platform tablet connections
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -8,94 +12,85 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const searchSource = req.method === 'POST' ? req.body : req.query;
-  const incomingImageStream = searchSource.image || '';
-  let manualPlateText = (searchSource.plate || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const rawRegion = (searchSource.region || 'VIC').trim().toUpperCase().replace('AU_', '');
-
-  let processedScannedText = '';
-
   try {
-    // 1. IF AN IMAGE STREAM ARRIVES, EXTRACT THE TEXT STRINGS IN THE CLOUD
-    if (incomingImageStream) {
-      console.log("📡 Intercepting image stream package. Running cloud OCR text array extraction...");
-      
-      const ocrResponse = await fetch('https://ocr.space', {
+    let cleanPlateText = '';
+    const region = (req.query.region || req.body.region || 'AU_VIC').toUpperCase();
+
+    // 1. Handle Post Payloads (Raw Tablet Camera base64 Snapshot Slices)
+    if (req.method === 'POST') {
+      const { image } = req.body;
+      if (!image) return res.status(400).json({ error: 'Missing raw image byte stream data.' });
+
+      const cleanBase64 = image.includes(',') ? image.split(',')[1] : image;
+
+      // Call your Vercel-internal cloud OCR proxy to parse the raw image
+      const originUrl = typeof window !== 'undefined' ? window.location.origin : `https://${req.headers.host}`;
+      const ocrResponse = await fetch(`${originUrl}/api/cloud-ocr`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `base64Image=${encodeURIComponent(incomingImageStream)}&language=eng&apikey=K85324564888957&isOverlayRequired=false`
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: cleanBase64 })
       });
-
-      if (!ocrResponse.ok) throw new Error("VISION_NODE_OFFLINE");
-      const ocrPayloadResult = await ocrResponse.json();
       
-      const parsedText = ocrPayloadResult?.ParsedResults && ocrPayloadResult.ParsedResults
-        ? ocrPayloadResult.ParsedResults[0].ParsedText || '' 
-        : '';
+      const ocrData = await ocrResponse.json();
+      cleanPlateText = (ocrData.plate || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    } else {
+      // 2. Handle Get Payloads (Manual Alphanumeric Keyboard Typing)
+      const { plate, vin } = req.query;
+      cleanPlateText = (plate || vin || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    }
+
+    if (!cleanPlateText) {
+      return res.status(422).json({ error: 'Failed to extract distinct registration details.' });
+    }
+
+    // 3. Live Australian Transport Registry Interception (RegCheck / CarRegistration API)
+    const usernameKey = process.env.CARREGISTRATION_USERNAME || 'Jobbo7';
+    
+    // Determine the state check value based on your clean region code primitives
+    // E.g., 'AU_VIC' becomes 'VIC', 'AU_NSW' becomes 'NSW'
+    const stateSelector = region.includes('_') ? region.split('_')[1] : 'VIC';
+
+    console.log(`📡 Querying live state transport registry logs for: ${cleanPlateText} (${stateSelector})`);
+    
+    // Connects straight to the commercial endpoint for live Australian registration records
+    const regCheckUrl = `https://regcheck.org.uk{encodeURIComponent(cleanPlateText)}&State=${encodeURIComponent(stateSelector)}&username=${encodeURIComponent(usernameKey)}`;
+    const regResponse = await fetch(regCheckUrl);
+
+    if (regResponse.ok) {
+      const rawXml = await regResponse.text();
+      
+      // Parse the returned XML envelope to extract the embedded vehicle data fields
+      const parser = new XMLParser();
+      const jsonObj = parser.parse(rawXml);
+      const xmlWrapper = jsonObj['soap:Envelope']?.['soap:Body']?.CheckAustraliaResponse?.CheckAustraliaResult || jsonObj?.CheckAustraliaResult;
+      
+      if (xmlWrapper && xmlWrapper.vehicleJson) {
+        const vehicle = JSON.parse(xmlWrapper.vehicleJson);
         
-      processedScannedText = parsedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+        console.log(`🟢 Live Registration Verified: Found ${vehicle.Make} ${vehicle.Model}`);
+        return res.status(200).json({
+          make: (vehicle.Make || 'GENUINE VEHICLE').toUpperCase(),
+          model: (vehicle.Model || 'REGO MATCH').toUpperCase(),
+          year: vehicle.RegistrationYear || vehicle.BuildYear || new Date().getFullYear(),
+          engine: vehicle.EngineDescription || `${vehicle.EngineSize || 'Multi-Point'} ${vehicle.FuelType || 'Petrol'}`.toUpperCase(),
+          vin: vehicle.Vin || vehicle.Chassis || `VIN-${cleanPlateText}`,
+          rego: cleanPlateText
+        });
+      }
     }
 
-    const finalLookupToken = processedScannedText || manualPlateText || "";
-
-    if (!finalLookupToken || finalLookupToken.startsWith('LIVE-') || finalLookupToken.startsWith('REGO-')) {
-      return res.status(200).json({ make: "AWAITING INPUT", model: "ENTER VALID PLATE", year: new Date().getFullYear(), engine: "N/A", vin: "N/A", rego: "" });
-    }
-
-    // Standardise raw region metrics to exact state titles matching the RegCheck database formatting rules
-    let lookupState = 'Victoria';
-    if (rawRegion === 'NSW' || rawRegion === 'NEW SOUTH WALES') lookupState = 'New South Wales';
-    if (rawRegion === 'QLD' || rawRegion === 'QUEENSLAND') lookupState = 'Queensland';
-    if (rawRegion === 'SA' || rawRegion === 'SOUTH AUSTRALIA') lookupState = 'South Australia';
-    if (rawRegion === 'WA' || rawRegion === 'WESTERN AUSTRALIA') lookupState = 'Western Australia';
-    if (rawRegion === 'TAS' || rawRegion === 'TASMANIA') lookupState = 'Tasmania';
-    if (rawRegion === 'NT' || rawRegion === 'NORTHERN TERRITORY') lookupState = 'Northern Territory';
-    if (rawRegion === 'ACT') lookupState = 'ACT';
-
-    const apiUsername = process.env.CARREGISTRATION_USERNAME || "Jobbo7";
-
-    // 2. QUERY THE RAPID COMMERCIAL MECHANICAL ENDPOINT FOR ENGINE SPECS ONLY
-    const targetUrl = `https://regcheck.org.uk{encodeURIComponent(finalLookupToken)}&State=${encodeURIComponent(lookupState)}&username=${encodeURIComponent(apiUsername)}`;
-    
-    const response = await fetch(targetUrl, {
-      method: "GET",
-      headers: { "Accept": "application/json" }
-    });
-
-    if (!response.ok) throw new Error(`External service responded with status ${response.status}`);
-    const rawDataText = await response.text();
-    
-    const jsonMatch = rawDataText.match(/<CheckAustraliaResult>([\s\S]*?)<\/CheckAustraliaResult>/);
-    if (!jsonMatch) throw new Error("INVALID_XML_WRAPPER_RETURNED");
-
-    const cleanCar = JSON.parse(jsonMatch[1]);
-    
-    // 3. RETURN MECHANICAL DATA LAYERS DIRECTLY TO YOUR WORKSPACE TABLET CARDS
-    if (cleanCar && (cleanCar.Make || cleanCar.CarMake)) {
-      return res.status(200).json({
-        make: (cleanCar.Make || cleanCar.CarMake || "MATCH FOUND").toUpperCase(),
-        model: (cleanCar.Model || cleanCar.CarModel || "LIVE DATA").toUpperCase(),
-        year: parseInt(cleanCar.RegistrationYear || cleanCar.YearOfManufacture) || new Date().getFullYear(),
-        engine: (cleanCar.EngineSize || cleanCar.EngineDescription || "ACTIVE").toUpperCase(),
-        vin: (cleanCar.Vin || cleanCar.ChassisNumber || `VIN-${finalLookupToken}`).toUpperCase(),
-        rego: finalLookupToken
-      });
-    }
-
-    throw new Error("PLATE_NOT_FOUND_IN_REGISTRY");
-
-  } catch (error) {
-    console.warn("Cloud processing pipeline caught network blockage. Delivering fallback data block:", error);
-    
-    // 🟢 THE MECHANICAL TEXT MIRROR FALLBACK: Returns engineering details containing the exact letters you photographed
-    const fallbackToken = (processedScannedText || manualPlateText || "REGO-ERR").toUpperCase();
+    // 4. Smart Text Mirror Fallback (Fires safely only if the registration API credentials reject the request)
     return res.status(200).json({
-      make: "GENUINE VEHICLE MATCHED",
-      model: `ENGINE SPECS GENERATED`,
+      make: "REGO NOT FOUND",
+      model: `PLATE ID: ${cleanPlateText}`,
       year: new Date().getFullYear(),
-      engine: "REAL-TIME WORKSHOP MECHANICAL PROFILE ONLINE",
-      vin: `SVR-NODE-${fallbackToken}-${rawRegion}`,
-      rego: fallbackToken
+      engine: "MANUAL WORKSHOP ENTRIES ACTIVE",
+      vin: `PF-FAIL-${cleanPlateText}-${stateSelector}`,
+      rego: cleanPlateText
     });
+
+  } catch (err) {
+    console.error('❌ Registry broker operation error:', err);
+    return res.status(500).json({ error: 'Internal vehicle indexing infrastructure crash.' });
   }
 }
