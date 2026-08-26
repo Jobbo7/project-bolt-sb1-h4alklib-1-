@@ -7,16 +7,96 @@ const getOrigin = () => typeof window !== 'undefined' ? window.location.origin :
  * Streams real-time parts queries down through your Vercel serverless edge paths
  * directly into your active global marketplace listings.
  */
-export async function processPartsQuery(query, regionCode = 'AU_VIC') {
-  if (!query || !query.trim()) return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] };
+export async function processPartsQuery(
+  query,
+  regionCode = 'AU_VIC',
+  vehicle = null
+) {
+  if (!query || !query.trim()) {
+    return {
+      local: [],
+      national: [],
+      trans_tasman: [],
+      global_direct: [],
+      facebook: []
+    };
+  }
+
   try {
-    console.log(`📡 Shipping edge packet connection for query: "${query}" in region: ${regionCode}`);
-    const response = await fetch(`${getOrigin()}/api/parts-search?q=${encodeURIComponent(query.trim())}&region=${encodeURIComponent(regionCode)}`);
-    if (!response.ok) throw new Error(`Serverless gateway rejection status code: ${response.status}`);
-    return await response.json();
+    const params = new URLSearchParams();
+
+    params.set('q', query.trim());
+    params.set('region', regionCode);
+
+    // Attach the currently matched vehicle to the parts search.
+    if (vehicle) {
+      if (vehicle.vin) {
+        params.set('vin', vehicle.vin);
+      }
+
+      if (vehicle.make) {
+        params.set('make', vehicle.make);
+      }
+
+      if (vehicle.model) {
+        params.set('model', vehicle.model);
+      }
+
+      if (vehicle.year) {
+        params.set('year', String(vehicle.year));
+      }
+
+      if (vehicle.engine) {
+        params.set('engine', vehicle.engine);
+      }
+
+      if (vehicle.engineCode) {
+        params.set('engineCode', vehicle.engineCode);
+      }
+
+      if (vehicle.series) {
+        params.set('series', vehicle.series);
+      }
+
+      if (vehicle.variant) {
+        params.set('variant', vehicle.variant);
+      }
+    }
+
+    console.log(
+      `📡 PartsForge parts search: "${query}" | ` +
+      `${vehicle?.year || ''} ${vehicle?.make || ''} ${vehicle?.model || ''}`
+    );
+
+    const response = await fetch(
+      `${getOrigin()}/api/parts-search?${params.toString()}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+        `Serverless gateway rejection status code: ${response.status}`
+      );
+    }
+
+    return data;
+
   } catch (error) {
-    console.error("❌ Live parts search pipeline failure:", error);
-    return { local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] };
+    console.error(
+      '❌ Live parts search pipeline failure:',
+      error
+    );
+
+    return {
+      error: error.message || 'Parts search failed.',
+      local: [],
+      national: [],
+      trans_tasman: [],
+      global_direct: [],
+      facebook: []
+    };
   }
 }
 
