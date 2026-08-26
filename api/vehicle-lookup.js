@@ -305,6 +305,43 @@ if (!plateData.success && !registryData) {
       registryData?.Engine ||
       registryData?.EngineNumber ||
       null;
+    // ─────────────────────────────────────────────
+// VIN specification enrichment
+// ─────────────────────────────────────────────
+let vinSpecs = null;
+
+if (vin) {
+  try {
+    console.log(`📡 Auto-decoding registry VIN: ${vin}`);
+
+    const vinLookupUrl =
+      `https://${req.headers.host}/api/vin-lookup?vin=${encodeURIComponent(vin)}`;
+
+    const vinResponse = await fetch(vinLookupUrl);
+
+    if (vinResponse.ok) {
+      const vinData = await vinResponse.json();
+
+      if (vinData?.success) {
+        vinSpecs = vinData;
+
+        console.log(
+          `🟢 VIN specifications received: ${vinData.year || ''} ${vinData.make || ''} ${vinData.model || ''}`
+        );
+      }
+    } else {
+      console.warn(
+        `⚠️ VIN decoder returned HTTP ${vinResponse.status}`
+      );
+    }
+  } catch (vinError) {
+    // VIN decoding failure must never break the working rego lookup.
+    console.warn(
+      '⚠️ VIN decoder unavailable; continuing with registration data:',
+      vinError
+    );
+  }
+}
 
     const result = {
       success: true,
