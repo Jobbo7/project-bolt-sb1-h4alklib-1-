@@ -44,7 +44,15 @@ export default async function handler(req, res) {
     }
 
     // 3. Live Australian Transport Registry Interception (RegCheck / CarRegistration API)
-    const usernameKey = process.env.CARREGISTRATION_USERNAME || 'Jobbo7';
+   const usernameKey = process.env.CARREGISTRATION_USERNAME;
+
+if (!usernameKey) {
+  console.error('❌ CARREGISTRATION_USERNAME is not configured.');
+  return res.status(500).json({
+    error: 'Vehicle registry credentials are not configured.',
+    code: 'REGISTRY_CONFIG_MISSING'
+  });
+}
     
     // FIXED: Correctly grab index 1 to map 'AU_VIC' straight onto a clean 'VIC' primitive string
     const stateSelector = region.includes('_') ? region.split('_')[1] : 'VIC';
