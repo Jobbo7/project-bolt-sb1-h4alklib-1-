@@ -84,12 +84,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // Map responses directly into your frontend's strict display structures
+    // 🟢 FIXED: All keys return perfectly flat array tiers to prevent App.jsx layout map crashes
     return res.status(200).json({
       local: wholesaleItems,
       national: wholesaleItems.slice(2),
       trans_tasman: [],
-      global_direct: wholesaleItems.length > 0 ? [wholesaleItems[0]] : [],
+      global_direct: wholesaleItems,
       facebook: facebookItems
     });
 
