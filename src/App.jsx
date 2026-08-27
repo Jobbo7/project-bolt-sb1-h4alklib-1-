@@ -2139,7 +2139,7 @@ function JobCard({
   const grand = subtotal + tax;
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+    <div id="active-job-card" className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
         <FileText className="h-3.5 w-3.5" style={{ color: C.orange }} /> Active Job Card
       </div>
@@ -2816,7 +2816,7 @@ function UnpaidInvoicesDirectory({ invoices, onSettle, onVerifyBank, region }) {
 }
 
 // ─── Account Settings Dropdown ───────────────────────────────────────────────
-function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, paidInvoices, onLinkAto, onConnectLedger, onInviteAccountant, onConnectBankFeed, bankFeedStatus, onExportToAccounting, onEmailAccountant, regionCode, workshopExpenses, onExportWorkshopExpense, onDeleteWorkshopExpense, userEmail, teamLinkCode, onGenerateTeamLinkCode, linkedEmployees }) {
+function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, paidInvoices, onLinkAto, onConnectLedger, onInviteAccountant, onConnectBankFeed, bankFeedStatus, onExportToAccounting, onEmailAccountant, regionCode, workshopExpenses, onExportWorkshopExpense, onDeleteWorkshopExpense, userEmail, teamLinkCode, onGenerateTeamLinkCode, linkedEmployees, savedJobs, onResumeJob, onDeleteJob, hoists }) {
   const [open, setOpen] = useState(false);
   const [subFolder, setSubFolder] = useState(null);
   const [atoStatus, setAtoStatus] = useState(null);
@@ -2836,6 +2836,7 @@ function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, 
   const closeAll = () => { setOpen(false); setSubFolder(null); };
 
   const folders = [
+    { id: 'hoist_jobs', label: `On the Hoist — In-Progress Jobs (${savedJobs?.length || 0})`, icon: <History className="h-4 w-4" /> },
     { id: 'financial', label: 'Financial Hub', icon: <Landmark className="h-4 w-4" /> },
     { id: 'corporate', label: 'Corporate Accounts', icon: <Building2 className="h-4 w-4" /> },
     { id: 'bankfeed', label: 'Live Bank Feed (CDR)', icon: <ShieldCheck className="h-4 w-4" /> },
@@ -2870,6 +2871,18 @@ function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, 
                 <button onClick={() => setSubFolder(null)} className="mb-3 flex items-center gap-1.5 text-xs" style={{ color: C.textDim }}>
                   <ArrowLeft className="h-3 w-3" /> Back
                 </button>
+
+                {subFolder === 'hoist_jobs' && (
+                  <OnTheHoistRepository
+                    savedJobs={savedJobs}
+                    onResume={(job, bayId) => {
+                      onResumeJob(job, bayId);
+                      closeAll();
+                    }}
+                    onDelete={onDeleteJob}
+                    bayOptions={(hoists || []).filter(hoist => hoist.status === 'available')}
+                  />
+                )}
 
                 {subFolder === 'financial' && (
                   <div className="space-y-3">
@@ -4729,16 +4742,25 @@ const handleSearch = async (query) => {
 
 // ── Job card: On the Hoist single-instance lifecycle ──
   const handleSaveProgress = async () => {
-    const payload = { cart: jobCart, consumables, laborHours, laborRate, taxOn, diagnostic, custName, custPhone, custEmail, vehicle, hoistId: vehicle?.hoistId || null };
+    const previousHoistId = vehicle?.hoistId || null;
+    const parkedVehicle = vehicle ? { ...vehicle, previousHoistId, hoistId: null, hoistName: null } : null;
+    const payload = { cart: jobCart, consumables, laborHours, laborRate, taxOn, diagnostic, custName, custPhone, custEmail, vehicle: parkedVehicle, hoistId: null, savedAt: new Date().toISOString() };
     const saved = await persistJobProgress(payload);
     if (activeHoistJobId) {
       setHoistJobs(prev => prev.map(j => j.jobId === activeHoistJobId ? { ...j, ...payload, jobId: activeHoistJobId, updatedAt: new Date().toISOString() } : j));
       setSaveToast(`Job progress updated: ${activeHoistJobId}`);
     } else {
-      const newJob = { ...saved, jobId: saved.jobId || uid() };
+      const savedObject = saved && typeof saved === 'object' ? saved : {};
+      const newJob = { ...payload, ...savedObject, jobId: savedObject.jobId || uid() };
       setHoistJobs(prev => [...prev, newJob]);
       setActiveHoistJobId(newJob.jobId);
       setSaveToast(newJob.jobId);
+    }
+    if (previousHoistId) {
+      saveHoists(hoists.map(h => h.id === previousHoistId ? { ...h, status: 'available', activeVehicleId: null } : h));
+    }
+    if (vehicle?.id) {
+      setGarageVehicles(prev => prev.map(v => v.id === vehicle.id ? { ...v, hoistId: null, hoistName: null } : v));
     }
     setTimeout(() => setSaveToast(null), 3500);
     // Clear active Job Card workspace fields for a fresh vehicle slot
@@ -4802,6 +4824,20 @@ const handleSearch = async (query) => {
 
   // Resume a hoist job into the active Job Card area
   const handleResumeJob = (job, targetBayId = null) => {
+    if (!targetBayId) {
+      setSaveToast('Select an available hoist before loading this job.');
+      setTimeout(() => setSaveToast(null), 3000);
+      return;
+    }
+    const targetHoist = hoists.find(h => h.id === targetBayId);
+    if (!targetHoist || targetHoist.status !== 'available') {
+      setSaveToast('That hoist is no longer available. Select another hoist.');
+      setTimeout(() => setSaveToast(null), 3000);
+      return;
+    }
+    const restoredVehicle = job.vehicle
+      ? { ...job.vehicle, hoistId: targetBayId, hoistName: targetHoist.name }
+      : null;
     setJobCart(job.cart || []);
     setConsumables(job.consumables || []);
     setLaborHours(job.laborHours || 0);
@@ -4811,16 +4847,31 @@ const handleSearch = async (query) => {
     setCustName(job.custName || '');
     setCustPhone(job.custPhone || '');
     setCustEmail(job.custEmail || '');
-    setVehicle(job.vehicle || null);
+    setVehicle(restoredVehicle);
     setActiveHoistJobId(job.jobId || job.id || null);
-    if (job.vehicle) {
-      const existing = garageVehicles.find(v => v.rego === job.vehicle?.rego);
-      if (existing) setActiveVehicleId(existing.id);
+    if (restoredVehicle) {
+      const existing = garageVehicles.find(v => v.id === restoredVehicle.id || (v.rego && v.rego === restoredVehicle.rego));
+      if (existing) {
+        setGarageVehicles(prev => prev.map(v => v.id === existing.id ? { ...v, ...restoredVehicle, id: existing.id } : v));
+        setActiveVehicleId(existing.id);
+        restoredVehicle.id = existing.id;
+      } else {
+        const restoredId = restoredVehicle.id || uid();
+        restoredVehicle.id = restoredId;
+        setGarageVehicles(prev => [...prev, restoredVehicle]);
+        setActiveVehicleId(restoredId);
+      }
     }
-    if (targetBayId) {
-      setSaveToast(`Job loaded into ${targetBayId}`);
-      setTimeout(() => setSaveToast(null), 3000);
-    }
+    saveHoists(hoists.map(h => h.id === targetBayId ? { ...h, status: 'occupied', activeVehicleId: restoredVehicle?.id || null } : h));
+    setHoistJobs(prev => prev.map(savedJob =>
+      (savedJob.jobId || savedJob.id) === (job.jobId || job.id)
+        ? { ...savedJob, hoistId: targetBayId, vehicle: restoredVehicle, updatedAt: new Date().toISOString() }
+        : savedJob
+    ));
+    setResults(null);
+    setSaveToast(`Job loaded into ${targetHoist.name}. Vehicle and VIN restored for parts searching.`);
+    setTimeout(() => setSaveToast(null), 4000);
+    setTimeout(() => document.getElementById('active-job-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   // In-Progress Delete Guard: remove a job from the hoist folder manually
@@ -5113,6 +5164,10 @@ const handleSearch = async (query) => {
                 teamLinkCode={teamLinkCode}
                 onGenerateTeamLinkCode={handleGenerateTeamLinkCode}
                 linkedEmployees={linkedEmployees}
+                savedJobs={hoistJobs}
+                onResumeJob={handleResumeJob}
+                onDeleteJob={handleDeleteHoistJob}
+                hoists={hoists}
               />
               {pendingApprovals.length > 0 && (
                 <EmployeeApprovalTable
@@ -5194,8 +5249,6 @@ const handleSearch = async (query) => {
           {/* Mechanic-only sections */}
           {role === 'pro' && (
             <>
-              <OnTheHoistRepository savedJobs={hoistJobs} onResume={handleResumeJob} onDelete={handleDeleteHoistJob} bayOptions={hoists} />
-
               <JobCard
                 cart={jobCart} role={role}
                 laborHours={laborHours} setLaborHours={setLaborHours}
