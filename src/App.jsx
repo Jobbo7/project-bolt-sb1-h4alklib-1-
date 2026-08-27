@@ -1962,7 +1962,7 @@ function StoreCatalogButton({ label, icon, accent, count, onClick }) {
 }
 
 // ─── Store Catalog Window (full-screen immersive catalog) ─────────────────────
-function StoreCatalogWindow({ label, icon, items, role, onAddToCart, accent, region, onClose, workshopMode }) {
+function StoreCatalogWindow({ label, icon, items, role, onAddToCart, cartIds = [], accent, region, onClose, workshopMode }) {
   const r = region || 'VIC';
   const f = (n) => fmt(n, r);
   const [search, setSearch] = useState('');
@@ -2002,6 +2002,7 @@ function StoreCatalogWindow({ label, icon, items, role, onAddToCart, accent, reg
 
   const getQty = (id) => quantities[id] || 1;
   const setQty = (id, val) => setQuantities(prev => ({ ...prev, [id]: Math.max(1, val) }));
+  const inCart = (id) => cartIds.includes(id);
 
   return (
     <div className="fixed inset-0 z-[85] overflow-y-auto" style={{ background: C.bg }}>
@@ -2068,8 +2069,8 @@ function StoreCatalogWindow({ label, icon, items, role, onAddToCart, accent, reg
                     <span className="font-mono text-sm text-slate-100">{getQty(detailItem.id)}</span>
                     <button onClick={(e) => { e.preventDefault(); setQty(detailItem.id, getQty(detailItem.id) + 1); }} className="flex h-7 w-7 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>+</button>
                   </div>
-                  <button onClick={(e) => { e.preventDefault(); onAddToCart(detailItem, getQty(detailItem.id)); }} className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>
-                    <ShoppingCart className="h-4 w-4" /> PURCHASE
+                  <button disabled={inCart(detailItem.id)} onClick={(e) => { e.preventDefault(); onAddToCart(detailItem, getQty(detailItem.id)); }} className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: inCart(detailItem.id) ? C.emerald : C.orange }}>
+                    {inCart(detailItem.id) ? <><CheckCircle2 className="h-4 w-4" /> IN CART</> : <><ShoppingCart className="h-4 w-4" /> PURCHASE</>}
                   </button>
                 </div>
               </div>
@@ -2105,14 +2106,40 @@ function StoreCatalogWindow({ label, icon, items, role, onAddToCart, accent, reg
                     <button onClick={(e) => { e.preventDefault(); setQty(item.id, getQty(item.id) + 1); }} className="flex h-6 w-6 items-center justify-center rounded border text-xs" style={{ borderColor: C.border, color: C.textDim }}>+</button>
                   </div>
                   {/* Add to cart */}
-                  <button onClick={(e) => { e.preventDefault(); onAddToCart(item, getQty(item.id)); }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-[10px] font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: C.orange }}>
-                    <ShoppingCart className="h-3 w-3" /> PURCHASE
+                  <button disabled={inCart(item.id)} onClick={(e) => { e.preventDefault(); onAddToCart(item, getQty(item.id)); }} className="flex items-center gap-1 rounded-lg px-3 py-2 text-[10px] font-extrabold text-slate-950 transition hover:opacity-90" style={{ background: inCart(item.id) ? C.emerald : C.orange }}>
+                    {inCart(item.id) ? <><CheckCircle2 className="h-3 w-3" /> IN CART</> : <><ShoppingCart className="h-3 w-3" /> PURCHASE</>}
                   </button>
                 </div>
               );
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function WorkshopStorePanel({ storeDropdowns, consumables, onUpdateConsumable, onRemoveConsumable, region }) {
+  const f = (n) => fmt(n, region || 'VIC');
+  return (
+    <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+      <h4 className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}><Store className="mr-1 inline h-3 w-3" /> Workshop Store Registries</h4>
+      <div className="space-y-2">{storeDropdowns}</div>
+      <div className="mt-4 border-t pt-4" style={{ borderColor: C.border }}>
+        <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}><FlaskConical className="h-3 w-3" /> Consumables & Fluids</h4>
+        <div className="mt-2 space-y-2">
+          {consumables.length === 0 && <p className="text-xs" style={{ color: C.textDimmer }}>No consumables added. Click "Add Consumable Asset" to pull from your store or the marketplace.</p>}
+          {consumables.map((con) => (
+            <div key={con.id} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.panel2 }}>
+              {con.source === 'internal' && <Store className="h-3.5 w-3.5 shrink-0" style={{ color: C.cyan }} />}
+              {con.source === 'outsourced' && <PackageSearch className="h-3.5 w-3.5 shrink-0" style={{ color: C.orange }} />}
+              <input type="text" value={con.title} onChange={(e) => onUpdateConsumable(con.id, 'title', e.target.value)} className="min-w-0 flex-1 rounded border px-2 py-1 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+              <input type="number" value={con.unitPrice} onChange={(e) => onUpdateConsumable(con.id, 'unitPrice', parseFloat(e.target.value) || 0)} className="w-20 rounded border px-2 py-1 text-right font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+              <span className="font-mono text-xs" style={{ color: C.emerald, minWidth: '60px', textAlign: 'right' }}>{f((con.unitPrice || 0) * (con.qty || 1))}</span>
+              <button onClick={() => onRemoveConsumable(con.id)} className="rounded p-1 transition" style={{ color: C.red }}><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -2203,34 +2230,6 @@ function JobCard({
               <input type="number" value={item.unitPrice} onChange={(e) => onUpdateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)} className="w-20 rounded border px-2 py-1 text-right font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
               <span className="font-mono text-xs" style={{ color: C.emerald, minWidth: '60px', textAlign: 'right' }}>{f(item.unitPrice * item.qty)}</span>
               <button onClick={() => onRemove(item.id)} className="rounded p-1 transition" style={{ color: C.red }}><Trash2 className="h-3.5 w-3.5" /></button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Professional Store Dropdowns (Lubricants, Consumables, Accessories) */}
-      {storeDropdowns && (
-        <div className="mt-4">
-          <h4 className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}><Store className="h-3 w-3 inline mr-1" /> Workshop Store Registries</h4>
-          {storeDropdowns}
-        </div>
-      )}
-
-      {/* Consumables (inline editable + Add Consumable Asset button) */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between">
-          <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}><FlaskConical className="h-3 w-3" /> Consumables & Fluids</h4>
-        </div>
-        <div className="mt-2 space-y-2">
-          {consumables.length === 0 && <p className="text-xs" style={{ color: C.textDimmer }}>No consumables added. Click "Add Consumable Asset" to pull from your store or the marketplace.</p>}
-          {consumables.map((con) => (
-            <div key={con.id} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.panel2 }}>
-              {con.source === 'internal' && <Store className="h-3.5 w-3.5 shrink-0" style={{ color: C.cyan }} />}
-              {con.source === 'outsourced' && <PackageSearch className="h-3.5 w-3.5 shrink-0" style={{ color: C.orange }} />}
-              <input type="text" value={con.title} onChange={(e) => onUpdateConsumable(con.id, 'title', e.target.value)} className="min-w-0 flex-1 rounded border px-2 py-1 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
-              <input type="number" value={con.unitPrice} onChange={(e) => onUpdateConsumable(con.id, 'unitPrice', parseFloat(e.target.value) || 0)} className="w-20 rounded border px-2 py-1 text-right font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
-              <span className="font-mono text-xs" style={{ color: C.emerald, minWidth: '60px', textAlign: 'right' }}>{f((con.unitPrice || 0) * (con.qty || 1))}</span>
-              <button onClick={() => onRemoveConsumable(con.id)} className="rounded p-1 transition" style={{ color: C.red }}><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           ))}
         </div>
@@ -5243,6 +5242,23 @@ const handleSearch = async (query) => {
           />
 
           {role === 'pro' && (
+            <WorkshopStorePanel
+              region={regionCode}
+              consumables={consumables}
+              onUpdateConsumable={handleUpdateConsumable}
+              onRemoveConsumable={handleRemoveConsumable}
+              storeDropdowns={
+                <>
+                  <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={LUBRICANTS_CATALOG.length} onClick={() => setCatalogWindow('lubricants')} />
+                  <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={CONSUMABLES_CATALOG_FLAT.length} onClick={() => setCatalogWindow('consumables')} />
+                  <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={ACCESSORIES_CATALOG.length} onClick={() => setCatalogWindow('accessories')} />
+                  <StoreCatalogButton label="Specialty Shop Tools" icon={<Wrench className="h-4 w-4" />} accent={C.orange} count={SPECIALTY_TOOLS_CATALOG.length} onClick={() => setCatalogWindow('tools')} />
+                </>
+              }
+            />
+          )}
+
+          {role === 'pro' && (
             <HoistManager
               hoists={hoists}
               onAdd={handleAddHoist}
@@ -5289,14 +5305,6 @@ const handleSearch = async (query) => {
                 consumables={consumables}
                 onUpdateConsumable={handleUpdateConsumable}
                 onRemoveConsumable={handleRemoveConsumable}
-                storeDropdowns={
-                  <div className="space-y-2">
-                    <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={LUBRICANTS_CATALOG.length} onClick={() => setCatalogWindow('lubricants')} />
-                    <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={CONSUMABLES_CATALOG_FLAT.length} onClick={() => setCatalogWindow('consumables')} />
-                    <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={ACCESSORIES_CATALOG.length} onClick={() => setCatalogWindow('accessories')} />
-                    <StoreCatalogButton label="Specialty Shop Tools" icon={<Wrench className="h-4 w-4" />} accent={C.orange} count={SPECIALTY_TOOLS_CATALOG.length} onClick={() => setCatalogWindow('tools')} />
-                  </div>
-                }
                 custName={custName} setCustName={setCustName}
                 custPhone={custPhone} setCustPhone={setCustPhone}
                 custEmail={custEmail} setCustEmail={setCustEmail}
@@ -5336,22 +5344,22 @@ const handleSearch = async (query) => {
 
         {/* Store Catalog Windows */}
         {catalogWindow === 'lubricants' && (
-          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={LUBRICANTS_CATALOG} role={role} accent={C.orange} region={regionCode} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={LUBRICANTS_CATALOG} role={role} cartIds={cartIds} accent={C.orange} region={regionCode} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE2_BAY_ALLOCATION')}
             workshopMode={false} />
         )}
         {catalogWindow === 'consumables' && (
-          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={CONSUMABLES_CATALOG_FLAT} role={role} accent={C.cyan} region={regionCode} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Consumables Catalog" icon={<SprayCan className="h-5 w-5" />} items={CONSUMABLES_CATALOG_FLAT} role={role} cartIds={cartIds} accent={C.cyan} region={regionCode} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
         {catalogWindow === 'accessories' && (
-          <StoreCatalogWindow label="Workshop Accessories Catalog" icon={<Wrench className="h-5 w-5" />} items={ACCESSORIES_CATALOG} role={role} accent={C.emerald} region={regionCode} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Workshop Accessories Catalog" icon={<Wrench className="h-5 w-5" />} items={ACCESSORIES_CATALOG} role={role} cartIds={cartIds} accent={C.emerald} region={regionCode} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
         {catalogWindow === 'tools' && (
-          <StoreCatalogWindow label="Specialty Shop Tools Catalog" icon={<Wrench className="h-5 w-5" />} items={SPECIALTY_TOOLS_CATALOG} role={role} accent={C.orange} region={regionCode} onClose={() => setCatalogWindow(null)}
+          <StoreCatalogWindow label="Specialty Shop Tools Catalog" icon={<Wrench className="h-5 w-5" />} items={SPECIALTY_TOOLS_CATALOG} role={role} cartIds={cartIds} accent={C.orange} region={regionCode} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE1_INTERNAL_EXPENSE')}
             workshopMode={false} />
         )}
