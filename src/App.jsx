@@ -1320,21 +1320,24 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [saveCard, setSaveCard] = useState(false);
-  const r = region || 'VIC';
+  const regionConfig = typeof region === 'string'
+    ? (REGIONS[region] || REGIONS.AU)
+    : (region || REGIONS.AU);
+  const r = regionConfig.code;
   if (!open) return null;
   const f = (n) => fmt(n, r);
   const partsTotal = cart.reduce((s, c) => s + c.unitPrice * c.qty, 0);
   const individualShippingTotal = cart.reduce((s, c) => s + itemShipping(c, r) * c.qty, 0);
-  const consolidated = calcConsolidatedFreight(cart, r);
+  const consolidated = calcConsolidatedFreight(cart, regionConfig);
   const shippingTotal = consolidationEnabled ? consolidated.fee : individualShippingTotal;
   const subtotal = partsTotal + shippingTotal;
-  const taxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(r, usStateCode) : 0.10;
+  const taxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(regionConfig, usStateCode) : 0.10;
   const tax = subtotal * taxRate;
   const grand = subtotal + tax;
 
   // Aggregate courier dispatch legs
   const courierLegs = cart.length > 0 ? cart.map(item => {
-    const oc = getOptimalCourier(item, r);
+    const oc = getOptimalCourier(item, regionConfig);
     return { item, ...oc };
   }) : [];
   const activeCouriers = [...new Set(courierLegs.map(l => l.network?.name).filter(Boolean))];
@@ -1344,7 +1347,9 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
     if (!selectedPaymentMethod) return;
     setProcessing(true);
     try {
-      if (typeof onCheckout === 'function') await onCheckout(selectedPaymentMethod);
+      if (typeof onCheckout === 'function') {
+        await onCheckout(selectedPaymentMethod, { partsTotal, shippingTotal, tax, grand });
+      }
     } finally {
       setProcessing(false);
       setSelectedPaymentMethod(null);
@@ -3915,7 +3920,7 @@ export default function App() {
   const [usStateCode, setUsStateCode] = useState(() => { try { return localStorage.getItem('partsforge_us_state') || 'CA'; } catch { return 'CA'; } });
   
   const region = (typeof REGIONS !== 'undefined' && REGIONS[regionCode]) ? REGIONS[regionCode] : 'VIC';
-  const effectiveTaxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(regionCode, usStateCode) : 0.10;
+  const effectiveTaxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(region, usStateCode) : 0.10;
   
   const handleRegionChange = (code) => { setRegionCode(code); try { localStorage.setItem('partsforge_region', code); } catch {} };
   const handleUsStateChange = (code) => { setUsStateCode(code); try { localStorage.setItem('partsforge_us_state', code); } catch {} };
@@ -4733,9 +4738,23 @@ const handleSearch = async (query) => {
   }, []);
 
   // ── Checkout: dispatch courier, hold items pending handshake verification ──
-  const handleCheckout = async () => {
+  const handleCheckout = async (_selectedPaymentMethod, checkoutSummary = {}) => {
     const cartSnapshot = [...purchaseCart];
-    const cartTotal = cartSnapshot.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
+    const checkoutItems = [
+      ...cartSnapshot,
+      ...(Number(checkoutSummary.shippingTotal) > 0 ? [{
+        id: `freight-${Date.now()}`,
+        title: 'Courier Delivery',
+        unitPrice: Number(checkoutSummary.shippingTotal),
+        qty: 1,
+      }] : []),
+      ...(Number(checkoutSummary.tax) > 0 ? [{
+        id: `tax-${Date.now()}`,
+        title: regionCode.startsWith('US') ? 'Sales Tax' : 'GST',
+        unitPrice: Number(checkoutSummary.tax),
+        qty: 1,
+      }] : []),
+    ];
 
     // Employee sub-user gating: block direct payment, route to master approval queue
     if (isEmployeeSubUser) {
@@ -4747,7 +4766,7 @@ const handleSearch = async (query) => {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: cartSnapshot, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
+        body: JSON.stringify({ items: checkoutItems, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
       });
       const data = await response.json();
       if (!response.ok || !data.checkoutUrl) throw new Error(data?.error || 'CHECKOUT_CREATION_FAILED');
