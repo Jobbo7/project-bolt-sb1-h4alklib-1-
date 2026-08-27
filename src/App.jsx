@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, Component } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect, Component } from 'react';
 import {
   ShieldCheck, Wrench, Mail, Lock, Eye, EyeOff, KeyRound, Search, Camera,
   ScanLine, BadgeCheck, CheckCircle2, AlertTriangle, X, ChevronDown,
@@ -53,6 +53,14 @@ const C = {
 };
 
 const uid = () => `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+const readStored = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+};
 const fmt = (n, regionCode) => {
   const activeCode = typeof regionCode === 'string' ? regionCode : 'AU_VIC';
   const targetRegion = (typeof REGIONS !== 'undefined' && REGIONS[activeCode]) ? REGIONS[activeCode] : { locale: 'en-AU', currency: 'AUD' };
@@ -457,10 +465,15 @@ function Field({ label, value, onChange, mono }) {
 
 // ─── Scanner Panel ───────────────────────────────────────────────────────────
 function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scanning, hoists, selectedHoistId, onHoistChange }) {
-  const [plate, setPlate] = useState('');
-  const [vin, setVin] = useState('');
-  const [region, setRegion] = useState('AU_VIC');
-  const [mode, setMode] = useState('rego');
+  const [plate, setPlate] = useState(() => readStored('partsforge_scanner_plate', ''));
+  const [vin, setVin] = useState(() => readStored('partsforge_scanner_vin', ''));
+  const [region, setRegion] = useState(() => readStored('partsforge_scanner_region', 'AU_VIC'));
+  const [mode, setMode] = useState(() => readStored('partsforge_scanner_mode', 'rego'));
+
+  useEffect(() => { try { localStorage.setItem('partsforge_scanner_plate', JSON.stringify(plate)); } catch {} }, [plate]);
+  useEffect(() => { try { localStorage.setItem('partsforge_scanner_vin', JSON.stringify(vin)); } catch {} }, [vin]);
+  useEffect(() => { try { localStorage.setItem('partsforge_scanner_region', JSON.stringify(region)); } catch {} }, [region]);
+  useEffect(() => { try { localStorage.setItem('partsforge_scanner_mode', JSON.stringify(mode)); } catch {} }, [mode]);
   
   const val = mode === 'vin' ? vin : plate;
 
@@ -771,7 +784,8 @@ function HoistManager({ hoists, onAdd, onRename, onStatusChange }) {
 
 // ─── Parts Search ────────────────────────────────────────────────────────────
 function PartsSearch({ onSearch, loading }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => readStored('partsforge_parts_query', ''));
+  useEffect(() => { try { localStorage.setItem('partsforge_parts_query', JSON.stringify(query)); } catch {} }, [query]);
   const submit = () => { if (query.trim()) onSearch(query.trim()); };
   return (
     <div className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
@@ -2129,6 +2143,29 @@ function JobCard({
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
         <FileText className="h-3.5 w-3.5" style={{ color: C.orange }} /> Active Job Card
       </div>
+
+      {vehicle ? (
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.cyan}40`, background: `${C.cyan}08` }}>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.cyan }}>Assigned Vehicle</div>
+              <div className="mt-1 text-sm font-bold text-slate-100">
+                {vehicle.year || 'YEAR UNKNOWN'} {vehicle.make || 'UNKNOWN MAKE'} {vehicle.model || 'UNKNOWN MODEL'}
+              </div>
+              <div className="mt-0.5 font-mono text-[10px]" style={{ color: C.textDim }}>
+                REGO: {vehicle.rego || 'NOT SUPPLIED'} · VIN: {vehicle.vin || 'NOT SUPPLIED'}
+              </div>
+            </div>
+            <span className="rounded-full px-2 py-1 text-[10px] font-bold" style={{ background: `${C.orange}15`, color: C.orange }}>
+              {vehicle.hoistName || vehicle.hoistId || 'HOIST UNASSIGNED'}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-lg border p-3 text-xs" style={{ borderColor: `${C.orange}30`, color: C.orange }}>
+          No vehicle is assigned. Complete a rego/VIN lookup and commit it to a hoist.
+        </div>
+      )}
 
       {/* Allocation Matrix button */}
       <button onClick={onOpenAllocation} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-bold transition" style={{ borderColor: `${C.orange}40`, background: `${C.orange}08`, color: C.orange }}>
@@ -3820,9 +3857,9 @@ export default function App() {
   const handleUsStateChange = (code) => { setUsStateCode(code); try { localStorage.setItem('partsforge_us_state', code); } catch {} };
 
   // Vehicle & garage state
-  const [garageVehicles, setGarageVehicles] = useState([]);
-  const [activeVehicleId, setActiveVehicleId] = useState(null);
-  const [intakeHoistId, setIntakeHoistId] = useState('');
+  const [garageVehicles, setGarageVehicles] = useState(() => readStored('partsforge_garage_vehicles', []));
+  const [activeVehicleId, setActiveVehicleId] = useState(() => readStored('partsforge_active_vehicle_id', null));
+  const [intakeHoistId, setIntakeHoistId] = useState(() => readStored('partsforge_intake_hoist_id', ''));
   const [hoists, setHoists] = useState(() => {
     try {
       const saved = localStorage.getItem('partsforge_hoists');
@@ -3833,46 +3870,46 @@ export default function App() {
   });
   const [regoLoading, setRegoLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [vehicle, setVehicle] = useState(null);
+  const [vehicle, setVehicle] = useState(() => readStored('partsforge_active_vehicle', null));
 
   // Parts search
   const [partsLoading, setPartsLoading] = useState(false);
-  const [results, setResults] = useState(null);
-  const [purchaseCart, setPurchaseCart] = useState([]);
-  const [jobCart, setJobCart] = useState([]);
+  const [results, setResults] = useState(() => readStored('partsforge_parts_results', null));
+  const [purchaseCart, setPurchaseCart] = useState(() => readStored('partsforge_purchase_cart', []));
+  const [jobCart, setJobCart] = useState(() => readStored('partsforge_job_cart', []));
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [consolidationEnabled, setConsolidationEnabled] = useState(false);
 
   // Job card state
-  const [consumables, setConsumables] = useState([]);
-  const [laborHours, setLaborHours] = useState(0);
-  const [laborRate, setLaborRate] = useState(95);
-  const [taxOn, setTaxOn] = useState(true);
-  const [diagnostic, setDiagnostic] = useState('');
-  const [custName, setCustName] = useState('');
-  const [custPhone, setCustPhone] = useState('');
-  const [custEmail, setCustEmail] = useState('');
+  const [consumables, setConsumables] = useState(() => readStored('partsforge_job_consumables', []));
+  const [laborHours, setLaborHours] = useState(() => readStored('partsforge_labor_hours', 0));
+  const [laborRate, setLaborRate] = useState(() => readStored('partsforge_labor_rate', 95));
+  const [taxOn, setTaxOn] = useState(() => readStored('partsforge_tax_on', true));
+  const [diagnostic, setDiagnostic] = useState(() => readStored('partsforge_diagnostic', ''));
+  const [custName, setCustName] = useState(() => readStored('partsforge_customer_name', ''));
+  const [custPhone, setCustPhone] = useState(() => readStored('partsforge_customer_phone', ''));
+  const [custEmail, setCustEmail] = useState(() => readStored('partsforge_customer_email', ''));
 
   // Saved jobs & invoices
-  const [hoistJobs, setHoistJobs] = useState([]);
-  const [activeHoistJobId, setActiveHoistJobId] = useState(null);
-  const [unpaidInvoices, setUnpaidInvoices] = useState([]);
-  const [paidInvoices, setPaidInvoices] = useState([]);
+  const [hoistJobs, setHoistJobs] = useState(() => readStored('partsforge_hoist_jobs', []));
+  const [activeHoistJobId, setActiveHoistJobId] = useState(() => readStored('partsforge_active_job_id', null));
+  const [unpaidInvoices, setUnpaidInvoices] = useState(() => readStored('partsforge_unpaid_invoices', []));
+  const [paidInvoices, setPaidInvoices] = useState(() => readStored('partsforge_paid_invoices', []));
   const [checkoutInvoice, setCheckoutInvoice] = useState(null);
   const [saveToast, setSaveToast] = useState(null);
 
   // Vault
-  const [vault, setVault] = useState([]);
+  const [vault, setVault] = useState(() => readStored('partsforge_delivered_stock', []));
   const [allocModalOpen, setAllocModalOpen] = useState(false);
   const [catalogWindow, setCatalogWindow] = useState(null);
   const [garageFolderOpen, setGarageFolderOpen] = useState(false);
 
   // Live Bank Feed + Accounting Ledger (global purchase dispatch)
-  const [bankFeedEntries, setBankFeedEntries] = useState([]);
-  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [bankFeedEntries, setBankFeedEntries] = useState(() => readStored('partsforge_bank_entries', []));
+  const [ledgerEntries, setLedgerEntries] = useState(() => readStored('partsforge_ledger_entries', []));
 
   // Workshop Expense Ledger — internal purchases routed OUT of client invoices
-  const [workshopExpenses, setWorkshopExpenses] = useState([]);
+  const [workshopExpenses, setWorkshopExpenses] = useState(() => readStored('partsforge_workshop_expenses', []));
 
   // Categories that are STRICTLY workshop-internal — never billable to a client job card
   const WORKSHOP_ONLY_CATEGORIES = new Set(['consumable', 'accessory', 'tool']);
@@ -4306,15 +4343,46 @@ const handleSearch = async (query) => {
 
   // ── Multi-Leg Courier Dispatch Pipeline (4 logistics gates) ──
   const [courierPipelineOpen, setCourierPipelineOpen] = useState(false);
-  const [dispatchJob, setDispatchJob] = useState(null);
+  const [dispatchJob, setDispatchJob] = useState(() => readStored('partsforge_dispatch_job', null));
   const [freightManifestOpen, setFreightManifestOpen] = useState(false);
-  const [shipmentStatus, setShipmentStatus] = useState('PENDING');
-  const [pendingDeliveryCart, setPendingDeliveryCart] = useState([]);
+  const [shipmentStatus, setShipmentStatus] = useState(() => readStored('partsforge_shipment_status', 'PENDING'));
+  const [pendingDeliveryCart, setPendingDeliveryCart] = useState(() => readStored('partsforge_pending_delivery', []));
 
   // ── Employee Sub-Tier Linking & Pre-Purchase Approval Gateway ──
   const [linkedEmployees, setLinkedEmployees] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [employeeCodeInput, setEmployeeCodeInput] = useState('');
+
+  const persist = (key, value) => {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  };
+
+  useEffect(() => persist('partsforge_garage_vehicles', garageVehicles), [garageVehicles]);
+  useEffect(() => persist('partsforge_active_vehicle_id', activeVehicleId), [activeVehicleId]);
+  useEffect(() => persist('partsforge_active_vehicle', vehicle), [vehicle]);
+  useEffect(() => persist('partsforge_intake_hoist_id', intakeHoistId), [intakeHoistId]);
+  useEffect(() => persist('partsforge_parts_results', results), [results]);
+  useEffect(() => persist('partsforge_purchase_cart', purchaseCart), [purchaseCart]);
+  useEffect(() => persist('partsforge_job_cart', jobCart), [jobCart]);
+  useEffect(() => persist('partsforge_job_consumables', consumables), [consumables]);
+  useEffect(() => persist('partsforge_labor_hours', laborHours), [laborHours]);
+  useEffect(() => persist('partsforge_labor_rate', laborRate), [laborRate]);
+  useEffect(() => persist('partsforge_tax_on', taxOn), [taxOn]);
+  useEffect(() => persist('partsforge_diagnostic', diagnostic), [diagnostic]);
+  useEffect(() => persist('partsforge_customer_name', custName), [custName]);
+  useEffect(() => persist('partsforge_customer_phone', custPhone), [custPhone]);
+  useEffect(() => persist('partsforge_customer_email', custEmail), [custEmail]);
+  useEffect(() => persist('partsforge_hoist_jobs', hoistJobs), [hoistJobs]);
+  useEffect(() => persist('partsforge_active_job_id', activeHoistJobId), [activeHoistJobId]);
+  useEffect(() => persist('partsforge_unpaid_invoices', unpaidInvoices), [unpaidInvoices]);
+  useEffect(() => persist('partsforge_paid_invoices', paidInvoices), [paidInvoices]);
+  useEffect(() => persist('partsforge_delivered_stock', vault), [vault]);
+  useEffect(() => persist('partsforge_bank_entries', bankFeedEntries), [bankFeedEntries]);
+  useEffect(() => persist('partsforge_ledger_entries', ledgerEntries), [ledgerEntries]);
+  useEffect(() => persist('partsforge_workshop_expenses', workshopExpenses), [workshopExpenses]);
+  useEffect(() => persist('partsforge_dispatch_job', dispatchJob), [dispatchJob]);
+  useEffect(() => persist('partsforge_shipment_status', shipmentStatus), [shipmentStatus]);
+  useEffect(() => persist('partsforge_pending_delivery', pendingDeliveryCart), [pendingDeliveryCart]);
 
   const handleOpenCourierPipeline = () => setCourierPipelineOpen(true);
   const handleCloseCourierPipeline = () => setCourierPipelineOpen(false);
