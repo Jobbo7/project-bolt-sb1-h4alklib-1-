@@ -6,7 +6,8 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
-  if (!process.env.STRIPE_SECRET_KEY) {
+  const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || '').trim();
+  if (!stripeSecretKey) {
     return res.status(503).json({ error: 'PAYMENTS_NOT_CONFIGURED' });
   }
 
@@ -21,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey);
     const intent = await stripe.paymentIntents.create({
       amount,
       currency,

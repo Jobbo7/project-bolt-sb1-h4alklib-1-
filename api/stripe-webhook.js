@@ -13,18 +13,20 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
-  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+  const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || '').trim();
+  const webhookSecret = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+  if (!stripeSecretKey || !webhookSecret) {
     return res.status(503).json({ error: 'STRIPE_WEBHOOK_NOT_CONFIGURED' });
   }
 
   try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey);
     const signature = req.headers['stripe-signature'];
     if (!signature) return res.status(400).json({ error: 'MISSING_STRIPE_SIGNATURE' });
     const event = stripe.webhooks.constructEvent(
       await readRawBody(req),
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET,
+      webhookSecret,
     );
 
     switch (event.type) {
