@@ -702,9 +702,9 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
               style={{ borderColor: C.border, background: C.bg }}
             >
               <option value="">Select an available hoist...</option>
-              {(hoists || []).map((hoist) => (
-                <option key={hoist.id} value={hoist.id} disabled={hoist.status === 'out_of_service'}>
-                  {hoist.name}{hoist.status === 'occupied' ? ' — OCCUPIED' : hoist.status === 'out_of_service' ? ' — OUT OF SERVICE' : ''}
+              {(hoists || []).filter(hoist => hoist.status === 'available').map((hoist) => (
+                <option key={hoist.id} value={hoist.id}>
+                  {hoist.name} — AVAILABLE
                 </option>
               ))}
             </select>
@@ -2815,7 +2815,7 @@ function UnpaidInvoicesDirectory({ invoices, onSettle, onVerifyBank, region }) {
 }
 
 // ─── Account Settings Dropdown ───────────────────────────────────────────────
-function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, paidInvoices, onLinkAto, onConnectLedger, onInviteAccountant, onConnectBankFeed, bankFeedStatus, onExportToAccounting, onEmailAccountant, regionCode, workshopExpenses, onExportWorkshopExpense, onDeleteWorkshopExpense, userEmail, teamLinkCode, onGenerateTeamLinkCode, linkedEmployees, savedJobs, onResumeJob, onDeleteJob, hoists }) {
+function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, paidInvoices, onLinkAto, onConnectLedger, onInviteAccountant, onConnectBankFeed, bankFeedStatus, onExportToAccounting, onEmailAccountant, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, workshopExpenses, onExportWorkshopExpense, onDeleteWorkshopExpense, userEmail, teamLinkCode, onGenerateTeamLinkCode, linkedEmployees, savedJobs, onResumeJob, onDeleteJob, hoists, onAddHoist, onRenameHoist, onHoistStatusChange }) {
   const [open, setOpen] = useState(false);
   const [subFolder, setSubFolder] = useState(null);
   const [atoStatus, setAtoStatus] = useState(null);
@@ -2836,11 +2836,10 @@ function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, 
 
   const folders = [
     { id: 'hoist_jobs', label: `On the Hoist — In-Progress Jobs (${savedJobs?.length || 0})`, icon: <History className="h-4 w-4" /> },
-    { id: 'financial', label: 'Financial Hub', icon: <Landmark className="h-4 w-4" /> },
+    { id: 'hoists', label: 'Workshop Hoists', icon: <Wrench className="h-4 w-4" /> },
+    { id: 'accounting', label: 'Accounting', icon: <Landmark className="h-4 w-4" /> },
     { id: 'corporate', label: 'Corporate Accounts', icon: <Building2 className="h-4 w-4" /> },
-    { id: 'bankfeed', label: 'Live Bank Feed (CDR)', icon: <ShieldCheck className="h-4 w-4" /> },
     { id: 'residency', label: 'Data Residency & Compliance', icon: <Database className="h-4 w-4" /> },
-    { id: 'archive', label: 'Invoice Archive Ledger', icon: <Archive className="h-4 w-4" /> },
     { id: 'team', label: 'Link & Manage Team Employees', icon: <Users className="h-4 w-4" /> },
   ];
 
@@ -2854,7 +2853,7 @@ function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, 
       {open && (
         <>
           <div className="fixed inset-0 z-[70]" onClick={closeAll} />
-          <div className="absolute right-0 z-[71] mt-2 w-80 overflow-hidden rounded-xl border shadow-2xl" style={{ background: C.bg, borderColor: C.border }}>
+          <div className="absolute right-0 z-[71] mt-2 max-h-[82vh] w-[min(92vw,44rem)] overflow-y-auto rounded-xl border shadow-2xl" style={{ background: C.bg, borderColor: C.border }}>
             {!subFolder ? (
               <div className="p-2">
                 {folders.map(f => (
@@ -2867,7 +2866,7 @@ function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, 
               </div>
             ) : (
               <div className="p-4">
-                <button onClick={() => setSubFolder(null)} className="mb-3 flex items-center gap-1.5 text-xs" style={{ color: C.textDim }}>
+                <button onClick={() => setSubFolder(['financial', 'bankfeed', 'region_currency', 'archive', 'live_ledger'].includes(subFolder) ? 'accounting' : null)} className="mb-3 flex items-center gap-1.5 text-xs" style={{ color: C.textDim }}>
                   <ArrowLeft className="h-3 w-3" /> Back
                 </button>
 
@@ -2881,6 +2880,38 @@ function AccountSettingsDropdown({ corpProfile, setCorpProfile, matchedAccount, 
                     onDelete={onDeleteJob}
                     bayOptions={(hoists || []).filter(hoist => hoist.status === 'available')}
                   />
+                )}
+
+                {subFolder === 'hoists' && (
+                  <HoistManager hoists={hoists || []} onAdd={onAddHoist} onRename={onRenameHoist} onStatusChange={onHoistStatusChange} />
+                )}
+
+                {subFolder === 'accounting' && (
+                  <div className="space-y-2">
+                    <h4 className="mb-3 text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Accounting Files</h4>
+                    {[
+                      ['financial', 'Financial Hub', <Landmark className="h-4 w-4" />],
+                      ['bankfeed', 'Live Bank Feed', <ShieldCheck className="h-4 w-4" />],
+                      ['live_ledger', 'Bank Feed & Accounting Ledger', <Activity className="h-4 w-4" />],
+                      ['region_currency', 'Region & Currency', <Globe className="h-4 w-4" />],
+                      ['archive', 'Invoices & Workshop Expenses', <Archive className="h-4 w-4" />],
+                    ].map(([id, label, icon]) => (
+                      <button key={id} onClick={() => setSubFolder(id)} className="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-xs font-semibold" style={{ borderColor: C.border, color: C.text }}>
+                        <span style={{ color: C.orange }}>{icon}</span><span className="flex-1">{label}</span><ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {subFolder === 'region_currency' && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Region & Currency</h4>
+                    <GlobalRegionSelector regionCode={regionCode} onRegionChange={onRegionChange} usStateCode={usStateCode} onUsStateChange={onUsStateChange} />
+                  </div>
+                )}
+
+                {subFolder === 'live_ledger' && (
+                  <BankFeedPanel bankFeedEntries={bankFeedEntries || []} ledgerEntries={ledgerEntries || []} region={regionCode} />
                 )}
 
                 {subFolder === 'financial' && (
@@ -3914,6 +3945,7 @@ export default function App() {
   const [vault, setVault] = useState(() => readStored('partsforge_delivered_stock', []));
   const [allocModalOpen, setAllocModalOpen] = useState(false);
   const [catalogWindow, setCatalogWindow] = useState(null);
+  const [partsSearchOpen, setPartsSearchOpen] = useState(false);
   const [garageFolderOpen, setGarageFolderOpen] = useState(false);
 
   // Live Bank Feed + Accounting Ledger (global purchase dispatch)
@@ -4806,6 +4838,14 @@ const handleSearch = async (query) => {
     }
     setSaveToast(`Invoice ${invoice.invoiceNo} sent to ${custEmail || 'customer'}`);
     setTimeout(() => setSaveToast(null), 4000);
+
+    const completedHoistId = vehicle?.hoistId || null;
+    if (completedHoistId) {
+      saveHoists(hoists.map(h => h.id === completedHoistId ? { ...h, status: 'available', activeVehicleId: null } : h));
+    }
+    if (vehicle?.id) {
+      setGarageVehicles(prev => prev.map(v => v.id === vehicle.id ? { ...v, hoistId: null, hoistName: null } : v));
+    }
     
     // Clear active form
     setJobCart([]);
@@ -5168,7 +5208,6 @@ const handleSearch = async (query) => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <GlobalRegionSelector regionCode={regionCode} onRegionChange={handleRegionChange} usStateCode={usStateCode} onUsStateChange={handleUsStateChange} />
               <button onClick={() => setIsCartOpen(true)} className="relative flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition" style={{ borderColor: C.border, background: C.panel, color: C.text }}>
                 <ShoppingCart className="h-4 w-4" style={{ color: C.orange }} /> Cart
                 {purchaseCart.length > 0 && <span className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-slate-950" style={{ background: C.orange }}>{purchaseCart.length}</span>}
@@ -5185,6 +5224,11 @@ const handleSearch = async (query) => {
                 onExportToAccounting={handleExportToAccounting}
                 onEmailAccountant={handleEmailAccountant}
                 regionCode={regionCode}
+                onRegionChange={handleRegionChange}
+                usStateCode={usStateCode}
+                onUsStateChange={handleUsStateChange}
+                bankFeedEntries={bankFeedEntries}
+                ledgerEntries={ledgerEntries}
                 workshopExpenses={workshopExpenses}
                 onExportWorkshopExpense={handleExportWorkshopExpense}
                 onDeleteWorkshopExpense={handleDeleteWorkshopExpense}
@@ -5196,6 +5240,9 @@ const handleSearch = async (query) => {
                 onResumeJob={handleResumeJob}
                 onDeleteJob={handleDeleteHoistJob}
                 hoists={hoists}
+                onAddHoist={handleAddHoist}
+                onRenameHoist={handleRenameHoist}
+                onHoistStatusChange={handleHoistStatusChange}
               />
               {pendingApprovals.length > 0 && (
                 <EmployeeApprovalTable
@@ -5249,6 +5296,7 @@ const handleSearch = async (query) => {
               onRemoveConsumable={handleRemoveConsumable}
               storeDropdowns={
                 <>
+                  <StoreCatalogButton label="Parts Search" icon={<PackageSearch className="h-4 w-4" />} accent={C.orange} count={results ? Object.values(results).flat().length : 0} onClick={() => setPartsSearchOpen(true)} />
                   <StoreCatalogButton label="Lubricants" icon={<FlaskConical className="h-4 w-4" />} accent={C.orange} count={LUBRICANTS_CATALOG.length} onClick={() => setCatalogWindow('lubricants')} />
                   <StoreCatalogButton label="Consumables" icon={<SprayCan className="h-4 w-4" />} accent={C.cyan} count={CONSUMABLES_CATALOG_FLAT.length} onClick={() => setCatalogWindow('consumables')} />
                   <StoreCatalogButton label="Workshop Accessories" icon={<Wrench className="h-4 w-4" />} accent={C.emerald} count={ACCESSORIES_CATALOG.length} onClick={() => setCatalogWindow('accessories')} />
@@ -5257,19 +5305,6 @@ const handleSearch = async (query) => {
               }
             />
           )}
-
-          {role === 'pro' && (
-            <HoistManager
-              hoists={hoists}
-              onAdd={handleAddHoist}
-              onRename={handleRenameHoist}
-              onStatusChange={handleHoistStatusChange}
-            />
-          )}
-
-          {/* Parts Search + Results */}
-          <PartsSearch onSearch={handleSearch} loading={partsLoading} />
-          <PartsResults results={results} role={role} onAdd={handleAddToCart} onAddConsumable={handleAddConsumable} cartIds={cartIds} region={regionCode} />
 
           {/* DIY Driver: Modular Store Catalog Buttons */}
           {role === 'diy' && (
@@ -5319,9 +5354,6 @@ const handleSearch = async (query) => {
 
                           <VaultPanel vault={vault} onMount={handleMountVaultItem} bayOptions={hoists} region={regionCode} />
 
-              {/* Live Bank Feed + Accounting Ledger */}
-              <BankFeedPanel bankFeedEntries={bankFeedEntries} ledgerEntries={ledgerEntries} region={regionCode} />
-
               <UnpaidInvoicesDirectory invoices={unpaidInvoices} onSettle={(inv) => setCheckoutInvoice(inv)} onVerifyBank={handleVerifyBankFeed} region={regionCode} />
             </>
           )}
@@ -5343,6 +5375,20 @@ const handleSearch = async (query) => {
         />
 
         {/* Store Catalog Windows */}
+        {partsSearchOpen && (
+          <div className="fixed inset-0 z-[85] overflow-y-auto" style={{ background: C.bg }}>
+            <div className="sticky top-0 z-10 border-b" style={{ borderColor: C.border, background: `${C.bg}f0` }}>
+              <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider" style={{ color: C.orange }}><PackageSearch className="h-5 w-5" /> Parts Search</div>
+                <button onClick={() => setPartsSearchOpen(false)} className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold" style={{ borderColor: C.border, color: C.text }}><X className="h-3.5 w-3.5" /> Close Parts Search</button>
+              </div>
+            </div>
+            <div className="mx-auto max-w-5xl space-y-4 px-4 py-4">
+              <PartsSearch onSearch={handleSearch} loading={partsLoading} />
+              <PartsResults results={results} role={role} onAdd={handleAddToCart} onAddConsumable={handleAddConsumable} cartIds={cartIds} region={regionCode} />
+            </div>
+          </div>
+        )}
         {catalogWindow === 'lubricants' && (
           <StoreCatalogWindow label="Lubricants Catalog" icon={<FlaskConical className="h-5 w-5" />} items={LUBRICANTS_CATALOG} role={role} cartIds={cartIds} accent={C.orange} region={regionCode} onClose={() => setCatalogWindow(null)}
             onAddToCart={(item, qty) => handleAddToCart(item, 'local', qty, 'LINE2_BAY_ALLOCATION')}
