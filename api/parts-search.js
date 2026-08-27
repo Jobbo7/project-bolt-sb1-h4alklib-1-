@@ -79,9 +79,84 @@ export default async function handler(req, res) {
         .toLowerCase()
     };
 
-    console.log(
-      `📡 PartsForge parts search: "${cleanQuery}" for ${vehicle.year || ''} ${vehicle.make} ${vehicle.model}`
+   console.log(
+  `📡 PartsForge parts search: "${cleanQuery}" for ${vehicle.year || ''} ${vehicle.make} ${vehicle.model}`
+);
+
+// ─────────────────────────────────────────────
+// AUTHORITATIVE PARTS CATALOGUE LOOKUP
+// ─────────────────────────────────────────────
+let catalogueData = null;
+let catalogueParts = [];
+
+try {
+  const catalogueUrl = new URL(
+    `https://${req.headers.host}/api/catalogue-search`
+  );
+
+  catalogueUrl.searchParams.set('q', cleanQuery);
+
+  if (vehicle.vin) {
+    catalogueUrl.searchParams.set('vin', vehicle.vin);
+  }
+
+  if (vehicle.make) {
+    catalogueUrl.searchParams.set('make', vehicle.make);
+  }
+
+  if (vehicle.model) {
+    catalogueUrl.searchParams.set('model', vehicle.model);
+  }
+
+  if (vehicle.year) {
+    catalogueUrl.searchParams.set('year', String(vehicle.year));
+  }
+
+  if (vehicle.engine) {
+    catalogueUrl.searchParams.set('engine', vehicle.engine);
+  }
+
+  if (vehicle.engineCode) {
+    catalogueUrl.searchParams.set(
+      'engineCode',
+      vehicle.engineCode
     );
+  }
+
+  if (vehicle.series) {
+    catalogueUrl.searchParams.set('series', vehicle.series);
+  }
+
+  if (vehicle.variant) {
+    catalogueUrl.searchParams.set('variant', vehicle.variant);
+  }
+
+  console.log(
+    `📚 Checking authoritative catalogue for "${cleanQuery}"`
+  );
+
+  const catalogueResponse = await fetch(
+    catalogueUrl.toString()
+  );
+
+  if (catalogueResponse.ok) {
+    catalogueData = await catalogueResponse.json();
+
+    if (Array.isArray(catalogueData?.parts)) {
+      catalogueParts = catalogueData.parts;
+    }
+
+    console.log(
+      `📚 Catalogue result: ${catalogueParts.length} authoritative part(s)`
+    );
+  }
+
+} catch (catalogueError) {
+  console.warn(
+    '⚠️ Catalogue provider unavailable; continuing with supplier search:',
+    catalogueError
+  );
+}
 
     // Search by part description first.
     const { data: dbMatches, error: dbError } = await supabase
