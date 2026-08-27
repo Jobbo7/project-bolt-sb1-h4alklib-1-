@@ -1,28 +1,41 @@
-// ─── PARTSFORGE SECURE STRIPE COMMERCIAL FINANCIAL GATEWAY ───
+import Stripe from 'stripe';
+
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
+  }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(503).json({ error: 'PAYMENTS_NOT_CONFIGURED' });
+  }
+
+  const amount = Number(req.body?.amount);
+  const currency = String(req.body?.currency || 'aud').toLowerCase();
+  const orderId = String(req.body?.orderId || '').slice(0, 100);
+  if (!Number.isInteger(amount) || amount < 50 || amount > 99_999_999) {
+    return res.status(422).json({ error: 'INVALID_AMOUNT' });
+  }
+  if (!/^[a-z]{3}$/.test(currency)) {
+    return res.status(422).json({ error: 'INVALID_CURRENCY' });
   }
 
   try {
-    const { items, amount } = req.body;
-    console.log(`💳 Initialising secure transaction stream via Vercel for transaction volume: $${(amount / 100).toFixed(2)}`);
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const intent = await stripe.paymentIntents.create({
+      amount,
+      currency,
+      automatic_payment_methods: { enabled: true },
+      metadata: { orderId },
+    }, orderId ? { idempotencyKey: `partsforge-${orderId}` } : undefined);
 
     return res.status(200).json({
-      success: true,
-      clientSecret: "pi_mock_secret_token_" + Math.random().toString(36).substring(2),
-      checkoutUrl: "https://stripe.com",
-      msg: "Stripe secure ledger vault instance mapped successfully"
+      paymentIntentId: intent.id,
+      clientSecret: intent.client_secret,
+      status: intent.status,
     });
-
   } catch (error) {
-    console.error("❌ Stripe accounting ledger core process crash:", error);
-    return res.status(500).json({ error: "Internal payment processor pipeline error" });
+    console.error('Stripe PaymentIntent error', error);
+    return res.status(502).json({ error: 'PAYMENT_PROVIDER_FAILED' });
   }
 }

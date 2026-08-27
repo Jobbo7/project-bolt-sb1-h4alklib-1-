@@ -36,9 +36,10 @@ export default async function handler(req, res) {
 
       const cleanBase64 = String(image);
 
-      const originUrl = `https://${req.headers.host}`;
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const originUrl = `${protocol}://${req.headers.host}`;
 
-      const ocrResponse = await fetch(`${originUrl}/api/cloud-ocr`, {
+      const ocrResponse = await fetch(`${originUrl}/api/ocr-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -314,8 +315,9 @@ if (vin) {
   try {
     console.log(`📡 Auto-decoding registry VIN: ${vin}`);
 
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
     const vinLookupUrl =
-      `https://${req.headers.host}/api/vin-lookup?vin=${encodeURIComponent(vin)}`;
+      `${protocol}://${req.headers.host}/api/vin-lookup?vin=${encodeURIComponent(vin)}`;
 
     const vinResponse = await fetch(vinLookupUrl);
 

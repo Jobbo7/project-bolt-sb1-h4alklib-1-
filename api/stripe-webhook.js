@@ -1,47 +1,45 @@
-import Buffer from 'buffer';
+import Stripe from 'stripe';
 
-export const config = {
-  api: {
-    bodyParser: false, // Disables Vercel body parsing to preserve raw signatures required by Stripe
-  },
-};
+export const config = { api: { bodyParser: false } };
+
+async function readRawBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return Buffer.concat(chunks);
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method rejection parameter' });
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
-
-  // Raw body accumulator layer to check against Stripe signature tampering
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.Buffer.from(chunk) : chunk);
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'STRIPE_WEBHOOK_NOT_CONFIGURED' });
   }
-  const rawBody = Buffer.Buffer.concat(chunks).toString('utf8');
-  const stripeSignature = req.headers['stripe-signature'];
-
-  console.log("📡 Incoming Stripe accounting payload caught on secure webhook vector node");
 
   try {
-    // 🏢 DYNAMIC PRODUCTION PARSING HANDSHAKE
-    // In production, Stripe verifies signatures. For testing, we read the payment status safely.
-    const paymentEnvelope = JSON.parse(rawBody);
-    const eventType = paymentEnvelope.type;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const signature = req.headers['stripe-signature'];
+    if (!signature) return res.status(400).json({ error: 'MISSING_STRIPE_SIGNATURE' });
+    const event = stripe.webhooks.constructEvent(
+      await readRawBody(req),
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET,
+    );
 
-    if (eventType === 'payment_intent.succeeded') {
-      const chargeSession = paymentEnvelope.data.object;
-      const invoiceVolume = chargeSession.amount / 100;
-      
-      console.log(`💰 Verified Clear Funds: A$${invoiceVolume.toFixed(2)} credited to your merchant ledger.`);
-      console.log(`🔧 Workshop Garage Bay Reference ID: ${chargeSession.metadata?.garageBayId || 'BAY-01'}`);
-      
-      // 🟢 SUCCESS HANDSHAKE: This signals your front-end App.jsx to unlock the parts basket instantly!
-      return res.status(200).json({ received: true, status: "INVOICE_SETTLED_LIVE" });
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+      case 'payment_intent.payment_failed':
+      case 'charge.refunded':
+        console.info('Verified Stripe event', event.id, event.type);
+        break;
+      default:
+        console.info('Unhandled verified Stripe event', event.id, event.type);
     }
 
-    return res.status(200).json({ received: true, msg: "Event logged securely" });
-
-  } catch (err) {
-    console.error("❌ Stripe accounting ledger core process crash:", err);
-    return res.status(400).send(`Webhook Validation Error: ${err.message}`);
+    return res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook verification failed', error);
+    return res.status(400).json({ error: 'INVALID_STRIPE_WEBHOOK' });
   }
 }

@@ -1,59 +1,41 @@
-// ─── PARTSFORGE SECURE BACKEND CLOUD OCR PROCESSING PROXY ───
+const MAX_IMAGE_LENGTH = 8_000_000;
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  res.setHeader('Cache-Control', 'no-store');
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: "METHOD_NOT_ALLOWED" });
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
 
-  const { image } = req.body;
-  if (!image) {
-    return res.status(400).json({ error: "MISSING_IMAGE_DATA_STREAM" });
-  }
+  const apiKey = process.env.OCR_SPACE_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'OCR_NOT_CONFIGURED' });
+
+  const image = typeof req.body?.image === 'string' ? req.body.image : '';
+  if (!image) return res.status(400).json({ error: 'MISSING_IMAGE_DATA' });
+  if (image.length > MAX_IMAGE_LENGTH) return res.status(413).json({ error: 'IMAGE_TOO_LARGE' });
+
+  const base64Image = image.startsWith('data:image') ? image : `data:image/jpeg;base64,${image}`;
+  const body = new URLSearchParams({ base64Image, language: 'eng', isOverlayRequired: 'false' });
 
   try {
-    console.log("📡 Cloud Processing Engine Initialized: Preparing raw image encoding payload...");
-    
-    // Ensure the incoming image has a valid data URL prefix syntax for the ocr.space engine
-    let base64Payload = image;
-    if (!base64Payload.startsWith('data:image')) {
-      base64Payload = `data:image/png;base64,${base64Payload}`;
-    }
-
-    // Connects to the high-availability cloud OCR matrix engine wrapper over the internet
-    const response = await fetch('https://ocr.space', {
+    const response = await fetch('https://api.ocr.space/parse/image', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `base64Image=${encodeURIComponent(base64Payload)}&language=eng&apikey=K85324564888957``
+      headers: { apikey: apiKey, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
     });
-
-    if (!response.ok) throw new Error(`External OCR engine returned status: ${response.status}`);
-    const ocrData = await response.json();
-    
-    // 🟢 FIXED SYNTAX: Cleared the double optional chaining mismatch typo completely
-    const parsedText = ocrData?.ParsedResults && ocrData.ParsedResults[0] ? ocrData.ParsedResults[0].ParsedText || '' : '';
-    
-    // Clean string alphanumeric extractor filters text characters and drops background graphics noise
-    const cleanPlateString = parsedText.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
-
-    console.log(`🟢 Cloud OCR Scan Complete: Extracted text "${cleanPlateString}"`);
-    
-    // Fallback logic returns an updated timestamp seed variable instead of looping onto static mock text strings
-    const dynamicTimestampToken = `LIVE-${Date.now().toString(36).toUpperCase().slice(-5)}`;
-    return res.status(200).json({ plate: cleanPlateString || dynamicTimestampToken });
-
-  } catch (err) {
-    console.error("❌ Cloud OCR Engine Halt Exception:", err);
-    // Secure dynamic random payload generation guarantees the app completely destroys the "1EG4BX" fallback state loop
-    const randomSeedId = Math.floor(100 + Math.random() * 900);
-    return res.status(200).json({ plate: `REGO-${randomSeedId}`, error: err.message });
+    const data = await response.json();
+    if (!response.ok || data?.IsErroredOnProcessing) {
+      return res.status(502).json({ error: 'OCR_PROVIDER_FAILED' });
+    }
+    const parsed = data?.ParsedResults?.map(result => result?.ParsedText || '').join(' ') || '';
+    const candidates = parsed.toUpperCase().match(/[A-Z0-9]{2,8}/g) || [];
+    const plate = candidates.sort((a, b) => b.length - a.length)[0] || '';
+    if (!plate) return res.status(422).json({ error: 'PLATE_NOT_DETECTED' });
+    return res.status(200).json({ plate });
+  } catch (error) {
+    console.error('OCR provider error', error);
+    return res.status(502).json({ error: 'OCR_PROVIDER_UNAVAILABLE' });
   }
 }

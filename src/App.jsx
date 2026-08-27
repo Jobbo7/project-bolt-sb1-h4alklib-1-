@@ -34,6 +34,13 @@ const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, prov
 
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseAuth = supabaseUrl && supabasePublishableKey
+  ? createClient(supabaseUrl, supabasePublishableKey)
+  : null;
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -184,49 +191,43 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
 
   const canSubmit = fullName.trim() && email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
 
-  const handleAuthSubmission = (e) => {
+  const handleAuthSubmission = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
     setAuthError('');
 
-    const storageKey = `partsforge_user_${email.trim().toLowerCase()}`;
+    if (!supabaseAuth) {
+      setAuthError('Authentication is not configured. Add the Supabase URL and publishable key to the deployment environment.');
+      return;
+    }
 
     if (isSignUpMode) {
-      const accountPayload = {
-        name: fullName.trim(),
+      const { error } = await supabaseAuth.auth.signUp({
         email: email.trim(),
         password: password.trim(),
-        tier,
-        linkedAccount: tier === 'APPRENTICE' ? linkedAccount.trim() : 'Master Root Account'
-      };
-      localStorage.setItem(storageKey, JSON.stringify(accountPayload));
-      alert(`🟢 REGISTRATION MATRIX TRACKED!\nAccount securely written to local storage cache memory. You can now use the sign-in toggle link to authenticate with these exact credentials.`);
+        options: { data: { name: fullName.trim(), tier, linkedAccount: tier === 'APPRENTICE' ? linkedAccount.trim() : 'Master Root Account' } },
+      });
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+      alert('Account created. Check your email to confirm the account, then sign in.');
       setIsSignUpMode(false);
       setPassword('');
     } else {
-      const savedAccountRaw = localStorage.getItem(storageKey);
-      if (!savedAccountRaw) {
-        setAuthError('❌ ACCESS DENIED: Account profile not found on this gateway node. Please toggle to Sign Up mode first.');
+      const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: email.trim(), password: password.trim() });
+      if (error || !data?.user) {
+        setAuthError(error?.message || 'Sign-in failed.');
         return;
       }
-
-      const verifiedProfile = JSON.parse(savedAccountRaw);
-      if (verifiedProfile.password !== password.trim()) {
-        setAuthError('❌ SECURITY EXCEPTION: Invalid secure password credentials. Gateway block tracking initialized.');
-        return;
-      }
-
-      if (!verifiedProfile.name) {
-        verifiedProfile.name = fullName.trim();
-        localStorage.setItem(storageKey, JSON.stringify(verifiedProfile));
-      }
-
+      const profile = data.user.user_metadata || {};
       onAuthenticate({ 
-        name: verifiedProfile.name || fullName.trim(),
-        email: verifiedProfile.email, 
-        role: verifiedProfile.tier, 
-        linkedAccount: verifiedProfile.linkedAccount,
-        isEmployeeSubUser: verifiedProfile.tier === 'APPRENTICE'
+        name: profile.name || fullName.trim(),
+        email: data.user.email,
+        role: profile.tier || 'DIY',
+        linkedAccount: profile.linkedAccount || '',
+        technicianId: data.user.id,
+        isEmployeeSubUser: profile.tier === 'APPRENTICE'
       });
     }
   };
@@ -1339,11 +1340,11 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
   const activeCouriers = [...new Set(courierLegs.map(l => l.network?.name).filter(Boolean))];
   const distinctSellers = [...new Set(cart.map(c => c.shop || c.loc || c.seller || 'Unknown'))];
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!selectedPaymentMethod) return;
     setProcessing(true);
     try {
-      if (typeof onCheckout === 'function') onCheckout();
+      if (typeof onCheckout === 'function') await onCheckout(selectedPaymentMethod);
     } finally {
       setProcessing(false);
       setSelectedPaymentMethod(null);
@@ -1587,27 +1588,9 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                 );
               })}
             </div>
-            {selectedPaymentMethod === 'card' && (
-              <div className="mt-2.5 space-y-2 rounded-lg border p-2.5" style={{ borderColor: C.border, background: C.bg }}>
-                <div>
-                  <label className="text-[9px] font-bold uppercase" style={{ color: C.textDim }}>Card Number</label>
-                  <input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} maxLength={19} placeholder="4242 4242 4242 4242" className="mt-1 w-full rounded-md border px-2.5 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[9px] font-bold uppercase" style={{ color: C.textDim }}>Expiry</label>
-                    <input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} maxLength={5} placeholder="MM/YY" className="mt-1 w-full rounded-md border px-2.5 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase" style={{ color: C.textDim }}>CVC</label>
-                    <input value={cardCvc} onChange={(e) => setCardCvc(e.target.value)} maxLength={4} placeholder="123" className="mt-1 w-full rounded-md border px-2.5 py-2 font-mono text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} />
-                  </div>
-                </div>
-                <label className="flex cursor-pointer items-center gap-2 text-[9px]" style={{ color: C.textDim }}>
-                  <input type="checkbox" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)} className="h-3 w-3" style={{ accentColor: C.orange }} />
-                  Save card details for faster future checkouts
-                </label>
+            {selectedPaymentMethod && (
+              <div className="mt-2.5 rounded-lg border p-2.5 text-[10px]" style={{ borderColor: `${C.emerald}35`, background: `${C.emerald}07`, color: C.textDim }}>
+                Payment details are collected securely on Stripe Checkout. PartsForge never receives or stores card numbers or CVC values.
               </div>
             )}
           </div>
@@ -4750,7 +4733,7 @@ const handleSearch = async (query) => {
   }, []);
 
   // ── Checkout: dispatch courier, hold items pending handshake verification ──
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     const cartSnapshot = [...purchaseCart];
     const cartTotal = cartSnapshot.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
 
@@ -4759,43 +4742,29 @@ const handleSearch = async (query) => {
       handleEmployeePurchaseAttempt(cartSnapshot, { name: userSession?.name || 'Linked Employee', employeeCode: teamLinkCode || 'PF-0000' });
       return;
     }
-
-    // A. Fire freight dispatch safe logs
-    if (consolidationEnabled) {
-      if (typeof dispatchConsolidatedFreight === 'function') dispatchConsolidatedFreight(cartSnapshot, {}, { lat: 0, lng: 0 }).catch(() => {});
-    } else {
-      if (typeof dispatchUberDirectDrivers === 'function') dispatchUberDirectDrivers(cartSnapshot, { lat: 0, lng: 0 }).catch(() => {});
+    try {
+      const orderId = `CART-${Date.now()}`;
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cartSnapshot, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.checkoutUrl) throw new Error(data?.error || 'CHECKOUT_CREATION_FAILED');
+      window.location.assign(data.checkoutUrl);
+    } catch (error) {
+      setSaveToast(`Checkout unavailable: ${error.message}`);
+      setTimeout(() => setSaveToast(null), 4500);
     }
-
-    // B. Dispatch to bank feed + accounting ledger
-    dispatchToBankFeed({ description: `Parts cart checkout (${cartSnapshot.length} items)`, amount: cartTotal, channel: 'Stripe', ref: `CART-${Date.now()}` });
-    setLedgerEntries(prev => [...prev, { id: uid(), ref: `CART-${Date.now()}`, description: `Parts purchase (${cartSnapshot.length} items)`, amount: cartTotal, channel: 'Stripe', syncedAt: new Date().toISOString() }]);
-
-    // C. Build multi-leg dispatch job and open courier pipeline
-    const consignmentId = `CON-${Date.now().toString(36).toUpperCase()}`;
-    const suppliers = buildSupplierLegs(cartSnapshot);
-    setPendingDeliveryCart(cartSnapshot);
-    setDispatchJob({
-      consignmentId,
-      stage: 'DISPATCH_TICKET',
-      suppliers,
-      scannedSuppliers: [],
-      items: cartSnapshot,
-      itemCount: cartSnapshot.length,
-      freightEstimate: cartTotal * 0.05,
-      qrToken: null,
-    });
-    setPurchaseCart([]);
-    setIsCartOpen(false);
-
-    // D. Open multi-leg courier dispatch pipeline
-    setCourierPipelineOpen(true);
-    setSaveToast('Transaction cleared. Courier dispatch ticket issued. Awaiting job acceptance...');
-    setTimeout(() => setSaveToast(null), 4000);
   };
 
   const handleSettleInvoice = async (invoiceNo, method) => {
     const result = await settleInvoiceViaCustomerPortal(invoiceNo, method);
+    if (!result?.ok) {
+      setSaveToast('Payment remains unpaid until a signed Stripe webhook confirms cleared funds.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const inv = [...unpaidInvoices].find(i => i.invoiceNo === invoiceNo);
     setPaidInvoices(prev => {
       return inv ? [...prev, { ...inv, paymentStatus: 'PAID', settledAt: result.settledAt, receiptId: result.receiptId }] : prev;
@@ -4878,7 +4847,14 @@ const handleSearch = async (query) => {
     invoice.technicianLogs = `Technician: ${signedInTechnician.name} · Account: ${signedInTechnician.email || signedInTechnician.id} · Role: ${signedInTechnician.role || 'TECHNICIAN'}${signedInTechnician.employeeCode ? ` · Employee Code: ${signedInTechnician.employeeCode}` : ''} · Hoist: ${assignedHoist?.name || 'Unassigned'} · Labor: ${laborHours}h @ ${laborRate} ${activeCurrencyLabel}/h · Finalised: ${finalAuditEntry.actionAt}`;
     invoice.vehicleRego = vehicle?.rego || '';
     
-    const dispatchResult = await dispatchInvoicePaymentRequest(invoice);
+    let dispatchResult;
+    try {
+      dispatchResult = await dispatchInvoicePaymentRequest(invoice);
+    } catch (error) {
+      setSaveToast(`Invoice checkout could not be created: ${error.message}`);
+      setTimeout(() => setSaveToast(null), 4500);
+      return;
+    }
     setUnpaidInvoices(prev => [...prev, { ...invoice, paymentLink: dispatchResult.paymentLink, dispatchedAt: dispatchResult.sentAt }]);
     
     // Dispatch purchase to bank feed + ledger
@@ -5149,6 +5125,7 @@ const handleSearch = async (query) => {
 
   // ── Sign Out ──
   const handleSignOut = () => {
+    supabaseAuth?.auth.signOut().catch(() => {});
     setUserSession(null);
     setAccepted(false);
     setGarageVehicles([]);

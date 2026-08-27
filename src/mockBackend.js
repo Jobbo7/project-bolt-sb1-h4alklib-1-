@@ -128,12 +128,12 @@ export const processVinLookup = async (vin) => {
   if (!vin || !vin.trim()) return { make: "STANDBY", model: "AWAITING LOOKUP", year: 2026 };
   try {
     console.log(`📡 Shipping secure query down to Vercel API routes for VIN: ${vin.toUpperCase()}`);
-    const response = await fetch(`${getOrigin()}/api/vehicle-lookup?vin=${encodeURIComponent(vin.trim())}`);
+    const response = await fetch(`${getOrigin()}/api/vin-lookup?vin=${encodeURIComponent(vin.trim())}`);
     if (!response.ok) throw new Error(`Gateway Error: ${response.status}`);
     return await response.json();
   } catch (err) {
     console.error("❌ Live VIN lookup connection failure:", err);
-    return { make: "LIVE VEHICLE", model: "VIN MATCH ACTIVE", year: new Date().getFullYear(), engine: "SPECS PENDING", vin: vin.toUpperCase() };
+    return { success: false, error: err.message || 'VIN lookup failed.', code: 'VIN_LOOKUP_FAILED', vin: vin.toUpperCase() };
   }
 };
 
@@ -154,9 +154,9 @@ export const PLATFORM_LOGISTICS_MARKUP = 0.10;
 export const TRANS_TASMAN_FREIGHT_SURCHARGE = 45.00;
 export const GLOBAL_DIRECT_FREIGHT_SURCHARGE = 85.00;
 
-export const executeWholesalerItemUpload = async () => true;
-export const executeStripeSplitPayouts = async () => true;
-export const persistJobProgress = async () => true;
+export const executeWholesalerItemUpload = async () => ({ ok: false, status: 'AUTHENTICATED_SELLER_API_REQUIRED' });
+export const executeStripeSplitPayouts = async () => ({ ok: false, status: 'STRIPE_CONNECT_NOT_CONFIGURED' });
+export const persistJobProgress = async (payload) => ({ ...payload, storage: 'browser_only' });
 export const getToolsForComponent = () => [];
 export const getConsumablesForComponent = () => [];
 export const getDocsForComponent = () => [];
@@ -184,15 +184,24 @@ export const compileCustomerInvoice = (jobData, taxRate) => {
   };
 };
 
-export const dispatchInvoicePaymentRequest = async (invoice) => ({ paymentLink: '#', sentAt: new Date().toISOString() });
-export const settleInvoiceViaCustomerPortal = async (invoiceNo, method) => ({ settledAt: new Date().toISOString(), receiptId: `STP-${Math.random().toString(36).substring(3, 9).toUpperCase()}` });
-export const connectOpenBankingFeed = async () => ({ ok: true, bankName: 'PartsForge Business Account', accountLast4: '9842', connectedAt: new Date().toISOString() });
-export const simulateInboundDeposit = async (invoice) => ({ ok: true, depositedAt: new Date().toISOString() });
-export const startBasiqBankFeedListener = async () => true;
-export const triggerXeroAccountantSync = async () => true;
-export const linkAtoSbr = async () => ({ status: 'LINKED_AND_VERIFIED' });
-export const connectAccountingSoftware = async (provider) => ({ provider, status: 'CONNECTED_LEDGER_STREAM_ACTIVE' });
-export const inviteAccountant = async (email) => ({ status: 'INVITATION_PENDING_LEDGER_ACCESS' });
-export const streamInvoiceToLedger = async () => true;
-export const dispatchUberDirectDrivers = async () => true;
-export const dispatchConsolidatedFreight = async () => true;
+export const dispatchInvoicePaymentRequest = async (invoice) => {
+  const response = await fetch(`${getOrigin()}/api/create-checkout-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: [...(invoice.cart || []), ...(invoice.consumables || [])], currency: 'aud', orderId: invoice.invoiceNo }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || 'CHECKOUT_CREATION_FAILED');
+  return { paymentLink: data.checkoutUrl, sessionId: data.sessionId, sentAt: new Date().toISOString() };
+};
+export const settleInvoiceViaCustomerPortal = async () => ({ ok: false, status: 'AWAITING_VERIFIED_STRIPE_WEBHOOK' });
+export const connectOpenBankingFeed = async () => ({ ok: false, status: 'BASIQ_OAUTH_ADAPTER_REQUIRED' });
+export const simulateInboundDeposit = async () => ({ ok: false, status: 'BANK_FEED_NOT_CONNECTED' });
+export const startBasiqBankFeedListener = async () => ({ ok: false, status: 'BASIQ_NOT_CONFIGURED' });
+export const triggerXeroAccountantSync = async () => ({ ok: false, status: 'XERO_OAUTH_NOT_CONFIGURED' });
+export const linkAtoSbr = async () => ({ ok: false, status: 'ATO_SBR_PROVIDER_REQUIRED' });
+export const connectAccountingSoftware = async (provider) => ({ ok: false, provider, status: 'OAUTH_CONFIGURATION_REQUIRED' });
+export const inviteAccountant = async () => ({ ok: false, status: 'EMAIL_PROVIDER_NOT_CONFIGURED' });
+export const streamInvoiceToLedger = async () => ({ ok: false, status: 'ACCOUNTING_LEDGER_NOT_CONNECTED' });
+export const dispatchUberDirectDrivers = async () => ({ ok: false, status: 'UBER_DIRECT_NOT_CONFIGURED' });
+export const dispatchConsolidatedFreight = async () => ({ ok: false, status: 'FREIGHT_PROVIDER_NOT_CONFIGURED' });
