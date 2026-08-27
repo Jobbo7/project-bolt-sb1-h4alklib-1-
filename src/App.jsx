@@ -165,6 +165,7 @@ const ADMIN_CREDENTIALS = { id: 'admin@partsforge.com.au', token: 'secure123' };
 
 function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tier, setTier] = useState('DIY');
@@ -181,7 +182,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
     if (scrollHeight - scrollTop - clientHeight < 5) setScrolled(true);
   };
 
-  const canSubmit = email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
+  const canSubmit = fullName.trim() && email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
 
   const handleAuthSubmission = (e) => {
     e.preventDefault();
@@ -192,6 +193,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
 
     if (isSignUpMode) {
       const accountPayload = {
+        name: fullName.trim(),
         email: email.trim(),
         password: password.trim(),
         tier,
@@ -214,10 +216,17 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
         return;
       }
 
+      if (!verifiedProfile.name) {
+        verifiedProfile.name = fullName.trim();
+        localStorage.setItem(storageKey, JSON.stringify(verifiedProfile));
+      }
+
       onAuthenticate({ 
+        name: verifiedProfile.name || fullName.trim(),
         email: verifiedProfile.email, 
         role: verifiedProfile.tier, 
-        linkedAccount: verifiedProfile.linkedAccount 
+        linkedAccount: verifiedProfile.linkedAccount,
+        isEmployeeSubUser: verifiedProfile.tier === 'APPRENTICE'
       });
     }
   };
@@ -242,6 +251,11 @@ return (
               {authError}
             </div>
           )}
+
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Technician / Account Holder Name</label>
+            <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Full legal name" />
+          </div>
 
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
@@ -2153,7 +2167,7 @@ function JobCard({
   consumables, onUpdateConsumable, onRemoveConsumable,
   custName, setCustName, custPhone, setCustPhone, custEmail, setCustEmail,
   vehicle, onSaveProgress, onCompileInvoice, onOpenAllocation, storeDropdowns,
-  region, effectiveTaxRate, onOpenCourierHandshake, shipmentStatus,
+  region, effectiveTaxRate, onOpenCourierHandshake, shipmentStatus, technician, technicianHistory = [],
 }) {
   const r = region || 'VIC';
   const taxRate = effectiveTaxRate || 0.10;
@@ -2193,6 +2207,21 @@ function JobCard({
           No vehicle is assigned. Complete a rego/VIN lookup and commit it to a hoist.
         </div>
       )}
+
+      <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}35`, background: `${C.emerald}07` }}>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.emerald }}>Responsible Technician</div>
+            <div className="mt-1 text-sm font-bold text-slate-100">{technician?.name || 'Technician identity required'}</div>
+            <div className="mt-0.5 text-[10px]" style={{ color: C.textDim }}>
+              {technician?.email || technician?.id || 'No account identifier'}{technician?.employeeCode ? ` · Employee Code: ${technician.employeeCode}` : ''}
+            </div>
+          </div>
+          <span className="rounded-full px-2 py-1 text-[10px] font-bold" style={{ background: `${C.emerald}15`, color: C.emerald }}>
+            {technician?.role || 'TECHNICIAN'} · {technicianHistory.length} PRIOR AUDIT EVENT(S)
+          </span>
+        </div>
+      </div>
 
       {/* Allocation Matrix button */}
       <button onClick={onOpenAllocation} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-bold transition" style={{ borderColor: `${C.orange}40`, background: `${C.orange}08`, color: C.orange }}>
@@ -3887,7 +3916,16 @@ export default function App() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isEmployeeSubUser, setIsEmployeeSubUser] = useState(false);
   const [teamLinkCode, setTeamLinkCode] = useState(null);
-  const role = userSession?.role === 'MECHANIC' ? 'pro' : userSession?.role === 'SELLER' ? 'seller' : 'diy';
+  const role = userSession?.role === 'MECHANIC' || userSession?.role === 'APPRENTICE' ? 'pro' : userSession?.role === 'SELLER' ? 'seller' : 'diy';
+  const signedInTechnician = useMemo(() => ({
+    id: userSession?.technicianId || userSession?.employeeCode || userSession?.email || 'unidentified-session',
+    name: userSession?.name || userSession?.email?.split('@')[0] || 'Unidentified Technician',
+    email: userSession?.email || '',
+    role: userSession?.role || '',
+    employeeCode: userSession?.employeeCode || teamLinkCode || '',
+    linkedAccount: userSession?.linkedAccount || '',
+    signedInAt: userSession?.signedInAt || '',
+  }), [userSession, teamLinkCode]);
 
   // ── Multi-Region Global State — Protected variables shield front-end nodes ──
   const [regionCode, setRegionCode] = useState(() => { try { return localStorage.getItem('partsforge_region') || 'AU'; } catch { return 'AU'; } });
@@ -3932,6 +3970,7 @@ export default function App() {
   const [custName, setCustName] = useState(() => readStored('partsforge_customer_name', ''));
   const [custPhone, setCustPhone] = useState(() => readStored('partsforge_customer_phone', ''));
   const [custEmail, setCustEmail] = useState(() => readStored('partsforge_customer_email', ''));
+  const [technicianHistory, setTechnicianHistory] = useState(() => readStored('partsforge_technician_history', []));
 
   // Saved jobs & invoices
   const [hoistJobs, setHoistJobs] = useState(() => readStored('partsforge_hoist_jobs', []));
@@ -3967,11 +4006,16 @@ export default function App() {
   const handleAuthenticate = (session) => {
     setIsAuthenticating(true);
     setTimeout(() => {
-      setUserSession(session);
-      try { localStorage.setItem('partsforge_session', JSON.stringify(session)); } catch {}
-      if (session?.isEmployeeSubUser) {
+      const auditedSession = {
+        ...session,
+        technicianId: session?.technicianId || session?.employeeCode || session?.email?.trim().toLowerCase(),
+        signedInAt: new Date().toISOString(),
+      };
+      setUserSession(auditedSession);
+      try { localStorage.setItem('partsforge_session', JSON.stringify(auditedSession)); } catch {}
+      if (auditedSession?.isEmployeeSubUser) {
         setIsEmployeeSubUser(true);
-        setTeamLinkCode(session?.employeeCode || null);
+        setTeamLinkCode(auditedSession?.employeeCode || null);
       }
       setIsAuthenticating(false);
     }, 800);
@@ -4416,6 +4460,7 @@ const handleSearch = async (query) => {
   useEffect(() => persist('partsforge_customer_name', custName), [custName]);
   useEffect(() => persist('partsforge_customer_phone', custPhone), [custPhone]);
   useEffect(() => persist('partsforge_customer_email', custEmail), [custEmail]);
+  useEffect(() => persist('partsforge_technician_history', technicianHistory), [technicianHistory]);
   useEffect(() => persist('partsforge_hoist_jobs', hoistJobs), [hoistJobs]);
   useEffect(() => persist('partsforge_active_job_id', activeHoistJobId), [activeHoistJobId]);
   useEffect(() => persist('partsforge_unpaid_invoices', unpaidInvoices), [unpaidInvoices]);
@@ -4775,7 +4820,9 @@ const handleSearch = async (query) => {
   const handleSaveProgress = async () => {
     const previousHoistId = vehicle?.hoistId || null;
     const parkedVehicle = vehicle ? { ...vehicle, previousHoistId, hoistId: null, hoistName: null } : null;
-    const payload = { cart: jobCart, consumables, laborHours, laborRate, taxOn, diagnostic, custName, custPhone, custEmail, vehicle: parkedVehicle, hoistId: null, savedAt: new Date().toISOString() };
+    const auditEntry = { ...signedInTechnician, action: 'SAVED_JOB_PROGRESS', actionAt: new Date().toISOString(), hoistId: previousHoistId };
+    const nextTechnicianHistory = [...technicianHistory, auditEntry];
+    const payload = { cart: jobCart, consumables, laborHours, laborRate, taxOn, diagnostic, custName, custPhone, custEmail, vehicle: parkedVehicle, hoistId: null, technician: signedInTechnician, technicianHistory: nextTechnicianHistory, savedAt: new Date().toISOString() };
     const saved = await persistJobProgress(payload);
     if (activeHoistJobId) {
       setHoistJobs(prev => prev.map(j => j.jobId === activeHoistJobId ? { ...j, ...payload, jobId: activeHoistJobId, updatedAt: new Date().toISOString() } : j));
@@ -4797,6 +4844,7 @@ const handleSearch = async (query) => {
     // Clear active Job Card workspace fields for a fresh vehicle slot
     setJobCart([]);
     setConsumables([]);
+    setTechnicianHistory([]);
     setLaborHours(0);
     setLaborRate(95);
     setDiagnostic('');
@@ -4815,7 +4863,9 @@ const handleSearch = async (query) => {
       setTimeout(() => setSaveToast(null), 4000);
       return;
     }
-    const jobData = { cart: jobCart, consumables, laborHours, laborRate, taxOn, custName, custPhone, custEmail, vehicle };
+    const finalAuditEntry = { ...signedInTechnician, action: 'COMPILED_AND_SENT_INVOICE', actionAt: new Date().toISOString(), hoistId: vehicle?.hoistId || null };
+    const finalTechnicianHistory = [...technicianHistory, finalAuditEntry];
+    const jobData = { cart: jobCart, consumables, laborHours, laborRate, taxOn, custName, custPhone, custEmail, vehicle, technician: signedInTechnician, technicianHistory: finalTechnicianHistory };
     const invoice = compileCustomerInvoice(jobData, effectiveTaxRate);
     
     // Attach diagnostic notes and technician logs safely without passing invalid region primitives
@@ -4823,7 +4873,9 @@ const handleSearch = async (query) => {
     
     const activeCurrencyLabel = (regionCode === 'US' || regionCode === 'US_CA' || regionCode === 'US_NY' || regionCode === 'US_TX') ? 'USD' : regionCode === 'UK' ? 'GBP' : 'AUD';
     const assignedHoist = hoists.find(h => h.id === vehicle?.hoistId);
-    invoice.technicianLogs = `Technician: ${userSession?.name || 'Unknown'} · Hoist: ${assignedHoist?.name || 'Unassigned'} · Labor: ${laborHours}h @ ${laborRate} ${activeCurrencyLabel}/h`;
+    invoice.technician = signedInTechnician;
+    invoice.technicianHistory = finalTechnicianHistory;
+    invoice.technicianLogs = `Technician: ${signedInTechnician.name} · Account: ${signedInTechnician.email || signedInTechnician.id} · Role: ${signedInTechnician.role || 'TECHNICIAN'}${signedInTechnician.employeeCode ? ` · Employee Code: ${signedInTechnician.employeeCode}` : ''} · Hoist: ${assignedHoist?.name || 'Unassigned'} · Labor: ${laborHours}h @ ${laborRate} ${activeCurrencyLabel}/h · Finalised: ${finalAuditEntry.actionAt}`;
     invoice.vehicleRego = vehicle?.rego || '';
     
     const dispatchResult = await dispatchInvoicePaymentRequest(invoice);
@@ -4859,6 +4911,7 @@ const handleSearch = async (query) => {
     setVehicle(null);
     setActiveVehicleId(null);
     setActiveHoistJobId(null);
+    setTechnicianHistory([]);
   };
 
   // Resume a hoist job into the active Job Card area
@@ -4886,6 +4939,7 @@ const handleSearch = async (query) => {
     setCustName(job.custName || '');
     setCustPhone(job.custPhone || '');
     setCustEmail(job.custEmail || '');
+    setTechnicianHistory(job.technicianHistory || (job.technician ? [{ ...job.technician, action: 'LEGACY_JOB_TECHNICIAN' }] : []));
     setVehicle(restoredVehicle);
     setActiveHoistJobId(job.jobId || job.id || null);
     if (restoredVehicle) {
@@ -5103,6 +5157,7 @@ const handleSearch = async (query) => {
     setPurchaseCart([]);
     setJobCart([]);
     setConsumables([]);
+    setTechnicianHistory([]);
     setResults(null);
     setVault([]);
     setHoistJobs([]);
@@ -5350,6 +5405,8 @@ const handleSearch = async (query) => {
                 region={regionCode} effectiveTaxRate={effectiveTaxRate}
                 onOpenCourierHandshake={handleOpenCourierPipeline}
                 shipmentStatus={shipmentStatus}
+                technician={signedInTechnician}
+                technicianHistory={technicianHistory}
               />
 
                           <VaultPanel vault={vault} onMount={handleMountVaultItem} bayOptions={hoists} region={regionCode} />
