@@ -4893,22 +4893,36 @@ const handleSearch = async (query) => {
 
   // ── Vault allocation (mount to bay + remove from vault) ──
   const handleMountVaultItem = (vaultItem, targetBayId = null) => {
-    const allocatedItem = { ...vaultItem, id: uid(), unitPrice: vaultItem.unitPrice || 0, qty: 1, fromVault: true, vaultId: vaultItem.vaultId, bayId: targetBayId };
+    const activeSavedJob = hoistJobs.find(job => (job.jobId || job.id) === activeHoistJobId);
+    const resolvedBayId = targetBayId || vehicle?.hoistId || activeSavedJob?.hoistId || activeSavedJob?.vehicle?.hoistId;
+    const allocatedItem = { ...vaultItem, id: uid(), unitPrice: vaultItem.unitPrice || 0, qty: 1, fromVault: true, vaultId: vaultItem.vaultId, bayId: resolvedBayId };
+    const activeJobMatches = Boolean(
+      resolvedBayId &&
+      (vehicle || activeHoistJobId) &&
+      (vehicle?.hoistId || activeSavedJob?.hoistId || activeSavedJob?.vehicle?.hoistId) === resolvedBayId
+    );
     const savedTargetJob = hoistJobs.find(job =>
-      (job.hoistId || job.vehicle?.hoistId) === targetBayId &&
+      (job.hoistId || job.vehicle?.hoistId) === resolvedBayId &&
       (job.jobId || job.id) !== activeHoistJobId
     );
-    const activeJobMatches = vehicle?.hoistId === targetBayId;
 
-    if (savedTargetJob) {
+    if (activeJobMatches) {
+      const nextJobCart = [...jobCart, allocatedItem];
+      setJobCart(nextJobCart);
+      if (activeHoistJobId) {
+        setHoistJobs(prev => prev.map(job =>
+          (job.jobId || job.id) === activeHoistJobId
+            ? { ...job, cart: nextJobCart, updatedAt: new Date().toISOString() }
+            : job
+        ));
+      }
+    } else if (savedTargetJob) {
       const targetJobId = savedTargetJob.jobId || savedTargetJob.id;
       setHoistJobs(prev => prev.map(job =>
         (job.jobId || job.id) === targetJobId
           ? { ...job, cart: [...(job.cart || []), allocatedItem], updatedAt: new Date().toISOString() }
           : job
       ));
-    } else if (activeJobMatches) {
-      setJobCart(prev => [...prev, allocatedItem]);
     } else {
       setSaveToast('Create or load a job on that hoist before allocating stock.');
       setTimeout(() => setSaveToast(null), 3500);
@@ -4917,7 +4931,7 @@ const handleSearch = async (query) => {
 
     setVault(prev => prev.filter(v => v.vaultId !== vaultItem.vaultId));
     setAllocModalOpen(false);
-    setSaveToast(`Delivered part allocated to ${hoists.find(h => h.id === targetBayId)?.name || targetBayId}.`);
+    setSaveToast(`Delivered part allocated to ${hoists.find(h => h.id === resolvedBayId)?.name || resolvedBayId}.`);
     setTimeout(() => setSaveToast(null), 3000);
   };
 
@@ -4929,22 +4943,37 @@ const handleSearch = async (query) => {
   // ── Vault batch allocation ──
   const handleBatchAllocate = (selectedVaultIds, targetBayId) => {
     const items = vault.filter(v => selectedVaultIds.includes(v.vaultId));
-    const allocatedItems = items.map(v => ({ ...v, id: uid(), unitPrice: v.unitPrice || 0, qty: 1, fromVault: true, vaultId: v.vaultId, bayId: targetBayId }));
+    if (!items.length) return;
+    const activeSavedJob = hoistJobs.find(job => (job.jobId || job.id) === activeHoistJobId);
+    const resolvedBayId = targetBayId || vehicle?.hoistId || activeSavedJob?.hoistId || activeSavedJob?.vehicle?.hoistId;
+    const allocatedItems = items.map(v => ({ ...v, id: uid(), unitPrice: v.unitPrice || 0, qty: 1, fromVault: true, vaultId: v.vaultId, bayId: resolvedBayId }));
+    const activeJobMatches = Boolean(
+      resolvedBayId &&
+      (vehicle || activeHoistJobId) &&
+      (vehicle?.hoistId || activeSavedJob?.hoistId || activeSavedJob?.vehicle?.hoistId) === resolvedBayId
+    );
     const savedTargetJob = hoistJobs.find(job =>
-      (job.hoistId || job.vehicle?.hoistId) === targetBayId &&
+      (job.hoistId || job.vehicle?.hoistId) === resolvedBayId &&
       (job.jobId || job.id) !== activeHoistJobId
     );
-    const activeJobMatches = vehicle?.hoistId === targetBayId;
 
-    if (savedTargetJob) {
+    if (activeJobMatches) {
+      const nextJobCart = [...jobCart, ...allocatedItems];
+      setJobCart(nextJobCart);
+      if (activeHoistJobId) {
+        setHoistJobs(prev => prev.map(job =>
+          (job.jobId || job.id) === activeHoistJobId
+            ? { ...job, cart: nextJobCart, updatedAt: new Date().toISOString() }
+            : job
+        ));
+      }
+    } else if (savedTargetJob) {
       const targetJobId = savedTargetJob.jobId || savedTargetJob.id;
       setHoistJobs(prev => prev.map(job =>
         (job.jobId || job.id) === targetJobId
           ? { ...job, cart: [...(job.cart || []), ...allocatedItems], updatedAt: new Date().toISOString() }
           : job
       ));
-    } else if (activeJobMatches) {
-      setJobCart(prev => [...prev, ...allocatedItems]);
     } else {
       setSaveToast('Create or load a job on that hoist before allocating stock.');
       setTimeout(() => setSaveToast(null), 3500);
@@ -4953,7 +4982,7 @@ const handleSearch = async (query) => {
 
     setVault(prev => prev.filter(v => !selectedVaultIds.includes(v.vaultId)));
     setAllocModalOpen(false);
-    setSaveToast(`${items.length} item(s) allocated to Bay ${targetBayId}`);
+    setSaveToast(`${items.length} item(s) allocated to ${hoists.find(h => h.id === resolvedBayId)?.name || resolvedBayId}`);
     setTimeout(() => setSaveToast(null), 3500);
   };
 
