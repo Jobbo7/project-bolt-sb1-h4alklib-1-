@@ -168,8 +168,6 @@ function SafetyShield({ onAccept }) {
 }
 
 // ─── Auth Gate ───────────────────────────────────────────────────────────────
-const ADMIN_CREDENTIALS = { id: 'admin@partsforge.com.au', token: 'secure123' };
-
 function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [isSignUpMode, setIsSignUpMode] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -220,14 +218,19 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
         setAuthError(error?.message || 'Sign-in failed.');
         return;
       }
-      const profile = data.user.user_metadata || {};
+      const { data: dbProfile, error: profileError } = await supabaseAuth.from('profiles').select('display_name,role,linked_account').eq('id', data.user.id).single();
+      if (profileError || !dbProfile) {
+        await supabaseAuth.auth.signOut();
+        setAuthError('Your account profile could not be verified. Contact support.');
+        return;
+      }
       onAuthenticate({ 
-        name: profile.name || fullName.trim(),
+        name: dbProfile.display_name || fullName.trim(),
         email: data.user.email,
-        role: profile.tier || 'DIY',
-        linkedAccount: profile.linkedAccount || '',
+        role: dbProfile.role,
+        linkedAccount: dbProfile.linked_account || '',
         technicianId: data.user.id,
-        isEmployeeSubUser: profile.tier === 'APPRENTICE'
+        isEmployeeSubUser: dbProfile.role === 'APPRENTICE'
       });
     }
   };
@@ -240,7 +243,7 @@ return (
             <Wrench className="h-6 w-6 text-slate-950" />
           </div>
           <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
-          <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Stripe Live Financial Network Active</p>
+          <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Secure account access</p>
           <div className="mt-3 px-3 py-1 text-[11px] font-bold uppercase rounded-full border border-slate-800 bg-slate-900/60 text-slate-400">
             Node: <span className="text-orange-400">{isSignUpMode ? 'Account Creation' : 'Secure Sign In'}</span>
           </div>
@@ -1320,24 +1323,21 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [saveCard, setSaveCard] = useState(false);
-  const regionConfig = typeof region === 'string'
-    ? (REGIONS[region] || REGIONS.AU)
-    : (region || REGIONS.AU);
-  const r = regionConfig.code;
+  const r = region || 'VIC';
   if (!open) return null;
   const f = (n) => fmt(n, r);
   const partsTotal = cart.reduce((s, c) => s + c.unitPrice * c.qty, 0);
   const individualShippingTotal = cart.reduce((s, c) => s + itemShipping(c, r) * c.qty, 0);
-  const consolidated = calcConsolidatedFreight(cart, regionConfig);
+  const consolidated = calcConsolidatedFreight(cart, r);
   const shippingTotal = consolidationEnabled ? consolidated.fee : individualShippingTotal;
   const subtotal = partsTotal + shippingTotal;
-  const taxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(regionConfig, usStateCode) : 0.10;
+  const taxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(r, usStateCode) : 0.10;
   const tax = subtotal * taxRate;
   const grand = subtotal + tax;
 
   // Aggregate courier dispatch legs
   const courierLegs = cart.length > 0 ? cart.map(item => {
-    const oc = getOptimalCourier(item, regionConfig);
+    const oc = getOptimalCourier(item, r);
     return { item, ...oc };
   }) : [];
   const activeCouriers = [...new Set(courierLegs.map(l => l.network?.name).filter(Boolean))];
@@ -1347,9 +1347,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
     if (!selectedPaymentMethod) return;
     setProcessing(true);
     try {
-      if (typeof onCheckout === 'function') {
-        await onCheckout(selectedPaymentMethod, { partsTotal, shippingTotal, tax, grand });
-      }
+      if (typeof onCheckout === 'function') await onCheckout(selectedPaymentMethod);
     } finally {
       setProcessing(false);
       setSelectedPaymentMethod(null);
@@ -3920,7 +3918,7 @@ export default function App() {
   const [usStateCode, setUsStateCode] = useState(() => { try { return localStorage.getItem('partsforge_us_state') || 'CA'; } catch { return 'CA'; } });
   
   const region = (typeof REGIONS !== 'undefined' && REGIONS[regionCode]) ? REGIONS[regionCode] : 'VIC';
-  const effectiveTaxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(region, usStateCode) : 0.10;
+  const effectiveTaxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(regionCode, usStateCode) : 0.10;
   
   const handleRegionChange = (code) => { setRegionCode(code); try { localStorage.setItem('partsforge_region', code); } catch {} };
   const handleUsStateChange = (code) => { setUsStateCode(code); try { localStorage.setItem('partsforge_us_state', code); } catch {} };
@@ -4611,15 +4609,15 @@ const handleSearch = async (query) => {
     setTimeout(() => setSaveToast(null), 4000);
   };
 
-  // ── Master mechanic approves employee purchase → process Stripe payment ──
+  // ── Master mechanic approves employee purchase request (payment remains pending) ──
   const handleApproveEmployeePurchase = (approvalId) => {
     const req = pendingApprovals.find(a => a.id === approvalId);
     if (!req) return;
 
-    // 1. Process Stripe payment telemetry logs safely into existing states
+    // Approval is not payment. Only a verified Stripe webhook may mark an order settled.
     const paymentDescription = `Employee purchase approved: ${req.employeeName} (${req.items.length} items)`;
-    setBankFeedEntries(prev => [{ id: uid(), description: paymentDescription, amount: req.total, channel: 'Stripe', status: 'SETTLED', timestamp: new Date().toISOString() }, ...prev]);
-    setLedgerEntries(prev => [{ id: uid(), ledgerId: `EMP-${approvalId}`, description: `Employee purchase: ${req.employeeName}`, amount: req.total, accountCode: '500-PURCH', status: 'POSTED', timestamp: new Date().toISOString() }, ...prev]);
+    setBankFeedEntries(prev => [{ id: uid(), description: paymentDescription, amount: req.total, channel: 'Stripe', status: 'PAYMENT_PENDING', timestamp: new Date().toISOString() }, ...prev]);
+    setLedgerEntries(prev => [{ id: uid(), ledgerId: `EMP-${approvalId}`, description: `Employee purchase: ${req.employeeName}`, amount: req.total, accountCode: '500-PURCH', status: 'PENDING', timestamp: new Date().toISOString() }, ...prev]);
 
     const employeeSource = `Purchased by Employee: ${req.employeeName} / ${req.employeeCode}`;
     const line2Items = req.items.filter(c => (typeof classifyItem === 'function' ? classifyItem(c) : 'LINE2_BAY_ALLOCATION') === 'LINE2_BAY_ALLOCATION');
@@ -4688,7 +4686,7 @@ const handleSearch = async (query) => {
 
     const line1Count = line1Items.length;
     const line2Count = line2Items.length;
-    let msg = `Approved ${req.employeeName}'s purchase. Stripe payment processed.`;
+    let msg = `Approved ${req.employeeName}'s purchase request. Payment is still pending.`;
     if (line2Count > 0 && line1Count > 0) {
       msg += ` ${line2Count} item(s) → Invoice Archive Ledger, ${line1Count} item(s) → Workshop Expense Ledger.`;
     } else if (line2Count > 0) {
@@ -4696,7 +4694,7 @@ const handleSearch = async (query) => {
     } else if (line1Count > 0) {
       msg += ` ${line1Count} item(s) pushed to Workshop Expense Ledger.`;
     }
-    msg += ' Courier dispatch pipeline opened.';
+    msg += ' Dispatch must wait for verified payment.';
     setSaveToast(msg);
     setTimeout(() => setSaveToast(null), 5000);
   };
@@ -4738,23 +4736,9 @@ const handleSearch = async (query) => {
   }, []);
 
   // ── Checkout: dispatch courier, hold items pending handshake verification ──
-  const handleCheckout = async (_selectedPaymentMethod, checkoutSummary = {}) => {
+  const handleCheckout = async () => {
     const cartSnapshot = [...purchaseCart];
-    const checkoutItems = [
-      ...cartSnapshot,
-      ...(Number(checkoutSummary.shippingTotal) > 0 ? [{
-        id: `freight-${Date.now()}`,
-        title: 'Courier Delivery',
-        unitPrice: Number(checkoutSummary.shippingTotal),
-        qty: 1,
-      }] : []),
-      ...(Number(checkoutSummary.tax) > 0 ? [{
-        id: `tax-${Date.now()}`,
-        title: regionCode.startsWith('US') ? 'Sales Tax' : 'GST',
-        unitPrice: Number(checkoutSummary.tax),
-        qty: 1,
-      }] : []),
-    ];
+    const cartTotal = cartSnapshot.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
 
     // Employee sub-user gating: block direct payment, route to master approval queue
     if (isEmployeeSubUser) {
@@ -4765,8 +4749,8 @@ const handleSearch = async (query) => {
       const orderId = `CART-${Date.now()}`;
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: checkoutItems, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
+        headers: { 'Content-Type': 'application/json', ...(supabaseAuth ? { Authorization: `Bearer ${(await supabaseAuth.auth.getSession()).data.session?.access_token || ''}` } : {}) },
+        body: JSON.stringify({ items: cartSnapshot, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
       });
       const data = await response.json();
       if (!response.ok || !data.checkoutUrl) throw new Error(data?.error || 'CHECKOUT_CREATION_FAILED');
