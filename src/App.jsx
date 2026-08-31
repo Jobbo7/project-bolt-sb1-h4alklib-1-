@@ -298,8 +298,8 @@ return (
 
           <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-1 h-20 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
             <p className="mb-1 font-semibold" style={{ color: C.orange }}>SECURE GATEWAY & LIABILITY ROUTING AGREEMENT</p>
-            <p className="mb-1">By initializing this node, the user verifies that all linked device sessions, automated courier manifest scans, and purchase orders are routed directly onto the Stripe Live Financial Network under the sole fiscal and trade license liability of the master account holder.</p>
-            <p>Scroll down to authorize this node connection and unlock validation tokens.</p>
+            <p className="mb-1">PartsForge uses account permissions to control workshop actions. Payments are available only when Stripe is configured, and an order is not treated as paid until PartsForge receives a verified payment confirmation.</p>
+            <p>Scroll down to review and accept the account and safety terms.</p>
           </div>
 
           <div className="flex items-center gap-2 text-[10px]">
