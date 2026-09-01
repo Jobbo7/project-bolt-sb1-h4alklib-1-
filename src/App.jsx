@@ -488,7 +488,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
   const [region, setRegion] = useState(() => readStored('partsforge_scanner_region', 'AU_VIC'));
   const [mode, setMode] = useState(() => readStored('partsforge_scanner_mode', 'rego'));
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
-  const [manualVehicle, setManualVehicle] = useState({ year: '', make: '', model: '', series: '', engine: '' });
+  const [manualVehicle, setManualVehicle] = useState({ year: '', make: '', model: '', series: '', engine: '', transmission: '', modifications: '' });
 
   useEffect(() => { try { localStorage.setItem('partsforge_scanner_plate', JSON.stringify(plate)); } catch {} }, [plate]);
   useEffect(() => { try { localStorage.setItem('partsforge_scanner_vin', JSON.stringify(vin)); } catch {} }, [vin]);
@@ -555,19 +555,19 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
           className="mt-2 w-full rounded-lg border px-3 py-2 text-xs font-semibold transition"
           style={{ borderColor: C.border, background: C.panel2, color: C.textDim }}
         >
-          {manualEntryOpen ? 'Hide Manual Vehicle Entry' : 'Enter Vehicle Manually — Free'}
+          {manualEntryOpen ? 'Hide Custom Vehicle Entry' : 'Custom / Modified Vehicle'}
         </button>
       )}
 
       {(manualEntryOpen || lookupError) && !loading && !vehicle && (
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.orange}50`, background: `${C.orange}08` }}>
           <div className="text-xs font-semibold" style={{ color: C.orange }}>
-            {lookupError ? 'Automatic lookup unavailable' : 'Manual Vehicle Entry — Free'}
+            {lookupError ? 'Automatic lookup unavailable' : 'Custom / Modified Vehicle'}
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: C.textDim }}>
             {lookupError
               ? `${lookupError} Enter the vehicle details below to continue without a paid registration lookup.`
-              : 'Skip the registration provider and enter the vehicle details you can confirm directly.'}
+              : 'Use this only for modified, imported, race, kit or engine-swapped vehicles that cannot be represented accurately by a standard registration lookup.'}
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <Field label="Year" value={manualVehicle.year} onChange={(value) => setManualVehicle(current => ({ ...current, year: value.replace(/\D/g, '').slice(0, 4) }))} mono />
@@ -577,6 +577,12 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
             <div className="sm:col-span-2">
               <Field label="Engine (if known)" value={manualVehicle.engine} onChange={(value) => setManualVehicle(current => ({ ...current, engine: value }))} />
             </div>
+            {!lookupError && (
+              <>
+                <Field label="Transmission" value={manualVehicle.transmission} onChange={(value) => setManualVehicle(current => ({ ...current, transmission: value }))} />
+                <Field label="Modifications / Engine Swap" value={manualVehicle.modifications} onChange={(value) => setManualVehicle(current => ({ ...current, modifications: value }))} />
+              </>
+            )}
           </div>
           <p className="mt-2 text-[11px]" style={{ color: C.textDimmer }}>
             Manual details help rank results only. Fitment remains unverified until confirmed against the vehicle or supplier catalogue.
@@ -585,14 +591,14 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
             onClick={(e) => {
               e.preventDefault();
               if (!manualVehicle.make.trim() || !manualVehicle.model.trim()) return;
-              onManualVehicle?.({ ...manualVehicle, rego: plate.trim().toUpperCase() });
+              onManualVehicle?.({ ...manualVehicle, rego: plate.trim().toUpperCase(), customVehicle: !lookupError });
               setManualEntryOpen(false);
             }}
             disabled={!manualVehicle.make.trim() || !manualVehicle.model.trim()}
             className="mt-3 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ background: C.orange }}
           >
-            Use Manual Vehicle Details
+            {lookupError ? 'Use Manual Vehicle Details' : 'Use Custom Vehicle Details'}
           </button>
         </div>
       )}
@@ -614,10 +620,10 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
       </button>
       
       {vehicle && !scanning && (
-        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: vehicle.source === 'manual' ? `${C.orange}40` : `${C.emerald}30`, background: vehicle.source === 'manual' ? `${C.orange}06` : `${C.emerald}05` }}>
-          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: vehicle.source === 'manual' ? C.orange : C.emerald }}>
-            {vehicle.source === 'manual' ? <AlertTriangle className="h-4 w-4" /> : <BadgeCheck className="h-4 w-4" />}
-            {vehicle.source === 'manual' ? 'Manual Vehicle — Unverified' : 'Vehicle Matched'}
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: vehicle.vehicleDataVerified === false ? `${C.orange}40` : `${C.emerald}30`, background: vehicle.vehicleDataVerified === false ? `${C.orange}06` : `${C.emerald}05` }}>
+          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: vehicle.vehicleDataVerified === false ? C.orange : C.emerald }}>
+            {vehicle.vehicleDataVerified === false ? <AlertTriangle className="h-4 w-4" /> : <BadgeCheck className="h-4 w-4" />}
+            {vehicle.source === 'custom' ? 'Custom Vehicle — Fitment Requires Verification' : vehicle.source === 'manual' ? 'Manual Vehicle — Unverified' : 'Vehicle Matched'}
           </div>
           <div className="mt-1.5 text-sm font-bold text-slate-100">
   {(vehicle.year || 'YEAR UNKNOWN')}{' '}
@@ -4154,7 +4160,7 @@ const handleRego = async (plateStr, targetRegion) => {
       model: manualData.model.trim().toUpperCase(),
       series: manualData.series.trim().toUpperCase(),
       engine: manualData.engine.trim().toUpperCase() || 'NOT SUPPLIED',
-      source: 'manual',
+      source: manualData.customVehicle ? 'custom' : 'manual',
       vehicleDataVerified: false,
       fitmentVerified: false,
     });
