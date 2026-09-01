@@ -136,6 +136,10 @@ export default async function handler(req, res) {
 
         const regResponse = await fetch(regUrl.toString());
 
+        console.log(
+          `CarRegistrationAPI response: HTTP ${regResponse.status}`
+        );
+
         if (regResponse.ok) {
           const xmlText = await regResponse.text();
 
@@ -160,11 +164,30 @@ export default async function handler(req, res) {
               );
             } catch (parseError) {
               console.warn(
-                '⚠️ Registry vehicleJson could not be parsed:',
-                parseError
+                '⚠️ CarRegistrationAPI returned an unreadable vehicle payload.',
+                { code: 'REGISTRY_PAYLOAD_INVALID_JSON' }
               );
             }
+          } else {
+            console.warn(
+              '⚠️ CarRegistrationAPI returned no vehicle payload.',
+              {
+                code: /<soap:Fault>|<faultcode>/i.test(xmlText)
+                  ? 'REGISTRY_SOAP_FAULT'
+                  : 'REGISTRY_PAYLOAD_MISSING',
+                contentType: regResponse.headers.get('content-type') || 'unknown',
+                responseBytes: xmlText.length
+              }
+            );
           }
+        } else {
+          console.warn(
+            '⚠️ CarRegistrationAPI request was rejected.',
+            {
+              code: 'REGISTRY_HTTP_ERROR',
+              status: regResponse.status
+            }
+          );
         }
       } catch (registryError) {
         // IMPORTANT:
