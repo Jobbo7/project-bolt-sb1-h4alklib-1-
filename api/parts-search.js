@@ -256,8 +256,17 @@ export default async function handler(req, res) {
           fitmentReasons:
             fitment.reasons,
 
-          fitmentVerified:
-            fitment.score >= 60,
+          // This score is a development ranking signal only. It is not an
+          // authoritative catalogue fitment assertion and must never be
+          // exposed to the workshop as "verified".
+          fitmentVerified: false,
+
+          fitmentCandidate:
+            fitment.score > 0,
+
+          fitmentSource: 'seller_offer_heuristic',
+
+          fitmentAuthoritative: false,
 
           vehicleFitment: {
             make: item.make || null,
@@ -365,6 +374,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       vehicleContext: vehicle,
+
+      catalogue: {
+        source: 'seller_offers',
+        mode: 'development',
+        authoritativeFitment: false,
+        message: 'Results are ranked from seller-supplied fields and require authoritative catalogue or supplier confirmation before ordering.'
+      },
 
       local: wholesaleItems,
 
