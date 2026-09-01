@@ -487,6 +487,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
   const [vin, setVin] = useState(() => readStored('partsforge_scanner_vin', ''));
   const [region, setRegion] = useState(() => readStored('partsforge_scanner_region', 'AU_VIC'));
   const [mode, setMode] = useState(() => readStored('partsforge_scanner_mode', 'rego'));
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [manualVehicle, setManualVehicle] = useState({ year: '', make: '', model: '', series: '', engine: '' });
 
   useEffect(() => { try { localStorage.setItem('partsforge_scanner_plate', JSON.stringify(plate)); } catch {} }, [plate]);
@@ -545,11 +546,28 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
         </div>
       </div>
 
-      {lookupError && !loading && (
+      {mode === 'rego' && !vehicle && (
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            setManualEntryOpen(current => !current);
+          }}
+          className="mt-2 w-full rounded-lg border px-3 py-2 text-xs font-semibold transition"
+          style={{ borderColor: C.border, background: C.panel2, color: C.textDim }}
+        >
+          {manualEntryOpen ? 'Hide Manual Vehicle Entry' : 'Enter Vehicle Manually — Free'}
+        </button>
+      )}
+
+      {(manualEntryOpen || lookupError) && !loading && !vehicle && (
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.orange}50`, background: `${C.orange}08` }}>
-          <div className="text-xs font-semibold" style={{ color: C.orange }}>Automatic lookup unavailable</div>
+          <div className="text-xs font-semibold" style={{ color: C.orange }}>
+            {lookupError ? 'Automatic lookup unavailable' : 'Manual Vehicle Entry — Free'}
+          </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: C.textDim }}>
-            {lookupError} Enter the vehicle details below to continue without a paid registration lookup.
+            {lookupError
+              ? `${lookupError} Enter the vehicle details below to continue without a paid registration lookup.`
+              : 'Skip the registration provider and enter the vehicle details you can confirm directly.'}
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <Field label="Year" value={manualVehicle.year} onChange={(value) => setManualVehicle(current => ({ ...current, year: value.replace(/\D/g, '').slice(0, 4) }))} mono />
@@ -568,6 +586,7 @@ function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loadi
               e.preventDefault();
               if (!manualVehicle.make.trim() || !manualVehicle.model.trim()) return;
               onManualVehicle?.({ ...manualVehicle, rego: plate.trim().toUpperCase() });
+              setManualEntryOpen(false);
             }}
             disabled={!manualVehicle.make.trim() || !manualVehicle.model.trim()}
             className="mt-3 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
