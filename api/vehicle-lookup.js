@@ -108,77 +108,116 @@ export default async function handler(req, res) {
 
     const registryUsername =
       process.env.CARREGISTRATION_USERNAME;
+    const registryApiKey =
+      process.env.CARREGISTRATION_API_KEY;
 
     if (registryUsername) {
       try {
-        const regUrl = new URL(
-          'https://www.regcheck.org.uk/api/reg.asmx/CheckAustralia'
-        );
+        const useRegistryRestApi = Boolean(registryApiKey);
+        const regUrl = useRegistryRestApi
+          ? new URL(
+              `https://www.regcheck.org.uk/api/json.aspx/CheckAustralia/${encodeURIComponent(cleanPlateText)}/${encodeURIComponent(stateSelector)}`
+            )
+          : new URL(
+              'https://www.regcheck.org.uk/api/reg.asmx/CheckAustralia'
+            );
 
-        regUrl.searchParams.set(
-          'RegistrationNumber',
-          cleanPlateText
-        );
+        if (!useRegistryRestApi) {
+          regUrl.searchParams.set(
+            'RegistrationNumber',
+            cleanPlateText
+          );
 
-        regUrl.searchParams.set(
-          'State',
-          stateSelector
-        );
+          regUrl.searchParams.set(
+            'State',
+            stateSelector
+          );
 
-        regUrl.searchParams.set(
-          'username',
-          registryUsername
-        );
+          regUrl.searchParams.set(
+            'username',
+            registryUsername
+          );
+        }
 
         console.log(
           `📡 CarRegistrationAPI VIN lookup: ${cleanPlateText} (${stateSelector})`
         );
 
-        const regResponse = await fetch(regUrl.toString());
+        const regResponse = await fetch(
+          regUrl.toString(),
+          useRegistryRestApi
+            ? {
+                headers: {
+                  Authorization: `Basic ${Buffer.from(`${registryUsername}:${registryApiKey}`).toString('base64')}`,
+                  Accept: 'application/json'
+                }
+              }
+            : undefined
+        );
 
         console.log(
           `CarRegistrationAPI response: HTTP ${regResponse.status}`
         );
 
         if (regResponse.ok) {
-          const xmlText = await regResponse.text();
+          const responseText = await regResponse.text();
+          const contentType = regResponse.headers.get('content-type') || '';
 
-          // Extract <vehicleJson>...</vehicleJson>
-          // without requiring XML parsing in the frontend.
-          const match = xmlText.match(
-            /<vehicleJson[^>]*>([\s\S]*?)<\/vehicleJson>/i
-          );
-
-          if (match?.[1]) {
-            const decodedJson = match[1]
-              .replace(/&quot;/g, '"')
-              .replace(/&amp;/g, '&')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>');
-
+          if (useRegistryRestApi || contentType.includes('application/json')) {
             try {
-              registryData = JSON.parse(decodedJson);
+              const parsed = JSON.parse(responseText);
+              registryData = typeof parsed?.vehicleJson === 'string'
+                ? JSON.parse(parsed.vehicleJson)
+                : parsed;
 
               console.log(
                 `🟢 Registry enrichment received for ${cleanPlateText}`
               );
-            } catch (parseError) {
+            } catch {
               console.warn(
                 '⚠️ CarRegistrationAPI returned an unreadable vehicle payload.',
                 { code: 'REGISTRY_PAYLOAD_INVALID_JSON' }
               );
             }
           } else {
-            console.warn(
-              '⚠️ CarRegistrationAPI returned no vehicle payload.',
-              {
-                code: /<soap:Fault>|<faultcode>/i.test(xmlText)
-                  ? 'REGISTRY_SOAP_FAULT'
-                  : 'REGISTRY_PAYLOAD_MISSING',
-                contentType: regResponse.headers.get('content-type') || 'unknown',
-                responseBytes: xmlText.length
-              }
+
+            // Extract <vehicleJson>...</vehicleJson>
+            // without requiring XML parsing in the frontend.
+            const match = responseText.match(
+              /<vehicleJson[^>]*>([\s\S]*?)<\/vehicleJson>/i
             );
+
+            if (match?.[1]) {
+              const decodedJson = match[1]
+                .replace(/&quot;/g, '"')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>');
+
+              try {
+                registryData = JSON.parse(decodedJson);
+
+                console.log(
+                  `🟢 Registry enrichment received for ${cleanPlateText}`
+                );
+              } catch {
+                console.warn(
+                  '⚠️ CarRegistrationAPI returned an unreadable vehicle payload.',
+                  { code: 'REGISTRY_PAYLOAD_INVALID_JSON' }
+                );
+              }
+            } else {
+              console.warn(
+                '⚠️ CarRegistrationAPI returned no vehicle payload.',
+                {
+                  code: /<soap:Fault>|<faultcode>/i.test(responseText)
+                    ? 'REGISTRY_SOAP_FAULT'
+                    : 'REGISTRY_PAYLOAD_MISSING',
+                  contentType: contentType || 'unknown',
+                  responseBytes: responseText.length
+                }
+              );
+            }
           }
         } else {
           console.warn(
@@ -259,28 +298,43 @@ export default async function handler(req, res) {
     }
 
     if (plateResponse.status === 401) {
+      if (registryData) {
+        console.warn('⚠️ PlateAPI authentication failed; using registry enrichment only.');
+        plateData = { success: false, alternatives: [] };
+      } else {
       return res.status(502).json({
         error: 'Vehicle lookup provider authentication failed.',
         code: 'PROVIDER_AUTH_FAILED'
       });
+      }
     }
 
     if (plateResponse.status === 429) {
+      if (registryData) {
+        console.warn('⚠️ PlateAPI quota reached; using registry enrichment only.');
+        plateData = { success: false, alternatives: [] };
+      } else {
       return res.status(429).json({
         error: 'Vehicle lookup service quota limit reached.',
         code: 'PROVIDER_RATE_LIMITED',
         rego: cleanPlateText,
         region
       });
+      }
     }
 
     if (!plateResponse.ok) {
+      if (registryData) {
+        console.warn(`⚠️ PlateAPI returned HTTP ${plateResponse.status}; using registry enrichment only.`);
+        plateData = { success: false, alternatives: [] };
+      } else {
       return res.status(502).json({
         error: 'Vehicle lookup provider unavailable.',
         code: 'PROVIDER_UNAVAILABLE',
         rego: cleanPlateText,
         region
       });
+      }
     }
 
    // PlateAPI may not recognise CarRegistrationAPI's free test plates.
