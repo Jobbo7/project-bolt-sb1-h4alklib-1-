@@ -1078,15 +1078,13 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
       </div>
 
       <div className="mt-1 text-xs font-bold">
-        {String(detailItem.fitmentNotes || '')
-          .toUpperCase()
-          .includes('DEVELOPMENT TEST') ? (
-          <span style={{ color: C.orange }}>
-            ⚠ DEVELOPMENT FITMENT TEST
-          </span>
-        ) : detailItem.fitmentScore >= 60 ? (
+        {detailItem.fitmentAuthoritative === true ? (
           <span style={{ color: C.emerald }}>
-            ✓ HIGH CONFIDENCE VEHICLE MATCH
+            ✓ AUTHORITATIVE CATALOGUE FITMENT
+          </span>
+        ) : detailItem.fitmentCandidate || detailItem.fitmentScore > 0 ? (
+          <span style={{ color: C.orange }}>
+            ⚠ DEVELOPMENT MATCH — VERIFY BEFORE ORDERING
           </span>
         ) : (
           <span style={{ color: C.textDim }}>
@@ -1096,8 +1094,16 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
       </div>
 
       <div className="mt-1 font-mono text-[10px]" style={{ color: C.textDim }}>
-        Fitment Score: {detailItem.fitmentScore ?? 0}
+        {detailItem.fitmentAuthoritative === true
+          ? 'Confirmed by the connected catalogue provider'
+          : `Development ranking score: ${detailItem.fitmentScore ?? 0}`}
       </div>
+
+      {detailItem.fitmentAuthoritative !== true && (
+        <div className="mt-2 text-[10px] leading-relaxed" style={{ color: C.textDim }}>
+          Seller-supplied vehicle fields are used only to rank possible matches. Confirm the part number and application with an authoritative catalogue or supplier before ordering or fitting.
+        </div>
+      )}
     </div>
 
     {detailItem.fitmentReasons?.length > 0 && (
@@ -4362,7 +4368,10 @@ const handleSearch = async (query) => {
         data?.facebook || [],
 
       vehicleContext:
-        data?.vehicleContext || null
+        data?.vehicleContext || null,
+
+      catalogue:
+        data?.catalogue || null
     });
 
   } catch (err) {

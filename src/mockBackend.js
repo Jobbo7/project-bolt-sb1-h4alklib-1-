@@ -90,6 +90,11 @@ export async function processPartsQuery(
     );
 
     return {
+      catalogue: {
+        source: 'unavailable',
+        mode: 'development',
+        authoritativeFitment: false
+      },
       error: error.message || 'Parts search failed.',
       local: [],
       national: [],
