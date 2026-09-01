@@ -278,9 +278,9 @@ return (
 
           {isSignUpMode && (
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Type</label>
               <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
-                <option value="DIY">DIY Driver Tier</option>
+                <option value="DIY">DIY Driver</option>
                 <option value="MECHANIC">Registered Mechanic (Master Account Holder)</option>
                 <option value="APPRENTICE">Employee Link (Sub-Account Access)</option>
                 <option value="SELLER">Verified Parts Seller Network</option>
@@ -292,7 +292,7 @@ return (
             <div className="p-3 rounded-lg border border-dashed animate-pulse" style={{ borderColor: C.orange, background: C.panel2 }}>
               <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.orange }}>🔗 Link to Employer's Master Account Email</label>
               <input type="email" required value={linkedAccount} onChange={(e) => setLinkedAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.background }} placeholder="owner@eppingmechanics.com.au" />
-              <p className="text-[10px] text-slate-400 mt-1 uppercase">Provides shared JobCard synchronization and roots all purchase accountability workflows straight to the master dashboard console tier.</p>
+              <p className="text-[10px] text-slate-400 mt-1 uppercase">Provides shared JobCard synchronization and routes purchase accountability workflows to the master workshop account.</p>
             </div>
           )}
 
