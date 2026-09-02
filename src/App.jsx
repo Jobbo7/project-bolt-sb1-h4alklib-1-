@@ -187,7 +187,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
     if (scrollHeight - scrollTop - clientHeight < 5) setScrolled(true);
   };
 
-  const canSubmit = fullName.trim() && email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
+  const canSubmit = (!isSignUpMode || fullName.trim()) && email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
 
   const handleAuthSubmission = async (e) => {
     e.preventDefault();
@@ -256,10 +256,12 @@ return (
             </div>
           )}
 
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Technician / Account Holder Name</label>
-            <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Full legal name" />
-          </div>
+          {isSignUpMode && (
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Account Holder Name</label>
+              <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Full legal name" />
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
@@ -5252,7 +5254,11 @@ const handleSearch = async (query) => {
     setCorpProfile({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
     setBankFeedEntries([]);
     setLedgerEntries([]);
-    try { localStorage.removeItem('partsforge_session'); localStorage.removeItem('partsforge_safety_agreed'); } catch {}
+    try {
+      localStorage.removeItem('partsforge_session');
+      localStorage.removeItem('partsforge_safety_agreed');
+      localStorage.removeItem('partsforge_seller_profile');
+    } catch {}
   };
 
   // ── Render gates (auth → waiver → app) ──

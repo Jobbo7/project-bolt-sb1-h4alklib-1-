@@ -3,6 +3,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+export const mergeCatalogueMatches = (results) =>
+  [...new Map(results.flatMap(result => result.data || []).map(item => [item.id, item])).values()];
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'private, max-age=30');
@@ -82,15 +85,17 @@ export default async function handler(req, res) {
       `📡 PartsForge parts search: "${cleanQuery}" for ${vehicle.year || ''} ${vehicle.make} ${vehicle.model}`
     );
 
-    // Search by part description first.
-    const { data: dbMatches, error: dbError } = await supabase
+    // Suppliers and workshops commonly identify stock by SKU or OEM number,
+    // so query each catalogue field and merge the results by offer ID.
+    const searchableFields = ['part', 'part_number', 'oem_number', 'brand'];
+    const searchResults = await Promise.all(searchableFields.map(field => supabase
       .from('seller_offers')
       .select('*')
-      .ilike('part', `%${cleanQuery}%`);
-
-    if (dbError) {
-      throw dbError;
-    }
+      .ilike(field, `%${cleanQuery}%`)
+      .limit(250)));
+    const dbError = searchResults.find(result => result.error)?.error;
+    if (dbError) throw dbError;
+    const dbMatches = mergeCatalogueMatches(searchResults);
 
     const scoreFitment = (item) => {
       let score = 0;

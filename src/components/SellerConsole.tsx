@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Building2, Phone, Mail, MapPin, FileText, Zap, Truck, Package, Boxes,
   Warehouse, CreditCard, Save, Upload, ChevronDown, CheckCircle2, Activity,
@@ -418,13 +418,17 @@ export default function SellerConsole({
   const r = region || REGIONS.AU;
   const f = (n: number) => fmt(n, r);
 
-  const [profile, setProfile] = useState<SellerProfile>({
-    businessName: corpProfile.businessName || '',
-    registryCode: r.code === 'AU' ? corpProfile.abn || '' : r.code === 'UK' ? corpProfile.companyHouse || '' : corpProfile.ein || '',
-    phone: corpProfile.phone || '',
-    billingAddress: corpProfile.billingAddress || '',
-    dispatchEmail: corpProfile.dispatchEmail || '',
-    subscriptionTier: 'monthly',
+  const [profile, setProfile] = useState<SellerProfile>(() => {
+    let saved: Partial<SellerProfile> = {};
+    try { saved = JSON.parse(localStorage.getItem('partsforge_seller_profile') || '{}'); } catch { /* storage is optional */ }
+    return {
+      businessName: corpProfile.businessName || saved.businessName || '',
+      registryCode: r.code === 'AU' ? corpProfile.abn || saved.registryCode || '' : r.code === 'UK' ? corpProfile.companyHouse || saved.registryCode || '' : corpProfile.ein || saved.registryCode || '',
+      phone: corpProfile.phone || saved.phone || '',
+      billingAddress: corpProfile.billingAddress || saved.billingAddress || '',
+      dispatchEmail: corpProfile.dispatchEmail || saved.dispatchEmail || '',
+      subscriptionTier: saved.subscriptionTier || 'monthly',
+    };
   });
 
   const [tickets, setTickets] = useState<PickTicket[]>([]);
@@ -434,15 +438,19 @@ export default function SellerConsole({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [loadingInventory, setLoadingInventory] = useState(true);
   const [alertFlash, setAlertFlash] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const triggerBeep = useAlertBeep();
+  const getAccessTokenRef = useRef(getAccessToken);
+  getAccessTokenRef.current = getAccessToken;
 
   const taxRate = r.taxIsFlat ? r.taxRate : getEffectiveTaxRate(r, usStateCode);
   const bankProvider = r.code === 'AU' ? 'Basiq API Core v2' : r.code === 'US' ? 'Plaid API Live Token' : 'Tink API Framework Network';
 
   const updateProfile = (key: keyof SellerProfile, value: string) => {
     setProfile(prev => ({ ...prev, [key]: value }));
+    if (key === 'businessName' || key === 'billingAddress' || key === 'dispatchEmail') setCorpProfile({ ...corpProfile, [key]: value });
     if (key === 'registryCode') {
       if (r.code === 'AU') setCorpProfile({ ...corpProfile, abn: value });
       else if (r.code === 'UK') setCorpProfile({ ...corpProfile, companyHouse: value });
@@ -450,6 +458,42 @@ export default function SellerConsole({
     }
     if (key === 'phone') setCorpProfile({ ...corpProfile, phone: value });
   };
+
+  useEffect(() => {
+    try { localStorage.setItem('partsforge_seller_profile', JSON.stringify(profile)); } catch { /* storage is optional */ }
+  }, [profile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadInventory = async () => {
+      try {
+        const token = await getAccessTokenRef.current();
+        if (!token) throw new Error('Your session expired. Sign in again to load inventory.');
+        const response = await fetch('/api/wholesaler-register', { headers: { Authorization: `Bearer ${token}` } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result?.message || result?.error || 'Inventory could not be loaded.');
+        if (cancelled) return;
+        const records = Array.isArray(result?.records) ? result.records : [];
+        setShelf(records.map((record: any) => ({
+          id: record.id, sku: record.part_number || '', name: record.part || '', aisle: '', shelf: '',
+          stockQty: Number(record.stock) || 0, tradePrice: Number(record.price) || 0,
+          brand: record.brand || '', location: record.location || '', make: record.make || '', model: record.model || '',
+          yearFrom: record.year_from ?? null, yearTo: record.year_to ?? null, engine: record.engine || '',
+          engineCode: record.engine_code || '', oemNumber: record.oem_number || '', fitmentNotes: record.fitment_notes || '',
+        })));
+        if (records[0]) {
+          setProfile(prev => ({ ...prev, businessName: prev.businessName || records[0].wholesaler_business_name || '', billingAddress: prev.billingAddress || records[0].location || '' }));
+          setSyncToast(`${records.length} published SKU${records.length === 1 ? '' : 's'} loaded from PartsForge.`);
+        }
+      } catch (error) {
+        if (!cancelled) setSyncError(error instanceof Error ? error.message : 'Inventory could not be loaded.');
+      } finally {
+        if (!cancelled) setLoadingInventory(false);
+      }
+    };
+    loadInventory();
+    return () => { cancelled = true; };
+  }, []);
 
   const fireAlert = useCallback(() => {
     triggerBeep();
@@ -493,30 +537,39 @@ export default function SellerConsole({
         const missing = required.filter(header => !headers.includes(header));
         if (missing.length) throw new Error(`Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.`);
 
-        const parsed: ShelfItem[] = [];
+        const parsedBySku = new Map<string, ShelfItem>();
+        const duplicateSkus = new Set<string>();
         const rowErrors: string[] = [];
         rows.slice(1).forEach((values, rowIndex) => {
           const record = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']));
           const stock = Number(record.stock);
           const price = Number(String(record.price).replace(/[$,]/g, ''));
-          if (!record.sku || !record.name || !Number.isInteger(stock) || stock < 0 || !Number.isFinite(price) || price < 0) {
+          const yearFrom = record.year_from ? Number(record.year_from) : null;
+          const yearTo = record.year_to ? Number(record.year_to) : null;
+          const yearsInvalid = (yearFrom !== null && (!Number.isInteger(yearFrom) || yearFrom < 1886 || yearFrom > 2100)) ||
+            (yearTo !== null && (!Number.isInteger(yearTo) || yearTo < 1886 || yearTo > 2100)) ||
+            (yearFrom !== null && yearTo !== null && yearFrom > yearTo);
+          if (!record.sku || !record.name || !Number.isInteger(stock) || stock < 0 || !Number.isFinite(price) || price < 0 || price > 9999999999.99 || yearsInvalid) {
             rowErrors.push(`Row ${rowIndex + 2}`);
             return;
           }
-          parsed.push({
+          const skuKey = String(record.sku).trim().toUpperCase();
+          if (parsedBySku.has(skuKey)) duplicateSkus.add(skuKey);
+          parsedBySku.set(skuKey, {
             id: `import-${rowIndex}-${record.sku}`, sku: record.sku, name: record.name,
             aisle: record.aisle || '', shelf: record.shelf || '', stockQty: stock, tradePrice: price,
             brand: record.brand || '', location: record.location || '', make: record.make || '', model: record.model || '',
-            yearFrom: record.year_from ? Number(record.year_from) : null, yearTo: record.year_to ? Number(record.year_to) : null,
+            yearFrom, yearTo,
             engine: record.engine || '', engineCode: record.engine_code || '', oemNumber: record.oem_number || '',
             fitmentNotes: record.fitment_notes || '',
           });
         });
         if (rowErrors.length) throw new Error(`${rowErrors.slice(0, 8).join(', ')} contain invalid SKU, name, stock or price values.`);
+        const parsed = [...parsedBySku.values()];
         if (!parsed.length) throw new Error('No valid inventory rows were found.');
         setShelf(parsed);
         setImportFileName(file.name);
-        setSyncToast(`${parsed.length} inventory rows validated. Review the preview, then publish.`);
+        setSyncToast(`${parsed.length} inventory rows validated. Review the preview, then publish.${duplicateSkus.size ? ` ${duplicateSkus.size} duplicate SKU${duplicateSkus.size === 1 ? '' : 's'} consolidated using the last row.` : ''}`);
       } catch (error) {
         setShelf([]);
         setImportFileName(null);
@@ -859,7 +912,7 @@ export default function SellerConsole({
                   </thead>
                   <tbody>
                     {!shelf.length && (
-                      <tr><td colSpan={6} className="px-4 py-8 text-center" style={{ color: C.textDim }}>No demonstration stock is shown. Upload the supplier's real CSV to begin.</td></tr>
+                      <tr><td colSpan={6} className="px-4 py-8 text-center" style={{ color: C.textDim }}>{loadingInventory ? 'Loading published inventory...' : "No published stock yet. Upload the supplier's CSV to begin."}</td></tr>
                     )}
                     {shelf.map(item => (
                       <tr key={item.id} className="border-b transition hover:bg-white/[0.02]" style={{ borderColor: C.border }}>
