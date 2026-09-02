@@ -5306,10 +5306,11 @@ const handleSearch = async (query) => {
           regionCode={regionCode || 'AU_VIC'}
           onRegionChange={handleRegionChange}
           usStates={(typeof REGIONS !== 'undefined' && REGIONS?.US?.usStates) ? REGIONS.US.usStates : []}
-          onUtStateChange={handleUsStateChange}
+          onUsStateChange={handleUsStateChange}
           onConnectLedger={handleConnectLedger}
           onConnectBankFeed={handleConnectBankFeed}
           bankFeedStatus={bankFeedStatus}
+          getAccessToken={async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || ''}
         />
       </AppErrorBoundary>
     );

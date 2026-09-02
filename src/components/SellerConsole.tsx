@@ -7,7 +7,7 @@ import {
   Settings, ChevronRight, ArrowLeft, Landmark, ShieldCheck, Send, X,
   Bell, Volume2, AlertTriangle, Link2,
 } from 'lucide-react';
-import { streamInvoiceToLedger, connectAccountingSoftware, executeWholesalerItemUpload, executeStripeSplitPayouts } from '../mockBackend.js';
+import { streamInvoiceToLedger, connectAccountingSoftware, executeStripeSplitPayouts } from '../mockBackend.js';
 
 // ─── Design Ttokens ──────────────────────────────────────────────────────────
 const C = {
@@ -37,6 +37,39 @@ const formatCurrency = (amount: number, region: any) =>
   }).format(amount);
 const getEffectiveTaxRate = (region: any, _stateCode: string) => Number(region.taxRate) || 0;
 const fmt = (n: number, region: any) => formatCurrency(n, region || REGIONS.AU);
+
+const CSV_HEADERS = ['sku', 'name', 'brand', 'stock', 'price', 'location', 'make', 'model', 'year_from', 'year_to', 'engine', 'engine_code', 'oem_number', 'fitment_notes'];
+const CSV_TEMPLATE = `${CSV_HEADERS.join(',')}\nBRK-001,Front brake pad set,Bendix,12,79.95,Epping VIC,Toyota,Corolla,2018,2022,1.8L,2ZR-FE,04465-02390,Verify rotor diameter before dispatch\n`;
+const HEADER_ALIASES: Record<string, string> = {
+  sku: 'sku', part_number: 'sku', partnumber: 'sku', product_code: 'sku', code: 'sku',
+  name: 'name', title: 'name', part: 'name', description: 'name', product_name: 'name',
+  brand: 'brand', manufacturer: 'brand', stock: 'stock', qty: 'stock', quantity: 'stock', stock_qty: 'stock',
+  price: 'price', trade_price: 'price', tradeprice: 'price', unit_price: 'price',
+  location: 'location', warehouse: 'location', branch: 'location', make: 'make', model: 'model',
+  year_from: 'year_from', yearfrom: 'year_from', start_year: 'year_from', year_to: 'year_to', yearto: 'year_to', end_year: 'year_to',
+  engine: 'engine', engine_code: 'engine_code', enginecode: 'engine_code', oem_number: 'oem_number', oem: 'oem_number',
+  fitment_notes: 'fitment_notes', notes: 'fitment_notes', aisle: 'aisle', shelf: 'shelf',
+};
+
+const parseCsvRows = (text: string) => {
+  const rows: string[][] = [];
+  let row: string[] = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === '"' && quoted && text[i + 1] === '"') { field += '"'; i += 1; }
+    else if (char === '"') quoted = !quoted;
+    else if (char === ',' && !quoted) { row.push(field.trim()); field = ''; }
+    else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[i + 1] === '\n') i += 1;
+      row.push(field.trim()); field = '';
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+    } else field += char;
+  }
+  row.push(field.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+};
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface SellerProfile {
@@ -77,6 +110,16 @@ interface ShelfItem {
   shelf: string;
   stockQty: number;
   tradePrice: number;
+  brand?: string;
+  location?: string;
+  make?: string;
+  model?: string;
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  engine?: string;
+  engineCode?: string;
+  oemNumber?: string;
+  fitmentNotes?: string;
 }
 
 interface SellerConsoleProps {
@@ -93,6 +136,7 @@ interface SellerConsoleProps {
   onConnectLedger: (provider: string) => Promise<any>;
   onConnectBankFeed: () => Promise<any>;
   bankFeedStatus: any;
+  getAccessToken: () => Promise<string>;
 }
 
 // ─── Workshop destination nodes ─────────────────────────────────────────────
@@ -369,24 +413,26 @@ function SellerAccountDropdown({ profile, updateProfile, region, onConnectLedger
 export default function SellerConsole({
   region, usStateCode, onDispatchToBankFeed, onSignOut, corpProfile, setCorpProfile,
   regionCode, onRegionChange, usStates, onUsStateChange,
-  onConnectLedger, onConnectBankFeed, bankFeedStatus,
+  onConnectLedger, onConnectBankFeed, bankFeedStatus, getAccessToken,
 }: SellerConsoleProps) {
   const r = region || REGIONS.AU;
   const f = (n: number) => fmt(n, r);
 
   const [profile, setProfile] = useState<SellerProfile>({
-    businessName: 'ForgedParts Pty Ltd',
-    registryCode: r.code === 'AU' ? corpProfile.abn || '51 428 927 641' : r.code === 'UK' ? corpProfile.companyHouse || '12345678' : corpProfile.ein || '47-1234567',
-    phone: corpProfile.phone || '+61 3 9401 2300',
-    billingAddress: '12 Trade Drive, Epping VIC 3076',
-    dispatchEmail: 'dispatch@forgedparts.com.au',
+    businessName: corpProfile.businessName || '',
+    registryCode: r.code === 'AU' ? corpProfile.abn || '' : r.code === 'UK' ? corpProfile.companyHouse || '' : corpProfile.ein || '',
+    phone: corpProfile.phone || '',
+    billingAddress: corpProfile.billingAddress || '',
+    dispatchEmail: corpProfile.dispatchEmail || '',
     subscriptionTier: 'monthly',
   });
 
-  const [tickets, setTickets] = useState<PickTicket[]>(SEED_TICKETS);
-  const [manifests] = useState<ConsolidatedManifest[]>(SEED_MANIFESTS);
-  const [shelf, setShelf] = useState<ShelfItem[]>(SEED_SHELF);
+  const [tickets, setTickets] = useState<PickTicket[]>([]);
+  const [manifests] = useState<ConsolidatedManifest[]>([]);
+  const [shelf, setShelf] = useState<ShelfItem[]>([]);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [alertFlash, setAlertFlash] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -435,30 +481,93 @@ export default function SellerConsole({
     fileInputRef.current?.click();
   };
 
-  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSyncToast(`CSV "${file.name}" ingested — ${shelf.length} shelf rows synced across PartsForge Index Network.`);
-      setTimeout(() => setSyncToast(null), 4000);
+      setSyncError(null);
+      try {
+        const rows = parseCsvRows(await file.text());
+        if (rows.length < 2) throw new Error('The CSV must contain a header row and at least one inventory row.');
+        const headers = rows[0].map(header => HEADER_ALIASES[header.trim().toLowerCase().replace(/[\s-]+/g, '_')] || header.trim().toLowerCase());
+        const required = ['sku', 'name', 'stock', 'price'];
+        const missing = required.filter(header => !headers.includes(header));
+        if (missing.length) throw new Error(`Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.`);
+
+        const parsed: ShelfItem[] = [];
+        const rowErrors: string[] = [];
+        rows.slice(1).forEach((values, rowIndex) => {
+          const record = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? '']));
+          const stock = Number(record.stock);
+          const price = Number(String(record.price).replace(/[$,]/g, ''));
+          if (!record.sku || !record.name || !Number.isInteger(stock) || stock < 0 || !Number.isFinite(price) || price < 0) {
+            rowErrors.push(`Row ${rowIndex + 2}`);
+            return;
+          }
+          parsed.push({
+            id: `import-${rowIndex}-${record.sku}`, sku: record.sku, name: record.name,
+            aisle: record.aisle || '', shelf: record.shelf || '', stockQty: stock, tradePrice: price,
+            brand: record.brand || '', location: record.location || '', make: record.make || '', model: record.model || '',
+            yearFrom: record.year_from ? Number(record.year_from) : null, yearTo: record.year_to ? Number(record.year_to) : null,
+            engine: record.engine || '', engineCode: record.engine_code || '', oemNumber: record.oem_number || '',
+            fitmentNotes: record.fitment_notes || '',
+          });
+        });
+        if (rowErrors.length) throw new Error(`${rowErrors.slice(0, 8).join(', ')} contain invalid SKU, name, stock or price values.`);
+        if (!parsed.length) throw new Error('No valid inventory rows were found.');
+        setShelf(parsed);
+        setImportFileName(file.name);
+        setSyncToast(`${parsed.length} inventory rows validated. Review the preview, then publish.`);
+      } catch (error) {
+        setShelf([]);
+        setImportFileName(null);
+        setSyncError(error instanceof Error ? error.message : 'The inventory file could not be read.');
+      }
     }
     e.target.value = '';
   };
 
+  const handleDownloadTemplate = () => {
+    const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'partsforge-inventory-template.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSyncShelf = async () => {
+    if (!shelf.length) {
+      setSyncError('Upload and validate an inventory CSV before publishing.');
+      return;
+    }
+    if (!profile.businessName.trim() || !profile.billingAddress.trim()) {
+      setSyncError('Enter the supplier business name and dispatch location before publishing.');
+      return;
+    }
     setSyncing(true);
-    await new Promise(r => setTimeout(r, 1200));
-    const totalValue = shelf.reduce((s, item) => s + item.stockQty * item.tradePrice, 0);
-    onDispatchToBankFeed({
-      description: `Shelf vault sync — ${shelf.length} SKUs reconciled`,
-      amount: totalValue,
-      channel: 'Inventory Sync',
-      ref: `SYNC-${Date.now()}`,
-    });
-    await streamInvoiceToLedger({ invoiceNo: `SYNC-${Date.now()}`, grandTotal: totalValue });
-    await connectAccountingSoftware('xero');
-    setSyncing(false);
-    setSyncToast(`Shelf vault synced. ${shelf.length} SKUs reconciled — ledger posted, accounting software updated.`);
-    setTimeout(() => setSyncToast(null), 4500);
+    setSyncError(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Your session expired. Sign in again before publishing inventory.');
+      let published = 0;
+      for (let offset = 0; offset < shelf.length; offset += 500) {
+        const response = await fetch('/api/wholesaler-register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ items: shelf.slice(offset, offset + 500), businessName: profile.businessName, location: profile.billingAddress }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result?.message || result?.errors?.[0]?.message || result?.error || 'Inventory publish failed.');
+        published += result.published || 0;
+      }
+      const totalValue = shelf.reduce((sum, item) => sum + item.stockQty * item.tradePrice, 0);
+      onDispatchToBankFeed({ description: `Inventory published — ${published} SKUs`, amount: totalValue, channel: 'Inventory Sync', ref: `SYNC-${Date.now()}` });
+      setSyncToast(`${published} SKUs are now live in PartsForge. Re-uploading the same SKUs safely updates them.`);
+      setImportFileName(null);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Inventory could not be published.');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const pendingTickets = tickets.filter(t => t.status === 'PENDING_DISPATCH');
@@ -540,6 +649,11 @@ export default function SellerConsole({
         {syncToast && (
           <div className="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs" style={{ borderColor: `${C.emerald}40`, background: `${C.emerald}10`, color: C.emerald }}>
             <CheckCircle2 className="h-4 w-4 shrink-0" /> {syncToast}
+          </div>
+        )}
+        {syncError && (
+          <div className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs" style={{ borderColor: `${C.red}40`, background: `${C.red}10`, color: C.red }}>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span><strong>Inventory needs attention:</strong> {syncError}</span>
           </div>
         )}
 
@@ -697,6 +811,17 @@ export default function SellerConsole({
               <span className="rounded-full px-2 py-0.5 text-[9px] font-bold" style={{ background: `${C.emerald}15`, color: C.emerald }}>{shelf.length} SKUs</span>
             </div>
             <div className="custom-scrollbar flex-1 overflow-y-auto p-3" style={{ maxHeight: 'calc(100vh - 230px)' }}>
+              <div className="mb-3 grid grid-cols-1 gap-2 rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+                <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+                  Supplier business name
+                  <input value={profile.businessName} onChange={(event) => updateProfile('businessName', event.target.value)} placeholder="Epping Auto Parts" className="mt-1 w-full rounded border px-2.5 py-2 text-xs font-normal text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+                </label>
+                <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.textDim }}>
+                  Dispatch location
+                  <input value={profile.billingAddress} onChange={(event) => updateProfile('billingAddress', event.target.value)} placeholder="Epping VIC 3076" className="mt-1 w-full rounded border px-2.5 py-2 text-xs font-normal text-slate-100 outline-none" style={{ borderColor: C.border, background: C.bg }} />
+                </label>
+              </div>
+
               {/* CSV Upload Drop Zone */}
               <div
                 onClick={handleCsvUpload}
@@ -704,9 +829,20 @@ export default function SellerConsole({
                 style={{ borderColor: `${C.orange}40`, background: `${C.orange}04` }}
               >
                 <Upload className="mx-auto h-6 w-6" style={{ color: C.orange }} />
-                <p className="mt-2 text-[10px] font-bold" style={{ color: C.orange }}>Upload Master CSV Inventory Sheet to Sync Local Stock Across the PartsForge Index Network</p>
+                <p className="mt-2 text-xs font-bold" style={{ color: C.orange }}>Upload inventory CSV</p>
+                <p className="mt-1 text-[10px]" style={{ color: C.textDim }}>Required: SKU, name, stock and price. Common supplier column names are recognised automatically.</p>
                 <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelected} className="hidden" />
               </div>
+
+              <button type="button" onClick={handleDownloadTemplate} className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-bold" style={{ borderColor: C.border, color: C.text }}>
+                <FileText className="h-3.5 w-3.5" /> Download PartsForge CSV template
+              </button>
+
+              {importFileName && (
+                <div className="mb-3 rounded-lg border px-3 py-2 text-[10px]" style={{ borderColor: `${C.emerald}35`, background: `${C.emerald}08`, color: C.emerald }}>
+                  Ready to publish: <strong>{importFileName}</strong> · {shelf.length} validated SKUs
+                </div>
+              )}
 
               {/* Spreadsheet grid */}
               <div className="overflow-x-auto rounded-lg border" style={{ borderColor: C.border }}>
@@ -722,6 +858,9 @@ export default function SellerConsole({
                     </tr>
                   </thead>
                   <tbody>
+                    {!shelf.length && (
+                      <tr><td colSpan={6} className="px-4 py-8 text-center" style={{ color: C.textDim }}>No demonstration stock is shown. Upload the supplier's real CSV to begin.</td></tr>
+                    )}
                     {shelf.map(item => (
                       <tr key={item.id} className="border-b transition hover:bg-white/[0.02]" style={{ borderColor: C.border }}>
                         <td className="px-2 py-2 font-mono text-slate-300">{item.sku}</td>
@@ -747,11 +886,11 @@ export default function SellerConsole({
               {/* Sync button */}
               <button
                 onClick={handleSyncShelf}
-                disabled={syncing}
+                disabled={syncing || !shelf.length}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs font-bold text-slate-950 transition disabled:opacity-50"
                 style={{ background: C.orange }}
               >
-                {syncing ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Syncing...</>) : (<><Save className="h-4 w-4" /> SYNC SHELF VAULT & AUTOMATE BACKENDS</>)}
+                {syncing ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Publishing inventory...</>) : (<><Save className="h-4 w-4" /> PUBLISH {shelf.length || 0} SKUs TO PARTSFORGE</>)}
               </button>
             </div>
           </div>
