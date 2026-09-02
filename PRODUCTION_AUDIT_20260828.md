@@ -11,16 +11,17 @@
 - AutoInfo `PartsListDx` has a server-only SOAP adapter and authenticated route at `/api/autoinfo-parts`. It is deliberately unavailable until real AutoInfo credentials are configured.
 - Sensitive API routes have a best-effort per-instance rate limiter, request IDs, timeouts, and structured logs without credentials.
 - The UI hard-coded admin credential and false “Stripe live/payment processed” messages were removed or corrected.
+- Public signup creates DIY accounts only. Mechanic, apprentice, seller and admin roles require controlled assignment after verification; browser-supplied signup metadata is not trusted for authorization.
 
 ## Local validation — 2 September 2026
 
 - `npm run build` passes (1,544 modules transformed; the generated application bundle is approximately 441 kB before gzip).
 - `npm run typecheck` passes.
 - `npm run lint` passes.
-- `npm test` passes all four supplier onboarding and catalogue-search tests.
+- `npm test` passes nine supplier, catalogue, configuration fail-closed and signup-role security tests.
 - A merge simulation against the fetched `main` commit (`6237055`) reports no conflicts; `main` is the branch merge base.
 - The vulnerable transitive `ws` package is pinned to patched version `8.21.3` through an npm override. npm resolves the override correctly and reports zero known vulnerabilities from the available audit data.
-- No Vercel Preview URL or deployment metadata was available in the repository, so deployed runtime behaviour remains unverified.
+- Both Vercel Preview projects build successfully and the Seller Terminal renders without browser console errors. Neither project currently has environment variables configured, so authenticated and provider-backed runtime behaviour remains unverified.
 
 ## Required configuration before integration tests
 
@@ -33,7 +34,7 @@ No credentials were present in the audited package, so none of these integration
 
 ## Critical remaining gaps
 
-1. The active Git repository, Vercel project, Supabase project and deployed environment were not connected to this task. This audit covers the latest local production package only.
+1. The GitHub branch and both Vercel Preview projects are connected and build successfully. Preview environment variables are empty, so Supabase, Stripe test mode, vehicle/OCR providers and AutoInfo cannot yet be integration-tested.
 2. Job cards, hoists, invoices, approvals, delivery state and technician history remain largely browser-local. They need tenant-scoped Supabase tables, server commands, RLS and audit history before multi-user use.
 3. Paid orders do not yet reserve/decrement supplier stock transactionally or create fulfilment jobs. Add a Postgres transaction/RPC invoked idempotently by the webhook worker.
 4. Refund and payment-failure reconciliation needs reliable mapping from Stripe objects to `orders`; store order IDs on every PaymentIntent/Charge and handle async methods.
@@ -43,7 +44,7 @@ No credentials were present in the audited package, so none of these integration
 8. The in-memory rate limiter is only per serverless instance. Replace or augment it with shared Redis/KV enforcement and provider quotas before public traffic.
 9. Monitoring needs a production service, alert routing, release/environment tags, uptime probes, performance thresholds and secret-safe retention rules.
 10. Privacy/security work remains: Australian privacy notice, retention/deletion process, data inventory, incident response, backups/restore tests, MFA policy for privileged users, admin audit UI, dependency scanning and penetration testing.
-11. Local build, typecheck, lint and the current four-test suite pass. Coverage remains narrow: authentication, RLS, Stripe webhooks, provider failures and full browser journeys still need integration and end-to-end tests.
+11. Local build, typecheck, lint and the current nine-test suite pass. Coverage remains narrow: live authentication, database RLS, signed Stripe webhook events, provider responses and full browser journeys still need integration and end-to-end tests.
 12. The dependency lock pins `ws` to patched version `8.21.3` and the local audit reports zero known vulnerabilities. CI or the Vercel Preview build should still verify a clean `npm ci` from the registry.
 13. Browser compatibility metadata is outdated. Refresh it in a network-enabled maintenance pass and review the resulting lockfile diff before commit.
 

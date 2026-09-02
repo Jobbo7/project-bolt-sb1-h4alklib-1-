@@ -173,8 +173,6 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [tier, setTier] = useState('DIY');
-  const [linkedAccount, setLinkedAccount] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -187,7 +185,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
     if (scrollHeight - scrollTop - clientHeight < 5) setScrolled(true);
   };
 
-  const canSubmit = (!isSignUpMode || fullName.trim()) && email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
+  const canSubmit = (!isSignUpMode || fullName.trim()) && email.trim() && password.trim() && !isAuthenticating && checked;
 
   const handleAuthSubmission = async (e) => {
     e.preventDefault();
@@ -203,13 +201,13 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
       const { error } = await supabaseAuth.auth.signUp({
         email: email.trim(),
         password: password.trim(),
-        options: { data: { name: fullName.trim(), tier, linkedAccount: tier === 'APPRENTICE' ? linkedAccount.trim() : 'Master Root Account' } },
+        options: { data: { name: fullName.trim() } },
       });
       if (error) {
         setAuthError(error.message);
         return;
       }
-      alert('Account created. Check your email to confirm the account, then sign in.');
+      alert('DIY account created. Check your email to confirm the account, then sign in. Mechanic, apprentice and supplier access requires administrator approval.');
       setIsSignUpMode(false);
       setPassword('');
     } else {
@@ -279,22 +277,8 @@ return (
           </div>
 
           {isSignUpMode && (
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Type</label>
-              <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
-                <option value="DIY">DIY Driver</option>
-                <option value="MECHANIC">Registered Mechanic (Master Account Holder)</option>
-                <option value="APPRENTICE">Employee Link (Sub-Account Access)</option>
-                <option value="SELLER">Verified Parts Seller Network</option>
-              </select>
-            </div>
-          )}
-
-          {isSignUpMode && tier === 'APPRENTICE' && (
-            <div className="p-3 rounded-lg border border-dashed animate-pulse" style={{ borderColor: C.orange, background: C.panel2 }}>
-              <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.orange }}>🔗 Link to Employer's Master Account Email</label>
-              <input type="email" required value={linkedAccount} onChange={(e) => setLinkedAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.background }} placeholder="owner@eppingmechanics.com.au" />
-              <p className="text-[10px] text-slate-400 mt-1 uppercase">Provides shared JobCard synchronization and routes purchase accountability workflows to the master workshop account.</p>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
+              Public signup creates a DIY account. Mechanic, apprentice and verified supplier roles are assigned only after administrator approval.
             </div>
           )}
 

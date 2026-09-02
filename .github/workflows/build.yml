@@ -6,11 +6,8 @@ on:
   pull_request:
     branches: [ main, master ]
 
-# ⚡ GLOBAL ENVIRONMENT SWITCH: Force-kills strict lockfile enforcement
 env:
-  NPM_CONFIG_CI: false
   NPM_CONFIG_FUND: false
-  NPM_CONFIG_AUDIT: false
 
 jobs:
   build:
@@ -25,10 +22,20 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Force-Sync All Project Dependencies
-        run: |
-          npm config set package-lock false
-          npm install --legacy-peer-deps
+      - name: Install locked dependencies
+        run: npm ci
 
-      - name: Compile and Verify Production Web Distribution Bundle
-        run: npm run build --if-present
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Check lint
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
