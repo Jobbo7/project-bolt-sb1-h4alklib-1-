@@ -75,3 +75,11 @@ test('latest signup migration ignores user-supplied authorization roles', async 
   assert.doesNotMatch(migration, /raw_user_meta_data\s*->>\s*'tier'/);
   assert.match(migration, /revoke update on table public\.profiles from authenticated/i);
 });
+
+test('profile privileges revoke operations that bypass or weaken RLS', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20260902020000_lock_profile_table_privileges.sql', import.meta.url), 'utf8');
+  assert.match(migration, /revoke all on table public\.profiles from anon, authenticated/i);
+  assert.match(migration, /grant select on table public\.profiles to authenticated/i);
+  assert.match(migration, /grant update \(display_name, linked_account\) on table public\.profiles to authenticated/i);
+  assert.doesNotMatch(migration, /grant\s+(insert|delete|truncate|trigger|references)/i);
+});
