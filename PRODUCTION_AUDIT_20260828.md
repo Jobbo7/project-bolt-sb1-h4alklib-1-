@@ -12,6 +12,16 @@
 - Sensitive API routes have a best-effort per-instance rate limiter, request IDs, timeouts, and structured logs without credentials.
 - The UI hard-coded admin credential and false “Stripe live/payment processed” messages were removed or corrected.
 
+## Local validation — 2 September 2026
+
+- `npm run build` passes (1,544 modules transformed; the generated application bundle is approximately 441 kB before gzip).
+- `npm run typecheck` passes.
+- `npm run lint` passes.
+- `npm test` passes all four supplier onboarding and catalogue-search tests.
+- A merge simulation against the fetched `main` commit (`6237055`) reports no conflicts; `main` is the branch merge base.
+- The vulnerable transitive `ws` package is pinned to patched version `8.21.3` through an npm override. npm resolves the override correctly and reports zero known vulnerabilities from the available audit data.
+- No Vercel Preview URL or deployment metadata was available in the repository, so deployed runtime behaviour remains unverified.
+
 ## Required configuration before integration tests
 
 - Supabase: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`.
@@ -33,8 +43,9 @@ No credentials were present in the audited package, so none of these integration
 8. The in-memory rate limiter is only per serverless instance. Replace or augment it with shared Redis/KV enforcement and provider quotas before public traffic.
 9. Monitoring needs a production service, alert routing, release/environment tags, uptime probes, performance thresholds and secret-safe retention rules.
 10. Privacy/security work remains: Australian privacy notice, retention/deletion process, data inventory, incident response, backups/restore tests, MFA policy for privileged users, admin audit UI, dependency scanning and penetration testing.
-11. The legacy TypeScript/component tree fails typecheck and lint (pre-existing errors). The package lock was repaired, but dependency audit currently reports 18 advisories (12 high); each upgrade needs compatibility review.
-12. The local Vite build is blocked by this workspace's parent-directory read restriction. Serverless files added in this pass all pass Node syntax checks.
+11. Local build, typecheck, lint and the current four-test suite pass. Coverage remains narrow: authentication, RLS, Stripe webhooks, provider failures and full browser journeys still need integration and end-to-end tests.
+12. The dependency lock pins `ws` to patched version `8.21.3` and the local audit reports zero known vulnerabilities. CI or the Vercel Preview build should still verify a clean `npm ci` from the registry.
+13. Browser compatibility metadata is outdated. Refresh it in a network-enabled maintenance pass and review the resulting lockfile diff before commit.
 
 ## Production activation sequence
 
