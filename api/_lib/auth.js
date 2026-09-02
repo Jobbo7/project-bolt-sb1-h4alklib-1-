@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { environmentValue } from './environment.js';
 
 export async function requireUser(req, res, allowedRoles = []) {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  const url = environmentValue('SUPABASE_URL');
+  const key = environmentValue('SUPABASE_PUBLISHABLE_KEY');
   const authorization = req.headers.authorization;
   if (!url || !key) {
     res.status(503).json({ error: 'AUTH_NOT_CONFIGURED' });

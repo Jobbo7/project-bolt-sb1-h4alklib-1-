@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { environmentValue } from './_lib/environment.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -6,7 +7,7 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
-  const stripeSecretKey = String(process.env.STRIPE_SECRET_KEY || '').trim();
+  const stripeSecretKey = environmentValue('STRIPE_SECRET_KEY');
   if (!stripeSecretKey) {
     return res.status(503).json({ error: 'PAYMENTS_NOT_CONFIGURED' });
   }

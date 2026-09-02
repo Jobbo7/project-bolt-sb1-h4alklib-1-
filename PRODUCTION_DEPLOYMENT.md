@@ -43,6 +43,8 @@ Also configure:
 - `OPENAI_API_KEY` and `OPENAI_MODEL` when diagnostics are enabled
 - `SOCIALCRAWL_API_KEY` only after licensing and privacy review
 
+For Vercel Preview deployments, use the isolated `PREVIEW_` alternatives when an existing variable is shared with Production: `PREVIEW_SUPABASE_URL`, `PREVIEW_SUPABASE_PUBLISHABLE_KEY`, `PREVIEW_SUPABASE_SECRET_KEY`, `PREVIEW_STRIPE_SECRET_KEY`, and `PREVIEW_STRIPE_WEBHOOK_SECRET`. The client build equivalents are `VITE_PREVIEW_SUPABASE_URL`, `VITE_PREVIEW_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PREVIEW_STRIPE_PUBLISHABLE_KEY`. Restrict these variables to Preview in Vercel. When present, they take precedence without modifying the Production values.
+
 After deployment, open `https://YOUR_DOMAIN/api/health`. A 200 response with `status: ready` means the required environment names are present. It does not prove provider credentials or billing are valid.
 
 ## Supabase setup

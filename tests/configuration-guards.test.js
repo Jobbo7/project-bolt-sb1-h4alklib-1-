@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import healthHandler from '../api/health.js';
 import checkoutHandler from '../api/create-checkout-session.js';
 import webhookHandler from '../api/stripe-webhook.js';
+import { environmentValue } from '../api/_lib/environment.js';
 
 function responseRecorder() {
   return {
@@ -29,7 +30,7 @@ function withoutEnvironment(names, callback) {
 
 test('health reports missing production configuration without exposing values', async () => {
   const names = ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'PLATE_API_KEY', 'OCR_SPACE_API_KEY'];
-  await withoutEnvironment(names, async () => {
+  await withoutEnvironment([...names, ...names.map(name => `PREVIEW_${name}`)], async () => {
     const res = responseRecorder();
     healthHandler({ method: 'GET' }, res);
     assert.equal(res.statusCode, 503);
@@ -40,7 +41,7 @@ test('health reports missing production configuration without exposing values', 
 });
 
 test('checkout fails closed before authentication when Stripe is not configured', async () => {
-  await withoutEnvironment(['STRIPE_SECRET_KEY', 'PUBLIC_APP_URL'], async () => {
+  await withoutEnvironment(['STRIPE_SECRET_KEY', 'PREVIEW_STRIPE_SECRET_KEY', 'PUBLIC_APP_URL'], async () => {
     const res = responseRecorder();
     await checkoutHandler({ method: 'POST', headers: {}, body: { items: [{ id: 'offer-1', qty: 1 }] } }, res);
     assert.equal(res.statusCode, 503);
@@ -49,11 +50,22 @@ test('checkout fails closed before authentication when Stripe is not configured'
 });
 
 test('webhook fails closed when signing secrets are not configured', async () => {
-  await withoutEnvironment(['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'], async () => {
+  await withoutEnvironment(['STRIPE_SECRET_KEY', 'PREVIEW_STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'PREVIEW_STRIPE_WEBHOOK_SECRET'], async () => {
     const res = responseRecorder();
     await webhookHandler({ method: 'POST', headers: {} }, res);
     assert.equal(res.statusCode, 503);
     assert.deepEqual(res.body, { error: 'STRIPE_WEBHOOK_NOT_CONFIGURED' });
+  });
+});
+
+test('Preview credentials override shared values without changing Production variables', async () => {
+  const names = ['SUPABASE_URL', 'PREVIEW_SUPABASE_URL'];
+  await withoutEnvironment(names, async () => {
+    process.env.SUPABASE_URL = 'https://production.invalid';
+    process.env.PREVIEW_SUPABASE_URL = 'https://preview.invalid';
+    assert.equal(environmentValue('SUPABASE_URL'), 'https://preview.invalid');
+    delete process.env.PREVIEW_SUPABASE_URL;
+    assert.equal(environmentValue('SUPABASE_URL'), 'https://production.invalid');
   });
 });
 

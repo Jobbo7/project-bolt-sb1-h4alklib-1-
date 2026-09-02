@@ -2,6 +2,7 @@
 // FILE: api/parts-search.js
 
 import { createClient } from '@supabase/supabase-js';
+import { environmentValue } from './_lib/environment.js';
 
 export const mergeCatalogueMatches = (results) =>
   [...new Map(results.flatMap(result => result.data || []).map(item => [item.id, item])).values()];
@@ -15,8 +16,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+    const supabaseUrl = environmentValue('SUPABASE_URL');
+    const supabaseKey = environmentValue('SUPABASE_SECRET_KEY') || environmentValue('SUPABASE_PUBLISHABLE_KEY');
     if (!supabaseUrl || !supabaseKey) {
       return res.status(503).json({ error: 'PARTS_DATABASE_NOT_CONFIGURED', local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     }

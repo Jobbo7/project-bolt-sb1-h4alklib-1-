@@ -13,7 +13,7 @@ export default function handler(req, res) {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
-  const missing = required.filter(name => !process.env[name]);
+  const missing = required.filter(name => !environmentValue(name));
   const optional = {
     autoinfo: Boolean(process.env.AUTOINFO_USER_ID && process.env.AUTOINFO_AUTH_CODE),
     diagnostics: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL),
@@ -26,3 +26,4 @@ export default function handler(req, res) {
     timestamp: new Date().toISOString(),
   });
 }
+import { environmentValue } from './_lib/environment.js';

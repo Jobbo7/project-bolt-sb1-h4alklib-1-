@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { requireUser } from './_lib/auth.js';
 import { enforceRateLimit } from './_lib/http.js';
+import { environmentValue } from './_lib/environment.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -10,20 +11,23 @@ export default async function handler(req, res) {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   }
-  if (!process.env.STRIPE_SECRET_KEY || !process.env.PUBLIC_APP_URL) {
+  const stripeSecretKey = environmentValue('STRIPE_SECRET_KEY');
+  const supabaseUrl = environmentValue('SUPABASE_URL');
+  const supabaseSecretKey = environmentValue('SUPABASE_SECRET_KEY');
+  if (!stripeSecretKey || !process.env.PUBLIC_APP_URL) {
     return res.status(503).json({ error: 'CHECKOUT_NOT_CONFIGURED' });
   }
   if (!enforceRateLimit(req, res, { scope: 'checkout', limit: 10 })) return;
   const auth = await requireUser(req, res, ['DIY', 'MECHANIC', 'SELLER', 'ADMIN']);
   if (!auth) return;
-  if (!process.env.SUPABASE_SECRET_KEY || !process.env.SUPABASE_URL) return res.status(503).json({ error: 'ORDER_STORE_NOT_CONFIGURED' });
+  if (!supabaseSecretKey || !supabaseUrl) return res.status(503).json({ error: 'ORDER_STORE_NOT_CONFIGURED' });
   const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 100) : [];
   if (!items.length) return res.status(422).json({ error: 'EMPTY_CART' });
 
   try {
     const requested = items.map(item => ({ id: String(item.id || ''), quantity: Math.max(1, Math.min(99, Number(item.qty) || 1)) }));
     if (requested.some(item => !item.id)) return res.status(422).json({ error: 'CATALOGUE_ITEM_ID_REQUIRED' });
-    const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const admin = createClient(supabaseUrl, supabaseSecretKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: offers, error: offerError } = await admin.from('seller_offers').select('id,part,brand,price,stock,owner_id').in('id', requested.map(item => item.id));
     if (offerError) throw offerError;
     const offerMap = new Map((offers || []).map(offer => [String(offer.id), offer]));
@@ -43,7 +47,7 @@ export default async function handler(req, res) {
         },
       };
     });
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey);
     const orderId = crypto.randomUUID();
     const currency = String(req.body?.currency || 'aud').toLowerCase();
     if (!['aud', 'nzd'].includes(currency)) return res.status(422).json({ error: 'UNSUPPORTED_CURRENCY' });
