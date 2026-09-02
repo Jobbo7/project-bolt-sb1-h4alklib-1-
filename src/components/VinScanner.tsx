@@ -70,7 +70,7 @@ export function VinScanner({ open, onClose, onDetected }: VinScannerProps) {
         await videoRef.current.play();
       }
       beginScan();
-    } catch (err) {
+    } catch {
       setPhase('denied');
     }
   }, [beginScan]);

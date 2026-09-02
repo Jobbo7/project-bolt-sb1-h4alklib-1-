@@ -1,6 +1,5 @@
-const tables = { offers: [], localWholesalers: [], facebookMarketplace: [] };
-
 import { KeyRound, Link2, Hash } from 'lucide-react';
+import { tables } from '../data/schema';
 
 const sideColors: Record<string, string> = {
   'All sides': 'text-sky-400 border-sky-500/30 bg-sky-500/5',

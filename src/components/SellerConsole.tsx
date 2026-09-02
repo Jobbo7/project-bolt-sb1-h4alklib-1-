@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+import { useState, useCallback, useRef } from 'react';
 import {
   Building2, Phone, Mail, MapPin, FileText, Zap, Truck, Package, Boxes,
   Warehouse, CreditCard, Save, Upload, ChevronDown, CheckCircle2, Activity,
@@ -6,7 +7,6 @@ import {
   Settings, ChevronRight, ArrowLeft, Landmark, ShieldCheck, Send, X,
   Bell, Volume2, AlertTriangle, Link2,
 } from 'lucide-react';
-const regionConfig = { defaultRegion: 'AU_VIC', currencies: { AU_VIC: 'A$' } };
 import { streamInvoiceToLedger, connectAccountingSoftware, executeWholesalerItemUpload, executeStripeSplitPayouts } from '../mockBackend.js';
 
 // ─── Design Ttokens ──────────────────────────────────────────────────────────
@@ -27,6 +27,15 @@ const C = {
 };
 
 const uid = () => `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+const REGIONS = {
+  AU: { code: 'AU', locale: 'en-AU', currency: 'AUD', taxIsFlat: true, taxRate: 0.1 },
+};
+const formatCurrency = (amount: number, region: any) =>
+  new Intl.NumberFormat(region.locale || 'en-AU', {
+    style: 'currency',
+    currency: region.currency || 'AUD',
+  }).format(amount);
+const getEffectiveTaxRate = (region: any, _stateCode: string) => Number(region.taxRate) || 0;
 const fmt = (n: number, region: any) => formatCurrency(n, region || REGIONS.AU);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
