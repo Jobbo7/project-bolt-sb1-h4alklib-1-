@@ -710,6 +710,25 @@ export default function SellerConsole({
           </div>
         )}
 
+        <section className="rounded-xl border p-4" style={{ borderColor: `${C.orange}40`, background: `${C.orange}08` }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Supplier onboarding · Start here</div>
+              <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold">
+                <span style={{ color: profile.businessName.trim() && profile.billingAddress.trim() ? C.emerald : C.textDim }}>1. Enter business and dispatch details</span>
+                <span style={{ color: C.textDim }}>→</span>
+                <span style={{ color: shelf.length ? C.emerald : C.textDim }}>2. Upload and review the CSV</span>
+                <span style={{ color: C.textDim }}>→</span>
+                <span style={{ color: importFileName ? C.orange : C.textDim }}>3. Publish inventory</span>
+              </div>
+              <p className="mt-1.5 text-[10px]" style={{ color: C.textDim }}>Already published stock loads automatically. Re-uploading an existing SKU updates it instead of creating a duplicate.</p>
+            </div>
+            <button type="button" onClick={() => document.getElementById('supplier-inventory-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="shrink-0 rounded-lg px-3 py-2 text-xs font-bold text-slate-950" style={{ background: C.orange }}>
+              Go to inventory importer
+            </button>
+          </div>
+        </section>
+
         {/* ═══════════════════════════════════════════════════════════════════
             DECOUPLED TRIPLE-COLUMN LIVE FREIGHT MANAGEMENT HUB
         ══════════════════════════════════════════════════════════════════ */}
@@ -855,7 +874,7 @@ export default function SellerConsole({
           </div>
 
           {/* ── COLUMN C: High-Density Merchant Shelf Inventory Vault ── */}
-          <div className="flex flex-col rounded-xl border" style={{ background: C.panel, borderColor: C.border, maxHeight: 'calc(100vh - 160px)' }}>
+          <div id="supplier-inventory-import" className="flex scroll-mt-24 flex-col rounded-xl border" style={{ background: C.panel, borderColor: C.border, maxHeight: 'calc(100vh - 160px)' }}>
             <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: C.border }}>
               <div className="flex items-center gap-2">
                 <Boxes className="h-4 w-4" style={{ color: C.orange }} />
