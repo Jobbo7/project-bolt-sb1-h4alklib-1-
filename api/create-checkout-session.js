@@ -34,23 +34,32 @@ export default async function handler(req, res) {
     if (offerMap.size !== requested.length) return res.status(409).json({ error: 'CATALOGUE_CHANGED' });
     const pricedItems = requested.map(item => ({ ...item, offer: offerMap.get(item.id) }));
     if (pricedItems.some(item => item.quantity > Number(item.offer.stock))) return res.status(409).json({ error: 'INSUFFICIENT_STOCK' });
-    const lineItems = pricedItems.map(item => {
-      const unitAmount = Math.round(Number(item.offer.price) * 100);
-      const quantity = item.quantity;
-      if (!Number.isInteger(unitAmount) || unitAmount < 50) throw new Error('INVALID_LINE_ITEM');
-      return {
-        quantity,
-        price_data: {
-          currency: String(req.body?.currency || 'aud').toLowerCase(),
-          unit_amount: unitAmount,
-          product_data: { name: String(item.offer.part || 'PartsForge item').slice(0, 200), metadata: { offerId: item.id } },
-        },
-      };
-    });
-    const stripe = new Stripe(stripeSecretKey);
-    const orderId = crypto.randomUUID();
-    const currency = String(req.body?.currency || 'aud').toLowerCase();
-    if (!['aud', 'nzd'].includes(currency)) return res.status(422).json({ error: 'UNSUPPORTED_CURRENCY' });
+   
+const currency = 'aud';
+
+const lineItems = pricedItems.map(item => {
+  const unitAmount = Math.round(Number(item.offer.price) * 100);
+  const quantity = item.quantity;
+
+  if (!Number.isInteger(unitAmount) || unitAmount < 50) {
+    throw new Error('INVALID_LINE_ITEM');
+  }
+
+  return {
+    quantity,
+    price_data: {
+      currency,
+      unit_amount: unitAmount,
+      product_data: {
+        name: String(item.offer.part || 'PartsForge item').slice(0, 200),
+        metadata: { offerId: item.id },
+      },
+    },
+  };
+});
+
+const stripe = new Stripe(stripeSecretKey);
+const orderId = crypto.randomUUID();
     const amountTotal = pricedItems.reduce((sum, item) => sum + Math.round(Number(item.offer.price) * 100) * item.quantity, 0);
     const { error: orderError } = await admin.from('orders').insert({ id: orderId, buyer_id: auth.user.id, status: 'PAYMENT_PENDING', currency, amount_total: amountTotal, items: pricedItems.map(item => ({ offerId: item.id, sellerId: item.offer.owner_id, title: item.offer.part, unitAmount: Math.round(Number(item.offer.price) * 100), quantity: item.quantity })) });
     if (orderError) throw orderError;
