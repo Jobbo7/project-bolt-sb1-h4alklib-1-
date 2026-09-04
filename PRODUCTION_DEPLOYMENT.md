@@ -43,6 +43,8 @@ Also configure:
 - `OPENAI_API_KEY` and `OPENAI_MODEL` when diagnostics are enabled
 - `SOCIALCRAWL_API_KEY` only after licensing and privacy review
 
+For Vercel Preview deployments, use the isolated `PREVIEW_` alternatives when an existing variable is shared with Production: `PREVIEW_SUPABASE_URL`, `PREVIEW_SUPABASE_PUBLISHABLE_KEY`, `PREVIEW_SUPABASE_SECRET_KEY`, `PREVIEW_STRIPE_SECRET_KEY`, and `PREVIEW_STRIPE_WEBHOOK_SECRET`. The client build equivalents are `VITE_PREVIEW_SUPABASE_URL`, `VITE_PREVIEW_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PREVIEW_STRIPE_PUBLISHABLE_KEY`. Restrict these variables to Preview in Vercel. When present, they take precedence without modifying the Production values.
+
 After deployment, open `https://YOUR_DOMAIN/api/health`. A 200 response with `status: ready` means the required environment names are present. It does not prove provider credentials or billing are valid.
 
 ## Supabase setup
@@ -55,8 +57,9 @@ After deployment, open `https://YOUR_DOMAIN/api/health`. A 200 response with `st
 6. Configure custom SMTP before launch.
 7. Confirm Row Level Security is enabled on every exposed table.
 8. Never expose `SUPABASE_SECRET_KEY` in Vercel variables beginning with `VITE_`.
+9. Confirm `anon` has no privileges on `public.profiles` and `authenticated` has only table-level `SELECT` plus column-level `UPDATE` for `display_name` and `linked_account`.
 
-The supplied migration creates authenticated profiles and seller offers with ownership policies. Operational workshop state still needs normalized tables and migration from browser storage before shared multi-device launch.
+The supplied migrations create authenticated profiles and seller offers with ownership policies, force public signups to the DIY role, and revoke profile-table operations that could bypass or weaken Row Level Security. Operational workshop state still needs normalized tables and migration from browser storage before shared multi-device launch.
 
 ## Stripe setup
 
@@ -85,8 +88,10 @@ Run locally:
 
 ```text
 npm ci
+npm test
 npm run typecheck
 npm run lint
+npm audit --offline
 npm run build
 npm run preview
 ```

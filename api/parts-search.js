@@ -2,6 +2,10 @@
 // FILE: api/parts-search.js
 
 import { createClient } from '@supabase/supabase-js';
+import { environmentValue } from './_lib/environment.js';
+
+export const mergeCatalogueMatches = (results) =>
+  [...new Map(results.flatMap(result => result.data || []).map(item => [item.id, item])).values()];
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
@@ -12,8 +16,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+    const supabaseUrl = environmentValue('SUPABASE_URL');
+    const supabaseKey = environmentValue('SUPABASE_SECRET_KEY') || environmentValue('SUPABASE_PUBLISHABLE_KEY');
     if (!supabaseUrl || !supabaseKey) {
       return res.status(503).json({ error: 'PARTS_DATABASE_NOT_CONFIGURED', local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     }
@@ -82,15 +86,17 @@ export default async function handler(req, res) {
       `📡 PartsForge parts search: "${cleanQuery}" for ${vehicle.year || ''} ${vehicle.make} ${vehicle.model}`
     );
 
-    // Search by part description first.
-    const { data: dbMatches, error: dbError } = await supabase
+    // Suppliers and workshops commonly identify stock by SKU or OEM number,
+    // so query each catalogue field and merge the results by offer ID.
+    const searchableFields = ['part', 'part_number', 'oem_number', 'brand'];
+    const searchResults = await Promise.all(searchableFields.map(field => supabase
       .from('seller_offers')
       .select('*')
-      .ilike('part', `%${cleanQuery}%`);
-
-    if (dbError) {
-      throw dbError;
-    }
+      .ilike(field, `%${cleanQuery}%`)
+      .limit(250)));
+    const dbError = searchResults.find(result => result.error)?.error;
+    if (dbError) throw dbError;
+    const dbMatches = mergeCatalogueMatches(searchResults);
 
     const scoreFitment = (item) => {
       let score = 0;
@@ -256,8 +262,17 @@ export default async function handler(req, res) {
           fitmentReasons:
             fitment.reasons,
 
-          fitmentVerified:
-            fitment.score >= 60,
+          // This score is a development ranking signal only. It is not an
+          // authoritative catalogue fitment assertion and must never be
+          // exposed to the workshop as "verified".
+          fitmentVerified: false,
+
+          fitmentCandidate:
+            fitment.score > 0,
+
+          fitmentSource: 'seller_offer_heuristic',
+
+          fitmentAuthoritative: false,
 
           vehicleFitment: {
             make: item.make || null,
@@ -365,6 +380,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       vehicleContext: vehicle,
+
+      catalogue: {
+        source: 'seller_offers',
+        mode: 'development',
+        authoritativeFitment: false,
+        message: 'Results are ranked from seller-supplied fields and require authoritative catalogue or supplier confirmation before ordering.'
+      },
 
       local: wholesaleItems,
 

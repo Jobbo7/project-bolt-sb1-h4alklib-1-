@@ -233,7 +233,7 @@ export type TableName =
 export interface TableMeta {
   name: TableName;
   label: string;
-  side: 'DIYers' | 'Mechanics' | 'Sellers' | 'Catalog' | 'Trust';
+  side: 'All sides' | 'DIYers' | 'Mechanics' | 'DIYers & Mechanics' | 'Sellers' | 'Catalog' | 'Trust';
   purpose: string;
   columns: { name: string; type: string; note?: string }[];
   indexes: string[];

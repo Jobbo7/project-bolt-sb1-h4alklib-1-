@@ -23,10 +23,9 @@ import {
   CheckCircle2,
   Cpu,
   Zap,
-  Wrench,
   User,
 } from 'lucide-react';
-import { simulateSearchEndpoint, simulateRegoLookup, simulatePhotoScan, simulateGeocode, haversineKm, type MockPart, type MockTutorial, type MockTorqueSpec, type MockVehicle, type GeocodeResult } from './mockBackend';
+import { simulateSearchEndpoint, simulateRegoLookup, simulateGeocode, haversineKm, type MockPart, type MockTutorial, type MockTorqueSpec, type MockVehicle, type GeocodeResult } from './mockBackend';
 import { TrackingOverlay } from './TrackingOverlay';
 import { TutorialHub } from './TutorialHub';
 import { VinScanner } from './VinScanner';
@@ -242,7 +241,6 @@ export function DiyDashboard() {
   const [torqueTitle, setTorqueTitle] = useState('');
 
   const [isTracking, setIsTracking] = useState(false);
-  const [trackingStage, setTrackingStage] = useState(0);
   const [trackingPartName, setTrackingPartName] = useState('Bendix Heavy Duty Brake Pads');
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -345,6 +343,8 @@ export function DiyDashboard() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
+    // Initial demo load only; subsequent searches are user driven.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeTab = TAB_DEFS.find((t) => t.key === tab)!;
@@ -357,13 +357,11 @@ export function DiyDashboard() {
   // Checkout — start the simulated courier tracking overlay.
   const handleCheckout = (part: MockPart) => {
     setTrackingPartName(part.title);
-    setTrackingStage(0);
     setIsTracking(true);
   };
 
   const resetTracking = () => {
     setIsTracking(false);
-    setTrackingStage(0);
   };
 
   if (isTracking) {
