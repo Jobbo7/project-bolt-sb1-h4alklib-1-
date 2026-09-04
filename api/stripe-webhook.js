@@ -107,14 +107,23 @@ export default async function handler(req, res) {
           session.currency || '',
         ).toLowerCase();
 
-        const orderMatchesPayment =
-          order.status === 'PAYMENT_PENDING' &&
-          order.stripe_checkout_session_id === session.id &&
-          Number(order.amount_total) === Number(session.amount_total) &&
-          expectedCurrency === paidCurrency &&
-          String(order.buyer_id) ===
-            String(session.metadata?.buyerId || '');
+        const paymentIdentityMatches =
+  order.stripe_checkout_session_id === session.id &&
+  Number(order.amount_total) === Number(session.amount_total) &&
+  expectedCurrency === paidCurrency &&
+  String(order.buyer_id) ===
+    String(session.metadata?.buyerId || '');
 
+if (order.status === 'PAID' && paymentIdentityMatches) {
+  return res.status(200).json({
+    received: true,
+    duplicate: true,
+  });
+}
+
+const orderMatchesPayment =
+  order.status === 'PAYMENT_PENDING' &&
+  paymentIdentityMatches;
         if (!orderMatchesPayment) {
           console.error('Stripe order reconciliation mismatch', {
             orderId: order.id,
@@ -124,34 +133,77 @@ export default async function handler(req, res) {
 
           throw new Error('STRIPE_ORDER_MISMATCH');
         }
+const { error: finalizeError } = await admin.rpc(
+  'finalize_paid_order',
+  {
+    p_order_id: order.id,
+    p_session_id: session.id,
+    p_payment_intent_id: String(
+      session.payment_intent || '',
+    ),
+    p_paid_at: new Date(
+      event.created * 1000,
+    ).toISOString(),
+  },
+);
 
-        const { data: updatedOrders, error: updateError } = await admin
-          .from('orders')
-          .update({
-            status: 'PAID',
-            stripe_payment_intent_id: String(
-              session.payment_intent || '',
-            ),
-            paid_at: new Date(
-              event.created * 1000,
-            ).toISOString(),
-          })
-          .eq('id', order.id)
-          .eq('status', 'PAYMENT_PENDING')
-          .eq('stripe_checkout_session_id', session.id)
-          .select('id');
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        if (!updatedOrders?.length) {
-          throw new Error('ORDER_UPDATE_CONFLICT');
-        }
+if (finalizeError) {
+  throw finalizeError;
+}
 
         break;
       }
+case 'checkout.session.expired': {
+  const session = event.data.object;
 
+  if (!session.metadata?.orderId) {
+    break;
+  }
+
+  const { data: order, error: orderLookupError } = await admin
+    .from('orders')
+    .select('id,status,stripe_checkout_session_id')
+    .eq('id', session.metadata.orderId)
+    .single();
+
+  if (orderLookupError || !order) {
+    throw new Error('ORDER_NOT_FOUND');
+  }
+
+  if (order.stripe_checkout_session_id !== session.id) {
+    throw new Error('STRIPE_ORDER_MISMATCH');
+  }
+
+  if (order.status === 'PAID') {
+    break;
+  }
+
+  const { error: releaseError } = await admin.rpc(
+    'release_order_stock',
+    {
+      p_order_id: order.id,
+    },
+  );
+
+  if (releaseError) {
+    throw releaseError;
+  }
+
+  if (order.status === 'PAYMENT_PENDING') {
+    const { error: cancelError } = await admin
+      .from('orders')
+      .update({ status: 'CANCELLED' })
+      .eq('id', order.id)
+      .eq('status', 'PAYMENT_PENDING')
+      .eq('stripe_checkout_session_id', session.id);
+
+    if (cancelError) {
+      throw cancelError;
+    }
+  }
+
+  break;
+}
       case 'payment_intent.succeeded':
       case 'payment_intent.payment_failed':
       case 'charge.refunded':
