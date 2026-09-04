@@ -173,27 +173,84 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const [accountType, setAccountType] = useState('DIY');
+  const [businessName, setBusinessName] = useState('');
+  const [abn, setAbn] = useState('');
+  const [phone, setPhone] = useState('');
+
   const [showPassword, setShowPassword] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [checked, setChecked] = useState(false);
   const [authError, setAuthError] = useState('');
+
   const boxRef = useRef(null);
 
+  const requiresBusinessDetails =
+    accountType === 'WORKSHOP' || accountType === 'SELLER';
+
+  const cleanAbn = abn.replace(/\D/g, '');
+const isValidAbn = (value) => {
+  if (!/^\d{11}$/.test(value)) return false;
+
+  const digits = value.split('').map(Number);
+  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+
+  digits[0] -= 1;
+
+  const total = digits.reduce(
+    (sum, digit, index) => sum + digit * weights[index],
+    0
+  );
+
+  return total % 89 === 0;
+};
+
+const abnIsValid = isValidAbn(cleanAbn);
   const handleScroll = () => {
     if (!boxRef.current) return;
+
     const { scrollTop, scrollHeight, clientHeight } = boxRef.current;
-    if (scrollHeight - scrollTop - clientHeight < 5) setScrolled(true);
+
+    if (scrollHeight - scrollTop - clientHeight < 5) {
+      setScrolled(true);
+    }
   };
 
-  const canSubmit = (!isSignUpMode || fullName.trim()) && email.trim() && password.trim() && !isAuthenticating && checked;
+  const canSubmit = Boolean(
+    (!isSignUpMode ||
+      (
+        fullName.trim() &&
+        (
+          !requiresBusinessDetails ||
+          (
+            businessName.trim() &&
+            abnIsValid &&
+            (
+              accountType !== 'SELLER' ||
+              phone.trim()
+            )
+          )
+        )
+      )
+    ) &&
+    email.trim() &&
+    password.trim() &&
+    !isAuthenticating &&
+    checked
+  );
 
   const handleAuthSubmission = async (e) => {
     e.preventDefault();
+
     if (!canSubmit) return;
+
     setAuthError('');
 
     if (!supabaseAuth) {
-      setAuthError('Authentication is not configured. Add the Supabase URL and publishable key to the deployment environment.');
+      setAuthError(
+        'Authentication is not configured. Add the Supabase URL and publishable key to the deployment environment.'
+      );
       return;
     }
 
@@ -201,118 +258,506 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
       const { error } = await supabaseAuth.auth.signUp({
         email: email.trim(),
         password: password.trim(),
-        options: { data: { name: fullName.trim() } },
+        options: {
+          data: {
+            name: fullName.trim(),
+            requestedAccountType: accountType,
+            businessName: requiresBusinessDetails
+              ? businessName.trim()
+              : '',
+            abn: requiresBusinessDetails
+              ? cleanAbn
+              : '',
+            phone: accountType === 'SELLER'
+              ? phone.trim()
+              : '',
+          },
+        },
       });
+
       if (error) {
         setAuthError(error.message);
         return;
       }
-      alert('DIY account created. Check your email to confirm the account, then sign in. Mechanic, apprentice and supplier access requires administrator approval.');
+
+      const accountLabel =
+        accountType === 'SELLER'
+          ? 'Supplier'
+          : accountType === 'WORKSHOP'
+            ? 'Workshop'
+            : 'Individual / DIY';
+
+      const confirmationMessage =
+        accountType === 'SELLER'
+          ? `${accountLabel} account created. Check your email to confirm your account. Supplier access will be activated after PartsForge verifies your business.`
+          : `${accountLabel} account created. Check your email to confirm your account before signing in.`;
+
+      alert(confirmationMessage);
+
       setIsSignUpMode(false);
       setPassword('');
-    } else {
-      const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: email.trim(), password: password.trim() });
-      if (error || !data?.user) {
-        setAuthError(error?.message || 'Sign-in failed.');
-        return;
-      }
-      const { data: dbProfile, error: profileError } = await supabaseAuth.from('profiles').select('display_name,role,linked_account').eq('id', data.user.id).single();
-      if (profileError || !dbProfile) {
-        await supabaseAuth.auth.signOut();
-        setAuthError('Your account profile could not be verified. Contact support.');
-        return;
-      }
-      onAuthenticate({ 
-        name: dbProfile.display_name || fullName.trim(),
-        email: data.user.email,
-        role: dbProfile.role,
-        linkedAccount: dbProfile.linked_account || '',
-        technicianId: data.user.id,
-        isEmployeeSubUser: dbProfile.role === 'APPRENTICE'
-      });
+      setChecked(false);
+      setScrolled(false);
+
+      return;
     }
+
+    const { data, error } =
+      await supabaseAuth.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
+      });
+
+    if (error || !data?.user) {
+      if (
+        String(error?.message || '')
+          .toLowerCase()
+          .includes('email not confirmed')
+      ) {
+        setAuthError(
+          'Please check your email and confirm your PartsForge account before signing in.'
+        );
+      } else {
+        setAuthError(error?.message || 'Sign-in failed.');
+      }
+
+      return;
+    }
+
+    const {
+      data: dbProfile,
+      error: profileError,
+    } = await supabaseAuth
+      .from('profiles')
+      .select(
+        'display_name,role,linked_account'
+      )
+      .eq('id', data.user.id)
+      .single();
+
+    if (profileError || !dbProfile) {
+      await supabaseAuth.auth.signOut();
+
+      setAuthError(
+        'Your account profile could not be verified. Contact PartsForge support.'
+      );
+
+      return;
+    }
+
+    onAuthenticate({
+      name:
+        dbProfile.display_name ||
+        fullName.trim(),
+      email: data.user.email,
+      role: dbProfile.role,
+      linkedAccount:
+        dbProfile.linked_account || '',
+      technicianId: data.user.id,
+      isEmployeeSubUser:
+        dbProfile.role === 'APPRENTICE',
+    });
   };
 
-return (
-    <div className="flex items-center justify-center p-4 min-h-screen">
-      <div className="w-full max-w-md rounded-2xl border p-6 shadow-2xl" style={{ borderColor: C.border, background: C.panel }}>
+  const switchAuthMode = () => {
+    setIsSignUpMode(!isSignUpMode);
+    setAuthError('');
+    setChecked(false);
+    setScrolled(false);
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div
+        className="w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+        style={{
+          borderColor: C.border,
+          background: C.panel,
+        }}
+      >
         <div className="flex flex-col items-center text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/20">
             <Wrench className="h-6 w-6 text-slate-950" />
           </div>
-          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
-          <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Secure account access</p>
-          <div className="mt-3 px-3 py-1 text-[11px] font-bold uppercase rounded-full border border-slate-800 bg-slate-900/60 text-slate-400">
-            Node: <span className="text-orange-400">{isSignUpMode ? 'Account Creation' : 'Secure Sign In'}</span>
+
+          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">
+            PartsForge Secure Gateway
+          </h2>
+
+          <p
+            className="mt-1 text-xs font-semibold uppercase tracking-widest"
+            style={{ color: C.orange }}
+          >
+            Secure account access
+          </p>
+
+          <div className="mt-3 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1 text-[11px] font-bold uppercase text-slate-400">
+            Node:{' '}
+            <span className="text-orange-400">
+              {isSignUpMode
+                ? 'Account Creation'
+                : 'Secure Sign In'}
+            </span>
           </div>
         </div>
 
-        <form onSubmit={handleAuthSubmission} className="mt-5 flex flex-col gap-4">
+        <form
+          onSubmit={handleAuthSubmission}
+          className="mt-5 flex flex-col gap-4"
+        >
           {authError && (
-            <div className="p-3 text-xs font-bold rounded-lg border border-red-900/30 bg-red-950/20 text-red-400 animate-pulse text-center">
+            <div className="animate-pulse rounded-lg border border-red-900/30 bg-red-950/20 p-3 text-center text-xs font-bold text-red-400">
               {authError}
             </div>
           )}
 
           {isSignUpMode && (
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Account Holder Name</label>
-              <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Full legal name" />
-            </div>
+            <>
+              <div>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.textDim }}
+                >
+                  Account Type
+                </label>
+
+                <select
+                  value={accountType}
+                  onChange={(e) =>
+                    setAccountType(e.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                  style={{
+                    borderColor: C.border,
+                    background: C.panel2,
+                  }}
+                >
+                  <option value="DIY">
+                    Individual / DIY
+                  </option>
+
+                  <option value="WORKSHOP">
+                    Workshop
+                  </option>
+
+                  <option value="SELLER">
+                    Supplier / Seller
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.textDim }}
+                >
+                  Account Holder Name
+                </label>
+
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) =>
+                    setFullName(e.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                  style={{
+                    borderColor: C.border,
+                    background: C.panel2,
+                  }}
+                  placeholder="Full legal name"
+                />
+              </div>
+
+              {requiresBusinessDetails && (
+                <>
+                  <div>
+                    <label
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.textDim }}
+                    >
+                      Business Name
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      value={businessName}
+                      onChange={(e) =>
+                        setBusinessName(e.target.value)
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                      style={{
+                        borderColor: C.border,
+                        background: C.panel2,
+                      }}
+                      placeholder="Registered business or trading name"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.textDim }}
+                    >
+                      ABN / Australian Business Number
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      maxLength={14}
+                      value={abn}
+                      onChange={(e) =>
+                        setAbn(e.target.value)
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                      style={{
+                        borderColor: C.border,
+                        background: C.panel2,
+                      }}
+                      placeholder="11 digit ABN"
+                    />
+
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Required for Workshop and Supplier accounts.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {accountType === 'SELLER' && (
+                <div>
+                  <label
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.textDim }}
+                  >
+                    Business Phone
+                  </label>
+
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value)
+                    }
+                    className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                    style={{
+                      borderColor: C.border,
+                      background: C.panel2,
+                    }}
+                    placeholder="Supplier contact number"
+                  />
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs leading-relaxed text-slate-400">
+                {accountType === 'DIY' && (
+                  <>
+                    Individual accounts can be used after email confirmation.
+                  </>
+                )}
+
+                {accountType === 'WORKSHOP' && (
+                  <>
+                    Workshop details and ABN are collected so PartsForge can identify and support your business account.
+                  </>
+                )}
+
+                {accountType === 'SELLER' && (
+                  <>
+                    Supplier details and ABN are collected for business verification. Supplier inventory and selling privileges require PartsForge approval.
+                  </>
+                )}
+              </div>
+            </>
           )}
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="name@workshop.com" />
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: C.textDim }}
+            >
+              Email Address
+            </label>
+
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) =>
+                setEmail(e.target.value)
+              }
+              className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+              style={{
+                borderColor: C.border,
+                background: C.panel2,
+              }}
+              placeholder="name@business.com"
+            />
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Secure Password</label>
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: C.textDim }}
+            >
+              Secure Password
+            </label>
+
             <div className="relative mt-1">
-              <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border pl-3 pr-10 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="••••••••" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <input
+                type={
+                  showPassword
+                    ? 'text'
+                    : 'password'
+                }
+                required
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                className="w-full rounded-lg border py-2.5 pl-3 pr-10 text-sm text-slate-100 outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.panel2,
+                }}
+                placeholder="••••••••"
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPassword(!showPassword)
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
 
-          {isSignUpMode && (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-              Public signup creates a DIY account. Mechanic, apprentice and verified supplier roles are assigned only after administrator approval.
-            </div>
-          )}
+          <div
+            ref={boxRef}
+            onScroll={handleScroll}
+            className="terms-scroll mt-1 h-20 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed"
+            style={{
+              background: C.panel2,
+              borderColor: C.border,
+              color: C.textDim,
+            }}
+          >
+            <p
+              className="mb-1 font-semibold"
+              style={{ color: C.orange }}
+            >
+              SECURE GATEWAY & LIABILITY ROUTING AGREEMENT
+            </p>
 
-          <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-1 h-20 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
-            <p className="mb-1 font-semibold" style={{ color: C.orange }}>SECURE GATEWAY & LIABILITY ROUTING AGREEMENT</p>
-            <p className="mb-1">PartsForge uses account permissions to control workshop actions. Payments are available only when Stripe is configured, and an order is not treated as paid until PartsForge receives a verified payment confirmation.</p>
-            <p>Scroll down to review and accept the account and safety terms.</p>
+            <p className="mb-1">
+              PartsForge uses account permissions to control workshop and supplier actions. Payments are available only when Stripe is configured, and an order is not treated as paid until PartsForge receives a verified payment confirmation.
+            </p>
+
+            <p>
+              Scroll down to review and accept the account and safety terms.
+            </p>
           </div>
 
           <div className="flex items-center gap-2 text-[10px]">
             {scrolled ? (
-              <span className="flex items-center gap-1" style={{ color: C.emerald }}><CheckCircle2 className="h-3 w-3" /> Framework Read Verified</span>
+              <span
+                className="flex items-center gap-1"
+                style={{ color: C.emerald }}
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Framework Read Verified
+              </span>
             ) : (
-              <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="h-3 w-3" /> Scroll box to verify protocols</span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <AlertTriangle className="h-3 w-3" />
+                Scroll box to verify protocols
+              </span>
             )}
           </div>
 
-          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${scrolled ? '' : 'cursor-not-allowed opacity-50'}`} style={{ borderColor: scrolled ? `${C.orange}40` : C.border, background: scrolled ? `${C.orange}05` : C.panel2 }}>
-            <input type="checkbox" checked={checked} disabled={!scrolled} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-4 w-4" style={{ accentColor: C.orange }} />
-            <span className="text-xs text-slate-300">I verify all linked device liability requirements.</span>
+          <label
+            className={`flex items-start gap-3 rounded-lg border p-3 transition ${
+              scrolled
+                ? 'cursor-pointer'
+                : 'cursor-not-allowed opacity-50'
+            }`}
+            style={{
+              borderColor: scrolled
+                ? `${C.orange}40`
+                : C.border,
+              background: scrolled
+                ? `${C.orange}05`
+                : C.panel2,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={!scrolled}
+              onChange={(e) =>
+                setChecked(e.target.checked)
+              }
+              className="mt-0.5 h-4 w-4"
+              style={{ accentColor: C.orange }}
+            />
+
+            <span className="text-xs text-slate-300">
+              I verify the account details provided above and accept the PartsForge account and liability requirements.
+            </span>
           </label>
 
-          <button type="submit" disabled={!canSubmit} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition shadow-md" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
-                        {isAuthenticating ? (
-              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Synchronizing Node...</>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold shadow-md transition"
+            style={{
+              background: canSubmit
+                ? C.orange
+                : C.border,
+              color: canSubmit
+                ? '#000'
+                : C.textDim,
+            }}
+          >
+            {isAuthenticating ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                Synchronizing Node...
+              </>
             ) : (
-              <>{isSignUpMode ? 'Create Secure Business Account' : 'Authenticate & Secure Entry'}</>
+              <>
+                {isSignUpMode
+                  ? accountType === 'SELLER'
+                    ? 'Create Supplier Account'
+                    : accountType === 'WORKSHOP'
+                      ? 'Create Workshop Account'
+                      : 'Create Individual Account'
+                  : 'Authenticate & Secure Entry'}
+              </>
             )}
           </button>
 
-          {/* TOGGLE LINK FOOTER */}
-          <div className="text-center mt-2 border-t pt-3 border-slate-800/80">
-            <button type="button" onClick={() => { setIsSignUpMode(!isSignUpMode); setAuthError(''); setChecked(false); }} className="text-xs font-medium text-slate-400 hover:text-orange-400 transition-all underline">
-              {isSignUpMode ? "Already have a workshop setup? Sign In here" : "Don't have a business node registered? Sign Up here"}
+          <div className="mt-2 border-t border-slate-800/80 pt-3 text-center">
+            <button
+              type="button"
+              onClick={switchAuthMode}
+              className="text-xs font-medium text-slate-400 underline transition-all hover:text-orange-400"
+            >
+              {isSignUpMode
+                ? 'Already have a PartsForge account? Sign in'
+                : 'New to PartsForge? Create an account'}
             </button>
           </div>
         </form>
