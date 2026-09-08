@@ -27,7 +27,7 @@ test('every customer-facing production mutation endpoint applies the server demo
     '../api/create-checkout-session.js',
     '../api/create-payment-intent.js',
     '../api/wholesaler-register.js',
-    '../api/collision-jobs.js',
+    '../api/collision.js',
   ];
   for (const file of files) {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
