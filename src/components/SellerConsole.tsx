@@ -123,6 +123,8 @@ interface ShelfItem {
 }
 
 interface SellerConsoleProps {
+  adminDemoMode?: boolean;
+  onExitDemo?: () => void;
   region: any;
   usStateCode: string;
   onDispatchToBankFeed: (summary: { description: string; amount: number; channel: string; ref: string }) => void;
@@ -411,6 +413,7 @@ function SellerAccountDropdown({ profile, updateProfile, region, onConnectLedger
 
 // ─── Main SellerConsole Component ───────────────────────────────────────────
 export default function SellerConsole({
+  adminDemoMode = false, onExitDemo,
   region, usStateCode, onDispatchToBankFeed, onSignOut, corpProfile, setCorpProfile,
   regionCode, onRegionChange, usStates, onUsStateChange,
   onConnectLedger, onConnectBankFeed, bankFeedStatus, getAccessToken,
@@ -469,7 +472,12 @@ export default function SellerConsole({
       try {
         const token = await getAccessTokenRef.current();
         if (!token) throw new Error('Your session expired. Sign in again to load inventory.');
-        const response = await fetch('/api/wholesaler-register', { headers: { Authorization: `Bearer ${token}` } });
+        const response = await fetch('/api/wholesaler-register', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'X-PartsForge-Admin-Demo': adminDemoMode ? 'true' : 'false',
+          },
+        });
         const result = await response.json();
         if (!response.ok) throw new Error(result?.message || result?.error || 'Inventory could not be loaded.');
         if (cancelled) return;
@@ -493,7 +501,7 @@ export default function SellerConsole({
     };
     loadInventory();
     return () => { cancelled = true; };
-  }, []);
+  }, [adminDemoMode]);
 
   const fireAlert = useCallback(() => {
     triggerBeep();
@@ -502,6 +510,10 @@ export default function SellerConsole({
   }, [triggerBeep]);
 
   const handleDispatch = useCallback((ticketId: string) => {
+    if (adminDemoMode) {
+      setSyncError('Demo mode: dispatch, stock, and bank-feed changes are blocked.');
+      return;
+    }
     setTickets(prev => prev.map(t => {
       if (t.id !== ticketId) return t;
       onDispatchToBankFeed({
@@ -515,7 +527,7 @@ export default function SellerConsole({
     fireAlert();
     setSyncToast(`Pick notification flashed to staff terminals — ticket status set to READY FOR COLLECTION.`);
     setTimeout(() => setSyncToast(null), 3500);
-  }, [onDispatchToBankFeed, fireAlert]);
+  }, [adminDemoMode, onDispatchToBankFeed, fireAlert]);
 
   const handleStockChange = (id: string, newQty: number) => {
     setShelf(prev => prev.map(s => s.id === id ? { ...s, stockQty: Math.max(0, newQty) } : s));
@@ -589,6 +601,10 @@ export default function SellerConsole({
   };
 
   const handleSyncShelf = async () => {
+    if (adminDemoMode) {
+      setSyncError('Demo mode: inventory publishing is blocked. Your validated preview has not changed production stock.');
+      return;
+    }
     if (!shelf.length) {
       setSyncError('Upload and validate an inventory CSV before publishing.');
       return;
@@ -641,6 +657,12 @@ export default function SellerConsole({
 
   return (
     <div className="min-h-screen" style={{ background: C.bg, color: C.text }}>
+      {adminDemoMode && (
+        <div className="sticky top-0 z-[70] flex items-center justify-between gap-3 border-b border-amber-400/40 bg-amber-950/95 px-4 py-2 text-xs text-amber-100">
+          <span><strong>ADMIN DEMO MODE</strong> — live inventory is visible; publishing, dispatch, payments, and integrations are blocked.</span>
+          <button type="button" onClick={onExitDemo} className="shrink-0 rounded-md border border-amber-300/50 px-2.5 py-1 font-bold">Back to Admin</button>
+        </div>
+      )}
       {/* Alert flash overlay */}
       {alertFlash && (
         <div className="fixed inset-0 z-[90] pointer-events-none animate-pulse" style={{ background: `radial-gradient(circle at 50% 50%, ${C.orange}15, transparent 70%)` }} />
