@@ -1,5 +1,7 @@
 import Stripe from 'stripe';
 import { environmentValue } from './_lib/environment.js';
+import { requireUser } from './_lib/auth.js';
+import { rejectAdminDemoMutation } from './_lib/admin-demo.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -11,6 +13,9 @@ export default async function handler(req, res) {
   if (!stripeSecretKey) {
     return res.status(503).json({ error: 'PAYMENTS_NOT_CONFIGURED' });
   }
+  const auth = await requireUser(req, res, ['DIY', 'MECHANIC', 'SELLER', 'ADMIN']);
+  if (!auth) return;
+  if (rejectAdminDemoMutation(auth, res)) return;
 
   const amount = Number(req.body?.amount);
   const currency = String(req.body?.currency || 'aud').toLowerCase();
