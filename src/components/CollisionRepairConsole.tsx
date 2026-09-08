@@ -74,7 +74,7 @@ export default function CollisionRepairConsole({ adminDemoMode = false, onExitDe
       if (!vehicle) throw new Error('Identify the vehicle before requesting a valuation.');
       if (!numberValue(odometer)) throw new Error('Enter the current odometer kilometres.');
       const token = await getAccessToken();
-      const response = await fetch('/api/vehicle-valuation', {
+      const response = await fetch('/api/collision?action=valuation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ vehicle, odometerKm: numberValue(odometer), condition, state: stateCode }),
@@ -104,7 +104,7 @@ export default function CollisionRepairConsole({ adminDemoMode = false, onExitDe
     setBusy(true); setMessage('');
     try {
       const token = await getAccessToken();
-      const response = await fetch('/api/collision-jobs', {
+      const response = await fetch('/api/collision?action=jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
