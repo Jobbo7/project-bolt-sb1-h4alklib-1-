@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { requireUser } from './_lib/auth.js';
 import { enforceRateLimit } from './_lib/http.js';
 import { environmentValue } from './_lib/environment.js';
+import { rejectAdminDemoMutation } from './_lib/admin-demo.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -20,6 +21,7 @@ export default async function handler(req, res) {
   if (!enforceRateLimit(req, res, { scope: 'checkout', limit: 10 })) return;
   const auth = await requireUser(req, res, ['DIY', 'MECHANIC', 'SELLER', 'ADMIN']);
   if (!auth) return;
+  if (rejectAdminDemoMutation(auth, res)) return;
   if (!supabaseSecretKey || !supabaseUrl) return res.status(503).json({ error: 'ORDER_STORE_NOT_CONFIGURED' });
   const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 100) : [];
   if (!items.length) return res.status(422).json({ error: 'EMPTY_CART' });
