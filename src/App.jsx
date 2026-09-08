@@ -34,6 +34,7 @@ const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, prov
 
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
+import CollisionRepairConsole from './components/CollisionRepairConsole';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_PREVIEW_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
@@ -187,7 +188,7 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
   const boxRef = useRef(null);
 
   const requiresBusinessDetails =
-    accountType === 'WORKSHOP' || accountType === 'SELLER';
+    accountType === 'WORKSHOP' || accountType === 'COLLISION' || accountType === 'SELLER';
 
   const cleanAbn = abn.replace(/\D/g, '');
 const isValidAbn = (value) => {
@@ -261,7 +262,8 @@ const abnIsValid = isValidAbn(cleanAbn);
         options: {
           data: {
             name: fullName.trim(),
-            requestedAccountType: accountType,
+            requestedAccountType: accountType === 'COLLISION' ? 'WORKSHOP' : accountType,
+            workshopType: accountType === 'COLLISION' ? 'COLLISION' : accountType === 'WORKSHOP' ? 'MECHANICAL' : '',
             businessName: requiresBusinessDetails
               ? businessName.trim()
               : '',
@@ -283,6 +285,8 @@ const abnIsValid = isValidAbn(cleanAbn);
       const accountLabel =
         accountType === 'SELLER'
           ? 'Supplier'
+          : accountType === 'COLLISION'
+            ? 'Collision Repair Workshop'
           : accountType === 'WORKSHOP'
             ? 'Workshop'
             : 'Individual / DIY';
@@ -351,6 +355,7 @@ const abnIsValid = isValidAbn(cleanAbn);
         fullName.trim(),
       email: data.user.email,
       role: dbProfile.role,
+      workshopType: String(data.user.user_metadata?.workshopType || '').toUpperCase(),
       linkedAccount:
         dbProfile.linked_account || '',
       technicianId: data.user.id,
@@ -437,7 +442,11 @@ const abnIsValid = isValidAbn(cleanAbn);
                   </option>
 
                   <option value="WORKSHOP">
-                    Workshop
+                    Mechanical Workshop
+                  </option>
+
+                  <option value="COLLISION">
+                    Collision Repair / Panel Shop
                   </option>
 
                   <option value="SELLER">
@@ -564,6 +573,12 @@ const abnIsValid = isValidAbn(cleanAbn);
                 {accountType === 'WORKSHOP' && (
                   <>
                     Workshop details and ABN are collected so PartsForge can identify and support your business account.
+                  </>
+                )}
+
+                {accountType === 'COLLISION' && (
+                  <>
+                    Collision repair accounts support private repairs and insurer claim assessments, including documented valuation and quote revisions.
                   </>
                 )}
 
@@ -743,6 +758,8 @@ const abnIsValid = isValidAbn(cleanAbn);
                     ? 'Create Supplier Account'
                     : accountType === 'WORKSHOP'
                       ? 'Create Workshop Account'
+                      : accountType === 'COLLISION'
+                        ? 'Create Collision Repair Account'
                       : 'Create Individual Account'
                   : 'Authenticate & Secure Entry'}
               </>
@@ -4094,8 +4111,17 @@ function DataResidencyNode({ regionCode }) {
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
+function AdminDemoBanner({ onExit }) {
+  return (
+    <div className="sticky top-0 z-[70] flex items-center justify-between gap-3 border-b border-amber-400/40 bg-amber-950/95 px-4 py-2 text-xs text-amber-100">
+      <span><strong>ADMIN DEMO MODE</strong> — live searches and pricing are enabled; purchases and production changes are blocked.</span>
+      <button type="button" onClick={onExit} className="shrink-0 rounded-md border border-amber-300/50 px-2.5 py-1 font-bold">Back to Admin</button>
+    </div>
+  );
+}
+
 // ─── Admin Console (3-column global infrastructure terminal) ─────────────────
-function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, paidInvoices, onSignOut }) {
+function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, paidInvoices, onSignOut, onSelectDashboard }) {
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const [patchText, setPatchText] = useState('');
   const [patchDeployed, setPatchDeployed] = useState(false);
@@ -4154,6 +4180,24 @@ function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode
             </div>
           </div>
           <div className="flex items-center gap-3">
+{session?.role === 'ADMIN' && session?.email?.trim().toLowerCase() === 'admin@partsforge.test' && onSelectDashboard && (
+  <select
+    defaultValue="ADMIN"
+    onChange={(e) => onSelectDashboard(e.target.value)}
+    className="rounded-lg border px-3 py-2 text-xs font-bold outline-none"
+    style={{
+      borderColor: `${C.orange}50`,
+      background: C.panel,
+      color: C.orange,
+    }}
+  >
+    <option value="ADMIN">Admin Dashboard</option>
+    <option value="DIY">DIY Dashboard</option>
+    <option value="WORKSHOP">Workshop Dashboard</option>
+    <option value="COLLISION">Collision Repair Dashboard</option>
+    <option value="SUPPLIER">Supplier Dashboard</option>
+  </select>
+)}
             <div className="hidden items-center gap-1.5 text-[10px] font-mono sm:flex" style={{ color: C.emerald }}>
               <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: C.emerald }} /> LIVE
             </div>
@@ -4401,7 +4445,32 @@ export default function App() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isEmployeeSubUser, setIsEmployeeSubUser] = useState(false);
   const [teamLinkCode, setTeamLinkCode] = useState(null);
-  const role = userSession?.role === 'MECHANIC' || userSession?.role === 'APPRENTICE' ? 'pro' : userSession?.role === 'SELLER' ? 'seller' : 'diy';
+  const isDemoAdmin =
+    userSession?.role === 'ADMIN' &&
+    userSession?.email?.trim().toLowerCase() === 'admin@partsforge.test';
+
+  const [qaPersona, setQaPersona] = useState(null);
+  const effectiveRole =
+    isDemoAdmin && qaPersona
+      ? qaPersona === 'WORKSHOP' || qaPersona === 'COLLISION'
+        ? 'MECHANIC'
+        : qaPersona === 'SUPPLIER'
+          ? 'SELLER'
+          : qaPersona === 'DIY'
+            ? 'DIY'
+            : 'ADMIN'
+      : userSession?.role;
+  const adminDemoMode = isDemoAdmin && effectiveRole !== 'ADMIN';
+  const effectiveWorkshopType = qaPersona === 'COLLISION'
+    ? 'COLLISION'
+    : String(userSession?.workshopType || '').toUpperCase();
+
+  const role =
+    effectiveRole === 'MECHANIC' || effectiveRole === 'APPRENTICE'
+      ? 'pro'
+      : effectiveRole === 'SELLER'
+        ? 'seller'
+        : 'diy';
   const signedInTechnician = useMemo(() => ({
     id: userSession?.technicianId || userSession?.employeeCode || userSession?.email || 'unidentified-session',
     name: userSession?.name || userSession?.email?.split('@')[0] || 'Unidentified Technician',
@@ -4925,6 +4994,11 @@ const handleSearch = async (query) => {
   };
 
   const handleExportWorkshopExpense = (expense) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: accounting exports are blocked.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
     setWorkshopExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, exported: true } : e));
     setSaveToast(`CSV/PDF statement emailed to ${userSession?.email || 'your registered email'} — check your PC inbox.`);
     setTimeout(() => setSaveToast(null), 4500);
@@ -5130,6 +5204,11 @@ const handleSearch = async (query) => {
 
   // ── Master mechanic approves employee purchase request (payment remains pending) ──
   const handleApproveEmployeePurchase = (approvalId) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: purchase approval cannot create payment, dispatch, stock, or ledger records.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const req = pendingApprovals.find(a => a.id === approvalId);
     if (!req) return;
 
@@ -5241,6 +5320,11 @@ const handleSearch = async (query) => {
 
   // ── Global Bank Feed + Accounting Ledger dispatch ──
   const dispatchToBankFeed = useCallback((summary) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: accounting and bank-feed writes are blocked.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
     const entry = {
       id: uid(),
       timestamp: new Date().toISOString(),
@@ -5252,12 +5336,18 @@ const handleSearch = async (query) => {
     };
     setBankFeedEntries(prev => [entry, ...prev]);
     setLedgerEntries(prev => [{ ...entry, ledgerId: `XRO-${Math.floor(100000 + Math.random() * 900000)}`, accountCode: '500-PURCH', status: 'POSTED' }, ...prev]);
-  }, []);
+  }, [adminDemoMode]);
 
   // ── Checkout: dispatch courier, hold items pending handshake verification ──
   const handleCheckout = async () => {
     const cartSnapshot = [...purchaseCart];
     const cartTotal = cartSnapshot.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
+
+    if (adminDemoMode) {
+      setSaveToast('DEMO MODE — no checkout, payment, order, or stock reservation was created.');
+      setTimeout(() => setSaveToast(null), 4500);
+      return;
+    }
 
     // Employee sub-user gating: block direct payment, route to master approval queue
     if (isEmployeeSubUser) {
@@ -5281,6 +5371,11 @@ const handleSearch = async (query) => {
   };
 
   const handleSettleInvoice = async (invoiceNo, method) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: invoice payment and settlement are blocked.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const result = await settleInvoiceViaCustomerPortal(invoiceNo, method);
     if (!result?.ok) {
       setSaveToast('Payment remains unpaid until a signed Stripe webhook confirms cleared funds.');
@@ -5348,6 +5443,11 @@ const handleSearch = async (query) => {
   };
 
     const handleCompileInvoice = async () => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: invoice creation, payment requests, and accounting writes are blocked.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const unallocatedParts = jobCart.filter(item => !item.fromVault || !item.vaultId);
     if (unallocatedParts.length > 0) {
       setSaveToast('Invoice blocked: every part must be delivered and allocated from stock first.');
@@ -5626,6 +5726,7 @@ const handleSearch = async (query) => {
   };
 
   const handleConnectBankFeed = async () => {
+    if (adminDemoMode) return demoMutationResult();
     const result = await connectOpenBankingFeed();
     setBankFeedStatus(result);
     return result;
@@ -5633,23 +5734,27 @@ const handleSearch = async (query) => {
 
   // ── Accounting export & accountant email ──
   const handleExportToAccounting = async (items) => {
+    if (adminDemoMode) return demoMutationResult();
     await streamInvoiceToLedger(items[0]);
   };
 
   const handleEmailAccountant = async (items) => {
+    if (adminDemoMode) return demoMutationResult();
     await triggerXeroAccountantSync(items[0], corpProfile.accountantEmail || 'accountant@tax.com');
   };
 
   // ── Bank feed (on-demand only) ──
-  const handleLinkAto = async () => linkAtoSbr();
-  const handleConnectLedger = async (provider) => connectAccountingSoftware(provider);
-  const handleInviteAccountant = async (email) => inviteAccountant(email);
+  const demoMutationResult = () => ({ ok: false, status: 'ADMIN_DEMO_MODE_MUTATION_BLOCKED', message: 'Demo mode blocks production changes.' });
+  const handleLinkAto = async () => adminDemoMode ? demoMutationResult() : linkAtoSbr();
+  const handleConnectLedger = async (provider) => adminDemoMode ? demoMutationResult() : connectAccountingSoftware(provider);
+  const handleInviteAccountant = async (email) => adminDemoMode ? demoMutationResult() : inviteAccountant(email);
 
   // ── Sign Out ──
   const handleSignOut = () => {
-    supabaseAuth?.auth.signOut().catch(() => {});
-    setUserSession(null);
-    setAccepted(false);
+  supabaseAuth?.auth.signOut().catch(() => {});
+  setUserSession(null);
+  setQaPersona(null);
+  setAccepted(false);
     setGarageVehicles([]);
     setActiveVehicleId(null);
     setVehicle(null);
@@ -5694,9 +5799,9 @@ const handleSearch = async (query) => {
   if (!userSession) {
     return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
   }
-  
+
   // ADMIN role bypasses safety shield → straight to enterprise monitoring terminal
-  if (userSession.role === 'ADMIN') {
+  if (effectiveRole === 'ADMIN') {
     return (
       <AppErrorBoundary>
         <AdminConsole
@@ -5710,6 +5815,7 @@ const handleSearch = async (query) => {
           ledgerEntries={ledgerEntries || []}
           paidInvoices={paidInvoices || []}
           onSignOut={handleSignOut}
+          onSelectDashboard={setQaPersona}
         />
       </AppErrorBoundary>
     );
@@ -5728,10 +5834,12 @@ const handleSearch = async (query) => {
   };
 
   // ── Seller role: exclusive B2B Industrial Transport & Logistics Command Terminal ──
-  if (userSession.role === 'SELLER') {
+  if (effectiveRole === 'SELLER') {
     return (
       <AppErrorBoundary>
         <SellerConsole
+          adminDemoMode={adminDemoMode}
+          onExitDemo={() => setQaPersona(null)}
           region={regionCode || 'VIC'}
           usStateCode={usStateCode}
           onDispatchToBankFeed={dispatchToBankFeed}
@@ -5751,9 +5859,23 @@ const handleSearch = async (query) => {
     );
   }
 
+  if (effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION') {
+    return (
+      <AppErrorBoundary>
+        <CollisionRepairConsole
+          adminDemoMode={adminDemoMode}
+          onExitDemo={() => setQaPersona(null)}
+          onSignOut={handleSignOut}
+          getAccessToken={async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || ''}
+        />
+      </AppErrorBoundary>
+    );
+  }
+
   return (
     <AppErrorBoundary>
       <div className="min-h-screen" style={{ background: C.bg, color: C.text }}>
+        {adminDemoMode && <AdminDemoBanner onExit={() => setQaPersona(null)} />}
         {/* Top HUD Nav */}
         <nav className="sticky top-0 z-50 border-b" style={{ borderColor: C.border, background: `${C.bg}f0` }}>
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
@@ -5763,7 +5885,7 @@ const handleSearch = async (query) => {
               </div>
               <div>
                 <div className="text-sm font-bold text-slate-50">PartsForge Garage</div>
-                <div className="text-[10px]" style={{ color: C.textDim }}>{TIER_LABELS[userSession.role]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>{TIER_LABELS[effectiveRole]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
