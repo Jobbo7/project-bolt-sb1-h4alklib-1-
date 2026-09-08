@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import healthHandler from '../api/health.js';
 import checkoutHandler from '../api/create-checkout-session.js';
 import webhookHandler from '../api/stripe-webhook.js';
+import valuationHandler from '../api/vehicle-valuation.js';
 import { environmentValue } from '../api/_lib/environment.js';
 
 function responseRecorder() {
@@ -79,6 +80,26 @@ test('sensitive endpoints reject unsupported methods', async () => {
   await webhookHandler({ method: 'GET', headers: {} }, webhookRes);
   assert.equal(webhookRes.statusCode, 405);
   assert.equal(webhookRes.headers.Allow, 'POST');
+
+  const valuationRes = responseRecorder();
+  await valuationHandler({ method: 'GET', headers: {} }, valuationRes);
+  assert.equal(valuationRes.statusCode, 405);
+  assert.equal(valuationRes.headers.Allow, 'POST');
+});
+
+test('collision repair signup keeps MECHANIC authorization while recording its workshop subtype', async () => {
+  const source = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(source, /requestedAccountType:\s*accountType === 'COLLISION' \? 'WORKSHOP'/);
+  assert.match(source, /workshopType:\s*accountType === 'COLLISION' \? 'COLLISION'/);
+  assert.match(source, /effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION'/);
+});
+
+test('collision repair jobs are owner-scoped and preserve an audit history', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20260908000000_collision_repair_jobs.sql', import.meta.url), 'utf8');
+  assert.match(migration, /enable row level security/i);
+  assert.match(migration, /owner_id = \(select auth\.uid\(\)\)/i);
+  assert.match(migration, /audit_history jsonb not null/i);
+  assert.match(migration, /p\.role = 'MECHANIC'/i);
 });
 
 test('latest signup migration ignores user-supplied authorization roles', async () => {
