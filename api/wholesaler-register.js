@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { requireUser } from './_lib/auth.js';
+import { rejectAdminDemoMutation } from './_lib/admin-demo.js';
 
 const MAX_ITEMS = 500;
 const cleanText = (value, max = 240) => String(value ?? '').trim().slice(0, max);
@@ -71,19 +72,23 @@ export function prepareInventoryRecords({ ownerId, body, now = new Date().toISOS
 export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
 
-  const auth = await requireUser(req, res, ['SELLER']);
+  const auth = await requireUser(req, res, ['SELLER', 'ADMIN']);
   if (!auth) return;
 
   if (req.method === 'GET') {
-    const { data, error } = await auth.supabase
+    let query = auth.supabase
       .from('seller_offers')
       .select('id,part,brand,part_number,oem_number,price,stock,location,wholesaler_business_name,make,model,year_from,year_to,engine,engine_code,fitment_notes,updated_at')
-      .eq('owner_id', auth.user.id)
       .order('updated_at', { ascending: false })
       .limit(5000);
+    if (auth.role !== 'ADMIN') query = query.eq('owner_id', auth.user.id);
+    const { data, error } = await query;
     if (error) return res.status(500).json({ error: 'INVENTORY_LOAD_FAILED', message: error.message });
     return res.status(200).json({ success: true, records: data || [] });
   }
+
+  if (rejectAdminDemoMutation(auth, res)) return;
+  if (auth.role !== 'SELLER') return res.status(403).json({ error: 'INSUFFICIENT_ROLE' });
 
   const prepared = prepareInventoryRecords({ ownerId: auth.user.id, body: req.body });
   if (prepared.error) return res.status(prepared.error.status).json(prepared.error.body);
