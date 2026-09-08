@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import healthHandler from '../api/health.js';
 import checkoutHandler from '../api/create-checkout-session.js';
 import webhookHandler from '../api/stripe-webhook.js';
-import valuationHandler from '../api/vehicle-valuation.js';
+import valuationHandler from '../api/collision.js';
 import { environmentValue } from '../api/_lib/environment.js';
 
 function responseRecorder() {
@@ -82,7 +82,7 @@ test('sensitive endpoints reject unsupported methods', async () => {
   assert.equal(webhookRes.headers.Allow, 'POST');
 
   const valuationRes = responseRecorder();
-  await valuationHandler({ method: 'GET', headers: {} }, valuationRes);
+  await valuationHandler({ method: 'GET', query: { action: 'valuation' }, headers: {} }, valuationRes);
   assert.equal(valuationRes.statusCode, 405);
   assert.equal(valuationRes.headers.Allow, 'POST');
 });
