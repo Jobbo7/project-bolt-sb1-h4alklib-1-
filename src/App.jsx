@@ -35,6 +35,7 @@ const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, prov
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
 import CollisionRepairConsole from './components/CollisionRepairConsole';
+import { resolveEffectiveWorkshopType } from './dashboard-role.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_PREVIEW_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
@@ -4461,9 +4462,10 @@ export default function App() {
             : 'ADMIN'
       : userSession?.role;
   const adminDemoMode = isDemoAdmin && effectiveRole !== 'ADMIN';
-  const effectiveWorkshopType = qaPersona === 'COLLISION'
-    ? 'COLLISION'
-    : String(userSession?.workshopType || '').toUpperCase();
+  const effectiveWorkshopType = resolveEffectiveWorkshopType(
+    qaPersona,
+    userSession?.workshopType,
+  );
 
   const role =
     effectiveRole === 'MECHANIC' || effectiveRole === 'APPRENTICE'

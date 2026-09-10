@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { isAdminDemoAccount, rejectAdminDemoMutation } from '../api/_lib/admin-demo.js';
+import { resolveEffectiveWorkshopType } from '../src/dashboard-role.js';
 
 test('only the designated authenticated ADMIN account is recognized as the demo account', () => {
   assert.equal(isAdminDemoAccount({ role: 'ADMIN', user: { email: 'ADMIN@PARTSFORGE.TEST' } }), true);
@@ -20,6 +21,12 @@ test('admin demo mutations fail closed with a stable response', () => {
   assert.equal(rejected, true);
   assert.equal(res.statusCode, 403);
   assert.equal(res.body.error, 'ADMIN_DEMO_MODE_MUTATION_BLOCKED');
+});
+
+test('admin demo workshop personas cannot inherit the collision dashboard', () => {
+  assert.equal(resolveEffectiveWorkshopType('WORKSHOP', 'COLLISION'), 'MECHANICAL');
+  assert.equal(resolveEffectiveWorkshopType('COLLISION', 'MECHANICAL'), 'COLLISION');
+  assert.equal(resolveEffectiveWorkshopType(null, 'collision'), 'COLLISION');
 });
 
 test('every customer-facing production mutation endpoint applies the server demo guard', async () => {
