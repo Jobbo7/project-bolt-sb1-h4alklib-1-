@@ -2,13 +2,22 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, X, Sparkles } from 'lucide-react';
 import { createWorker } from 'tesseract.js';
 
-export default function PhotoScanner({ open, onClose, onResult, region }) {
-  const [phase, setPhase] = useState('idle'); // 'idle' | 'streaming' | 'processing'
-  const [errorMessage, setErrorMessage] = useState(null);
+interface PhotoScannerProps {
+  open: boolean;
+  onClose: () => void;
+  onResult: (description: string, confidence: number, plate: string) => void;
+  region?: string;
+}
+
+type ScanPhase = 'idle' | 'streaming' | 'processing';
+
+export default function PhotoScanner({ open, onClose, onResult, region }: PhotoScannerProps) {
+  const [phase, setPhase] = useState<ScanPhase>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const startCameraStream = async () => {
     setErrorMessage(null);
@@ -27,7 +36,7 @@ export default function PhotoScanner({ open, onClose, onResult, region }) {
         await videoRef.current.play();
         setPhase('streaming');
       }
-    } catch (err) {
+    } catch {
       setErrorMessage("⚠️ LENS ACCESS DENIED: Please update your tablet's browser hardware privacy settings.");
     }
   };
@@ -54,6 +63,11 @@ export default function PhotoScanner({ open, onClose, onResult, region }) {
     const ctx = canvas.getContext('2d');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    if (!ctx) {
+      setErrorMessage('Unable to read the captured camera frame.');
+      setPhase('streaming');
+      return;
+    }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     try {
@@ -76,7 +90,7 @@ export default function PhotoScanner({ open, onClose, onResult, region }) {
         alert("⚠️ Text recognition failed. Reposition tablet directly over the registration text.");
         setPhase('streaming');
       }
-    } catch (error) {
+    } catch {
       alert("⚠️ Processing Exception: Server lookup path timed out.");
       setPhase('streaming');
     }
@@ -123,3 +137,5 @@ export default function PhotoScanner({ open, onClose, onResult, region }) {
     </div>
   );
 }
+
+export { PhotoScanner };

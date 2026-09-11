@@ -1,0 +1,192 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import healthHandler from '../api/_lib/routes/health.js';
+import checkoutHandler, { normaliseCheckoutItems } from '../api/create-checkout-session.js';
+import legacyPaymentHandler from '../api/create-payment-intent.js';
+import orderStatusHandler from '../api/order-status.js';
+import fulfilmentHandshakeHandler from '../api/fulfilment-handshake.js';
+import fulfilmentsHandler from '../api/fulfilments.js';
+import webhookHandler from '../api/stripe-webhook.js';
+import valuationHandler from '../api/collision.js';
+import { environmentValue } from '../api/_lib/environment.js';
+
+function responseRecorder() {
+  return {
+    statusCode: 200,
+    headers: {},
+    body: undefined,
+    setHeader(name, value) { this.headers[name] = value; },
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+}
+
+function withoutEnvironment(names, callback) {
+  const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  names.forEach(name => delete process.env[name]);
+  return Promise.resolve(callback()).finally(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+}
+
+test('health reports missing production configuration without exposing values', async () => {
+  const names = ['SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SECRET_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'PLATE_API_KEY', 'OCR_SPACE_API_KEY'];
+  await withoutEnvironment([...names, ...names.map(name => `PREVIEW_${name}`)], async () => {
+    const res = responseRecorder();
+    healthHandler({ method: 'GET' }, res);
+    assert.equal(res.statusCode, 503);
+    assert.equal(res.body.status, 'configuration_required');
+    assert.deepEqual([...res.body.missing].sort(), [...names].sort());
+    assert.equal(JSON.stringify(res.body).includes('secret_'), false);
+  });
+});
+
+test('checkout fails closed before authentication when Stripe is not configured', async () => {
+  await withoutEnvironment(['STRIPE_SECRET_KEY', 'PREVIEW_STRIPE_SECRET_KEY', 'PUBLIC_APP_URL'], async () => {
+    const res = responseRecorder();
+    await checkoutHandler({ method: 'POST', headers: {}, body: { items: [{ id: 'offer-1', qty: 1 }] } }, res);
+    assert.equal(res.statusCode, 503);
+    assert.deepEqual(res.body, { error: 'CHECKOUT_NOT_CONFIGURED' });
+  });
+});
+
+test('checkout uses immutable seller offer IDs and consolidates duplicate cart lines', () => {
+  assert.deepEqual(normaliseCheckoutItems([
+    { id: 'SKU-DB-display-1', offerId: 'offer-1', qty: 2, unitPrice: 0.01 },
+    { id: 'another-display-id', offerId: 'offer-1', qty: 3, unitPrice: 999999 },
+    { id: 'offer-2', qty: 1 },
+  ]), [
+    { id: 'offer-1', quantity: 5 },
+    { id: 'offer-2', quantity: 1 },
+  ]);
+});
+
+test('legacy browser-priced payment intents are permanently retired', async () => {
+  const res = responseRecorder();
+  await legacyPaymentHandler({
+    method: 'POST',
+    body: { amount: 50, currency: 'aud', orderId: 'caller-controlled' },
+  }, res);
+  assert.equal(res.statusCode, 410);
+  assert.deepEqual(res.body, {
+    error: 'PAYMENT_ROUTE_RETIRED',
+    replacement: '/api/create-checkout-session',
+  });
+});
+
+test('webhook fails closed when signing secrets are not configured', async () => {
+  await withoutEnvironment(['STRIPE_SECRET_KEY', 'PREVIEW_STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'PREVIEW_STRIPE_WEBHOOK_SECRET'], async () => {
+    const res = responseRecorder();
+    await webhookHandler({ method: 'POST', headers: {} }, res);
+    assert.equal(res.statusCode, 503);
+    assert.deepEqual(res.body, { error: 'STRIPE_WEBHOOK_NOT_CONFIGURED' });
+  });
+});
+
+test('Preview credentials override shared values without changing Production variables', async () => {
+  const names = ['SUPABASE_URL', 'PREVIEW_SUPABASE_URL'];
+  await withoutEnvironment(names, async () => {
+    process.env.SUPABASE_URL = 'https://production.invalid';
+    process.env.PREVIEW_SUPABASE_URL = 'https://preview.invalid';
+    assert.equal(environmentValue('SUPABASE_URL'), 'https://preview.invalid');
+    delete process.env.PREVIEW_SUPABASE_URL;
+    assert.equal(environmentValue('SUPABASE_URL'), 'https://production.invalid');
+  });
+});
+
+test('sensitive endpoints reject unsupported methods', async () => {
+  const checkoutRes = responseRecorder();
+  await checkoutHandler({ method: 'GET', headers: {} }, checkoutRes);
+  assert.equal(checkoutRes.statusCode, 405);
+  assert.equal(checkoutRes.headers.Allow, 'POST');
+
+  const webhookRes = responseRecorder();
+  await webhookHandler({ method: 'GET', headers: {} }, webhookRes);
+  assert.equal(webhookRes.statusCode, 405);
+  assert.equal(webhookRes.headers.Allow, 'POST');
+
+  const valuationRes = responseRecorder();
+  await valuationHandler({ method: 'GET', query: { action: 'valuation' }, headers: {} }, valuationRes);
+  assert.equal(valuationRes.statusCode, 405);
+  assert.equal(valuationRes.headers.Allow, 'POST');
+
+  const orderStatusRes = responseRecorder();
+  await orderStatusHandler({ method: 'POST', headers: {} }, orderStatusRes);
+  assert.equal(orderStatusRes.statusCode, 405);
+  assert.equal(orderStatusRes.headers.Allow, 'GET');
+
+  const fulfilmentRes = responseRecorder();
+  await fulfilmentHandshakeHandler({ method: 'GET', headers: {} }, fulfilmentRes);
+  assert.equal(fulfilmentRes.statusCode, 405);
+  assert.equal(fulfilmentRes.headers.Allow, 'POST');
+
+  const fulfilmentsRes = responseRecorder();
+  await fulfilmentsHandler({ method: 'POST', headers: {} }, fulfilmentsRes);
+  assert.equal(fulfilmentsRes.statusCode, 405);
+  assert.equal(fulfilmentsRes.headers.Allow, 'GET');
+});
+
+test('collision repair signup keeps MECHANIC authorization while recording its workshop subtype', async () => {
+  const source = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(source, /requestedAccountType:\s*accountType === 'COLLISION' \? 'WORKSHOP'/);
+  assert.match(source, /workshopType:\s*accountType === 'COLLISION' \? 'COLLISION'/);
+  assert.match(source, /effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION'/);
+});
+
+test('parts search requires authentication and never advertises an invented trade discount', async () => {
+  const apiSource = await readFile(new URL('../api/parts-search.js', import.meta.url), 'utf8');
+  const clientSource = await readFile(new URL('../src/mockBackend.js', import.meta.url), 'utf8');
+  assert.match(apiSource, /requireUser\(req, res, \['DIY', 'MECHANIC', 'APPRENTICE', 'SELLER', 'ADMIN'\]\)/);
+  assert.match(apiSource, /trade:\s*parsedPrice != null\s*\? parsedPrice/s);
+  assert.doesNotMatch(apiSource, /parsedPrice \* 0\.85/);
+  assert.match(clientSource, /Authorization: `Bearer \$\{accessToken\}`/);
+});
+
+test('delivery is server priced and paid orders create persistent fulfilments', async () => {
+  const checkoutSource = await readFile(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8');
+  const webhookSource = await readFile(new URL('../api/stripe-webhook.js', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/20260911010000_delivery_fulfilment.sql', import.meta.url), 'utf8');
+  assert.match(checkoutSource, /deliveryMethod = String\(req\.body\?\.deliveryMethod \|\| 'DELIVERY'\)/);
+  assert.match(checkoutSource, /shipping_address_collection/);
+  assert.match(checkoutSource, /delivery_amount: deliveryAmount/);
+  assert.match(webhookSource, /from\('order_fulfilments'\)/);
+  assert.match(webhookSource, /status: 'AWAITING_SUPPLIER'/);
+  assert.match(migration, /fulfilments_participant_read/);
+  assert.match(migration, /buyer_id = \(select auth\.uid\(\)\) or seller_id = \(select auth\.uid\(\)\)/);
+});
+
+test('QR custody handoff uses random single-purpose tokens and authenticated participants', async () => {
+  const source = await readFile(new URL('../api/fulfilment-handshake.js', import.meta.url), 'utf8');
+  assert.match(source, /crypto\.randomBytes\(32\)/);
+  assert.match(source, /tokenHash\(suppliedToken\) === fulfilment\.handoff_token_hash/);
+  assert.match(source, /const isSeller =/);
+  assert.match(source, /const isBuyer =/);
+  assert.doesNotMatch(source, /Math\.random/);
+});
+
+test('collision repair jobs are owner-scoped and preserve an audit history', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20260908000000_collision_repair_jobs.sql', import.meta.url), 'utf8');
+  assert.match(migration, /enable row level security/i);
+  assert.match(migration, /owner_id = \(select auth\.uid\(\)\)/i);
+  assert.match(migration, /audit_history jsonb not null/i);
+  assert.match(migration, /p\.role = 'MECHANIC'/i);
+});
+
+test('latest signup migration ignores user-supplied authorization roles', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20260902010000_lock_public_signup_roles.sql', import.meta.url), 'utf8');
+  assert.match(migration, /'DIY'/);
+  assert.doesNotMatch(migration, /raw_user_meta_data\s*->>\s*'tier'/);
+  assert.match(migration, /revoke update on table public\.profiles from authenticated/i);
+});
+
+test('profile privileges revoke operations that bypass or weaken RLS', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/20260902020000_lock_profile_table_privileges.sql', import.meta.url), 'utf8');
+  assert.match(migration, /revoke all on table public\.profiles from anon, authenticated/i);
+  assert.match(migration, /grant select on table public\.profiles to authenticated/i);
+  assert.match(migration, /grant update \(display_name, linked_account\) on table public\.profiles to authenticated/i);
+  assert.doesNotMatch(migration, /grant\s+(insert|delete|truncate|trigger|references)/i);
+});

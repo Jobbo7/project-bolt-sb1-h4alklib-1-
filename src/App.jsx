@@ -34,10 +34,14 @@ const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, prov
 
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
+import CollisionRepairConsole from './components/CollisionRepairConsole';
+import { resolveEffectiveWorkshopType } from './dashboard-role.js';
+import { restoreVerifiedUserSession } from './auth-session.js';
+import { loadWorkshopState, saveWorkshopState } from './workshop-state.js';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl = import.meta.env.VITE_PREVIEW_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+const supabasePublishableKey = import.meta.env.VITE_PREVIEW_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const supabaseAuth = supabaseUrl && supabasePublishableKey
   ? createClient(supabaseUrl, supabasePublishableKey)
   : null;
@@ -168,36 +172,89 @@ function SafetyShield({ onAccept }) {
 }
 
 // ─── Auth Gate ───────────────────────────────────────────────────────────────
-const ADMIN_CREDENTIALS = { id: 'admin@partsforge.com.au', token: 'secure123' };
-
 function AuthGate({ onAuthenticate, isAuthenticating }) {
   const [isSignUpMode, setIsSignUpMode] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [tier, setTier] = useState('DIY');
-  const [linkedAccount, setLinkedAccount] = useState('');
+
+  const [accountType, setAccountType] = useState('DIY');
+  const [businessName, setBusinessName] = useState('');
+  const [abn, setAbn] = useState('');
+  const [phone, setPhone] = useState('');
+
   const [showPassword, setShowPassword] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [checked, setChecked] = useState(false);
   const [authError, setAuthError] = useState('');
+
   const boxRef = useRef(null);
 
+  const requiresBusinessDetails =
+    accountType === 'WORKSHOP' || accountType === 'COLLISION' || accountType === 'SELLER';
+
+  const cleanAbn = abn.replace(/\D/g, '');
+const isValidAbn = (value) => {
+  if (!/^\d{11}$/.test(value)) return false;
+
+  const digits = value.split('').map(Number);
+  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+
+  digits[0] -= 1;
+
+  const total = digits.reduce(
+    (sum, digit, index) => sum + digit * weights[index],
+    0
+  );
+
+  return total % 89 === 0;
+};
+
+const abnIsValid = isValidAbn(cleanAbn);
   const handleScroll = () => {
     if (!boxRef.current) return;
+
     const { scrollTop, scrollHeight, clientHeight } = boxRef.current;
-    if (scrollHeight - scrollTop - clientHeight < 5) setScrolled(true);
+
+    if (scrollHeight - scrollTop - clientHeight < 5) {
+      setScrolled(true);
+    }
   };
 
-  const canSubmit = fullName.trim() && email.trim() && password.trim() && !isAuthenticating && checked && (tier !== 'APPRENTICE' || linkedAccount.trim());
+  const canSubmit = Boolean(
+    (!isSignUpMode ||
+      (
+        fullName.trim() &&
+        (
+          !requiresBusinessDetails ||
+          (
+            businessName.trim() &&
+            abnIsValid &&
+            (
+              accountType !== 'SELLER' ||
+              phone.trim()
+            )
+          )
+        )
+      )
+    ) &&
+    email.trim() &&
+    password.trim() &&
+    !isAuthenticating &&
+    checked
+  );
 
   const handleAuthSubmission = async (e) => {
     e.preventDefault();
+
     if (!canSubmit) return;
+
     setAuthError('');
 
     if (!supabaseAuth) {
-      setAuthError('Authentication is not configured. Add the Supabase URL and publishable key to the deployment environment.');
+      setAuthError(
+        'Authentication is not configured. Add the Supabase URL and publishable key to the deployment environment.'
+      );
       return;
     }
 
@@ -205,125 +262,522 @@ function AuthGate({ onAuthenticate, isAuthenticating }) {
       const { error } = await supabaseAuth.auth.signUp({
         email: email.trim(),
         password: password.trim(),
-        options: { data: { name: fullName.trim(), tier, linkedAccount: tier === 'APPRENTICE' ? linkedAccount.trim() : 'Master Root Account' } },
+        options: {
+          data: {
+            name: fullName.trim(),
+            requestedAccountType: accountType === 'COLLISION' ? 'WORKSHOP' : accountType,
+            workshopType: accountType === 'COLLISION' ? 'COLLISION' : accountType === 'WORKSHOP' ? 'MECHANICAL' : '',
+            businessName: requiresBusinessDetails
+              ? businessName.trim()
+              : '',
+            abn: requiresBusinessDetails
+              ? cleanAbn
+              : '',
+            phone: accountType === 'SELLER'
+              ? phone.trim()
+              : '',
+          },
+        },
       });
+
       if (error) {
         setAuthError(error.message);
         return;
       }
-      alert('Account created. Check your email to confirm the account, then sign in.');
+
+      const accountLabel =
+        accountType === 'SELLER'
+          ? 'Supplier'
+          : accountType === 'COLLISION'
+            ? 'Collision Repair Workshop'
+          : accountType === 'WORKSHOP'
+            ? 'Workshop'
+            : 'Individual / DIY';
+
+      const confirmationMessage =
+        accountType === 'SELLER'
+          ? `${accountLabel} account created. Check your email to confirm your account. Supplier access will be activated after PartsForge verifies your business.`
+          : `${accountLabel} account created. Check your email to confirm your account before signing in.`;
+
+      alert(confirmationMessage);
+
       setIsSignUpMode(false);
       setPassword('');
-    } else {
-      const { data, error } = await supabaseAuth.auth.signInWithPassword({ email: email.trim(), password: password.trim() });
-      if (error || !data?.user) {
-        setAuthError(error?.message || 'Sign-in failed.');
-        return;
-      }
-      const profile = data.user.user_metadata || {};
-      onAuthenticate({ 
-        name: profile.name || fullName.trim(),
-        email: data.user.email,
-        role: profile.tier || 'DIY',
-        linkedAccount: profile.linkedAccount || '',
-        technicianId: data.user.id,
-        isEmployeeSubUser: profile.tier === 'APPRENTICE'
-      });
+      setChecked(false);
+      setScrolled(false);
+
+      return;
     }
+
+    const { data, error } =
+      await supabaseAuth.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
+      });
+
+    if (error || !data?.user) {
+      if (
+        String(error?.message || '')
+          .toLowerCase()
+          .includes('email not confirmed')
+      ) {
+        setAuthError(
+          'Please check your email and confirm your PartsForge account before signing in.'
+        );
+      } else {
+        setAuthError(error?.message || 'Sign-in failed.');
+      }
+
+      return;
+    }
+
+    const {
+      data: dbProfile,
+      error: profileError,
+    } = await supabaseAuth
+      .from('profiles')
+      .select(
+        'display_name,role,linked_account'
+      )
+      .eq('id', data.user.id)
+      .single();
+
+    if (profileError || !dbProfile) {
+      await supabaseAuth.auth.signOut();
+
+      setAuthError(
+        'Your account profile could not be verified. Contact PartsForge support.'
+      );
+
+      return;
+    }
+
+    onAuthenticate({
+      name:
+        dbProfile.display_name ||
+        fullName.trim(),
+      email: data.user.email,
+      role: dbProfile.role,
+      workshopType: String(data.user.user_metadata?.workshopType || '').toUpperCase(),
+      linkedAccount:
+        dbProfile.linked_account || '',
+      technicianId: data.user.id,
+      isEmployeeSubUser:
+        dbProfile.role === 'APPRENTICE',
+    });
   };
 
-return (
-    <div className="flex items-center justify-center p-4 min-h-screen">
-      <div className="w-full max-w-md rounded-2xl border p-6 shadow-2xl" style={{ borderColor: C.border, background: C.panel }}>
+  const switchAuthMode = () => {
+    setIsSignUpMode(!isSignUpMode);
+    setAuthError('');
+    setChecked(false);
+    setScrolled(false);
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div
+        className="w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+        style={{
+          borderColor: C.border,
+          background: C.panel,
+        }}
+      >
         <div className="flex flex-col items-center text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/20">
             <Wrench className="h-6 w-6 text-slate-950" />
           </div>
-          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">PartsForge Secure Gateway</h2>
-          <p className="mt-1 text-xs uppercase tracking-widest font-semibold" style={{ color: C.orange }}>Stripe Live Financial Network Active</p>
-          <div className="mt-3 px-3 py-1 text-[11px] font-bold uppercase rounded-full border border-slate-800 bg-slate-900/60 text-slate-400">
-            Node: <span className="text-orange-400">{isSignUpMode ? 'Account Creation' : 'Secure Sign In'}</span>
+
+          <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-100">
+            PartsForge Secure Gateway
+          </h2>
+
+          <p
+            className="mt-1 text-xs font-semibold uppercase tracking-widest"
+            style={{ color: C.orange }}
+          >
+            Secure account access
+          </p>
+
+          <div className="mt-3 rounded-full border border-slate-800 bg-slate-900/60 px-3 py-1 text-[11px] font-bold uppercase text-slate-400">
+            Node:{' '}
+            <span className="text-orange-400">
+              {isSignUpMode
+                ? 'Account Creation'
+                : 'Secure Sign In'}
+            </span>
           </div>
         </div>
 
-        <form onSubmit={handleAuthSubmission} className="mt-5 flex flex-col gap-4">
+        <form
+          onSubmit={handleAuthSubmission}
+          className="mt-5 flex flex-col gap-4"
+        >
           {authError && (
-            <div className="p-3 text-xs font-bold rounded-lg border border-red-900/30 bg-red-950/20 text-red-400 animate-pulse text-center">
+            <div className="animate-pulse rounded-lg border border-red-900/30 bg-red-950/20 p-3 text-center text-xs font-bold text-red-400">
               {authError}
             </div>
           )}
 
+          {isSignUpMode && (
+            <>
+              <div>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.textDim }}
+                >
+                  Account Type
+                </label>
+
+                <select
+                  value={accountType}
+                  onChange={(e) =>
+                    setAccountType(e.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                  style={{
+                    borderColor: C.border,
+                    background: C.panel2,
+                  }}
+                >
+                  <option value="DIY">
+                    Individual / DIY
+                  </option>
+
+                  <option value="WORKSHOP">
+                    Mechanical Workshop
+                  </option>
+
+                  <option value="COLLISION">
+                    Collision Repair / Panel Shop
+                  </option>
+
+                  <option value="SELLER">
+                    Supplier / Seller
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: C.textDim }}
+                >
+                  Account Holder Name
+                </label>
+
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) =>
+                    setFullName(e.target.value)
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                  style={{
+                    borderColor: C.border,
+                    background: C.panel2,
+                  }}
+                  placeholder="Full legal name"
+                />
+              </div>
+
+              {requiresBusinessDetails && (
+                <>
+                  <div>
+                    <label
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.textDim }}
+                    >
+                      Business Name
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      value={businessName}
+                      onChange={(e) =>
+                        setBusinessName(e.target.value)
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                      style={{
+                        borderColor: C.border,
+                        background: C.panel2,
+                      }}
+                      placeholder="Registered business or trading name"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.textDim }}
+                    >
+                      ABN / Australian Business Number
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      maxLength={14}
+                      value={abn}
+                      onChange={(e) =>
+                        setAbn(e.target.value)
+                      }
+                      className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                      style={{
+                        borderColor: C.border,
+                        background: C.panel2,
+                      }}
+                      placeholder="11 digit ABN"
+                    />
+
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Required for Workshop and Supplier accounts.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {accountType === 'SELLER' && (
+                <div>
+                  <label
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.textDim }}
+                  >
+                    Business Phone
+                  </label>
+
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value)
+                    }
+                    className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+                    style={{
+                      borderColor: C.border,
+                      background: C.panel2,
+                    }}
+                    placeholder="Supplier contact number"
+                  />
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs leading-relaxed text-slate-400">
+                {accountType === 'DIY' && (
+                  <>
+                    Individual accounts can be used after email confirmation.
+                  </>
+                )}
+
+                {accountType === 'WORKSHOP' && (
+                  <>
+                    Workshop details and ABN are collected so PartsForge can identify and support your business account.
+                  </>
+                )}
+
+                {accountType === 'COLLISION' && (
+                  <>
+                    Collision repair accounts support private repairs and insurer claim assessments, including documented valuation and quote revisions.
+                  </>
+                )}
+
+                {accountType === 'SELLER' && (
+                  <>
+                    Supplier details and ABN are collected for business verification. Supplier inventory and selling privileges require PartsForge approval.
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Technician / Account Holder Name</label>
-            <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="Full legal name" />
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: C.textDim }}
+            >
+              Email Address
+            </label>
+
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) =>
+                setEmail(e.target.value)
+              }
+              className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none"
+              style={{
+                borderColor: C.border,
+                background: C.panel2,
+              }}
+              placeholder="name@business.com"
+            />
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Email Address</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="name@workshop.com" />
-          </div>
+            <label
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: C.textDim }}
+            >
+              Secure Password
+            </label>
 
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Secure Password</label>
             <div className="relative mt-1">
-              <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border pl-3 pr-10 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }} placeholder="••••••••" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <input
+                type={
+                  showPassword
+                    ? 'text'
+                    : 'password'
+                }
+                required
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                className="w-full rounded-lg border py-2.5 pl-3 pr-10 text-sm text-slate-100 outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.panel2,
+                }}
+                placeholder="••••••••"
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPassword(!showPassword)
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
 
-          {isSignUpMode && (
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.textDim }}>Select Account Tier</label>
-              <select value={tier} onChange={(e) => setTier(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm text-slate-100 outline-none" style={{ borderColor: C.border, background: C.panel2 }}>
-                <option value="DIY">DIY Driver Tier</option>
-                <option value="MECHANIC">Registered Mechanic (Master Account Holder)</option>
-                <option value="APPRENTICE">Employee Link (Sub-Account Access)</option>
-                <option value="SELLER">Verified Parts Seller Network</option>
-              </select>
-            </div>
-          )}
+          <div
+            ref={boxRef}
+            onScroll={handleScroll}
+            className="terms-scroll mt-1 h-20 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed"
+            style={{
+              background: C.panel2,
+              borderColor: C.border,
+              color: C.textDim,
+            }}
+          >
+            <p
+              className="mb-1 font-semibold"
+              style={{ color: C.orange }}
+            >
+              SECURE GATEWAY & LIABILITY ROUTING AGREEMENT
+            </p>
 
-          {isSignUpMode && tier === 'APPRENTICE' && (
-            <div className="p-3 rounded-lg border border-dashed animate-pulse" style={{ borderColor: C.orange, background: C.panel2 }}>
-              <label className="text-[11px] font-bold uppercase tracking-wider" style={{ color: C.orange }}>🔗 Link to Employer's Master Account Email</label>
-              <input type="email" required value={linkedAccount} onChange={(e) => setLinkedAccount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-xs text-slate-100 outline-none" style={{ borderColor: C.border, background: C.background }} placeholder="owner@eppingmechanics.com.au" />
-              <p className="text-[10px] text-slate-400 mt-1 uppercase">Provides shared JobCard synchronization and roots all purchase accountability workflows straight to the master dashboard console tier.</p>
-            </div>
-          )}
+            <p className="mb-1">
+              PartsForge uses account permissions to control workshop and supplier actions. Payments are available only when Stripe is configured, and an order is not treated as paid until PartsForge receives a verified payment confirmation.
+            </p>
 
-          <div ref={boxRef} onScroll={handleScroll} className="terms-scroll mt-1 h-20 overflow-y-auto rounded-lg border p-3 text-xs leading-relaxed" style={{ background: C.panel2, borderColor: C.border, color: C.textDim }}>
-            <p className="mb-1 font-semibold" style={{ color: C.orange }}>SECURE GATEWAY & LIABILITY ROUTING AGREEMENT</p>
-            <p className="mb-1">By initializing this node, the user verifies that all linked device sessions, automated courier manifest scans, and purchase orders are routed directly onto the Stripe Live Financial Network under the sole fiscal and trade license liability of the master account holder.</p>
-            <p>Scroll down to authorize this node connection and unlock validation tokens.</p>
+            <p>
+              Scroll down to review and accept the account and safety terms.
+            </p>
           </div>
 
           <div className="flex items-center gap-2 text-[10px]">
             {scrolled ? (
-              <span className="flex items-center gap-1" style={{ color: C.emerald }}><CheckCircle2 className="h-3 w-3" /> Framework Read Verified</span>
+              <span
+                className="flex items-center gap-1"
+                style={{ color: C.emerald }}
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Framework Read Verified
+              </span>
             ) : (
-              <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="h-3 w-3" /> Scroll box to verify protocols</span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <AlertTriangle className="h-3 w-3" />
+                Scroll box to verify protocols
+              </span>
             )}
           </div>
 
-          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${scrolled ? '' : 'cursor-not-allowed opacity-50'}`} style={{ borderColor: scrolled ? `${C.orange}40` : C.border, background: scrolled ? `${C.orange}05` : C.panel2 }}>
-            <input type="checkbox" checked={checked} disabled={!scrolled} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-4 w-4" style={{ accentColor: C.orange }} />
-            <span className="text-xs text-slate-300">I verify all linked device liability requirements.</span>
+          <label
+            className={`flex items-start gap-3 rounded-lg border p-3 transition ${
+              scrolled
+                ? 'cursor-pointer'
+                : 'cursor-not-allowed opacity-50'
+            }`}
+            style={{
+              borderColor: scrolled
+                ? `${C.orange}40`
+                : C.border,
+              background: scrolled
+                ? `${C.orange}05`
+                : C.panel2,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={!scrolled}
+              onChange={(e) =>
+                setChecked(e.target.checked)
+              }
+              className="mt-0.5 h-4 w-4"
+              style={{ accentColor: C.orange }}
+            />
+
+            <span className="text-xs text-slate-300">
+              I verify the account details provided above and accept the PartsForge account and liability requirements.
+            </span>
           </label>
 
-          <button type="submit" disabled={!canSubmit} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition shadow-md" style={{ background: canSubmit ? C.orange : C.border, color: canSubmit ? '#000' : C.textDim }}>
-                        {isAuthenticating ? (
-              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" /> Synchronizing Node...</>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold shadow-md transition"
+            style={{
+              background: canSubmit
+                ? C.orange
+                : C.border,
+              color: canSubmit
+                ? '#000'
+                : C.textDim,
+            }}
+          >
+            {isAuthenticating ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+                Synchronizing Node...
+              </>
             ) : (
-              <>{isSignUpMode ? 'Create Secure Business Account' : 'Authenticate & Secure Entry'}</>
+              <>
+                {isSignUpMode
+                  ? accountType === 'SELLER'
+                    ? 'Create Supplier Account'
+                    : accountType === 'WORKSHOP'
+                      ? 'Create Workshop Account'
+                      : accountType === 'COLLISION'
+                        ? 'Create Collision Repair Account'
+                      : 'Create Individual Account'
+                  : 'Authenticate & Secure Entry'}
+              </>
             )}
           </button>
 
-          {/* TOGGLE LINK FOOTER */}
-          <div className="text-center mt-2 border-t pt-3 border-slate-800/80">
-            <button type="button" onClick={() => { setIsSignUpMode(!isSignUpMode); setAuthError(''); setChecked(false); }} className="text-xs font-medium text-slate-400 hover:text-orange-400 transition-all underline">
-              {isSignUpMode ? "Already have a workshop setup? Sign In here" : "Don't have a business node registered? Sign Up here"}
+          <div className="mt-2 border-t border-slate-800/80 pt-3 text-center">
+            <button
+              type="button"
+              onClick={switchAuthMode}
+              className="text-xs font-medium text-slate-400 underline transition-all hover:text-orange-400"
+            >
+              {isSignUpMode
+                ? 'Already have a PartsForge account? Sign in'
+                : 'New to PartsForge? Create an account'}
             </button>
           </div>
         </form>
@@ -479,11 +933,13 @@ function Field({ label, value, onChange, mono }) {
 }
 
 // ─── Scanner Panel ───────────────────────────────────────────────────────────
-function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scanning, hoists, selectedHoistId, onHoistChange }) {
+function ScannerPanel({ onRego, onVin, onPhoto, onManualVehicle, onCommit, loading, vehicle, lookupError, scanning, hoists, selectedHoistId, onHoistChange }) {
   const [plate, setPlate] = useState(() => readStored('partsforge_scanner_plate', ''));
   const [vin, setVin] = useState(() => readStored('partsforge_scanner_vin', ''));
   const [region, setRegion] = useState(() => readStored('partsforge_scanner_region', 'AU_VIC'));
   const [mode, setMode] = useState(() => readStored('partsforge_scanner_mode', 'rego'));
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [manualVehicle, setManualVehicle] = useState({ year: '', make: '', model: '', series: '', engine: '', transmission: '', modifications: '' });
 
   useEffect(() => { try { localStorage.setItem('partsforge_scanner_plate', JSON.stringify(plate)); } catch {} }, [plate]);
   useEffect(() => { try { localStorage.setItem('partsforge_scanner_vin', JSON.stringify(vin)); } catch {} }, [vin]);
@@ -540,6 +996,63 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
           </button>
         </div>
       </div>
+
+      {mode === 'rego' && !vehicle && (
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            setManualEntryOpen(current => !current);
+          }}
+          className="mt-2 w-full rounded-lg border px-3 py-2 text-xs font-semibold transition"
+          style={{ borderColor: C.border, background: C.panel2, color: C.textDim }}
+        >
+          {manualEntryOpen ? 'Hide Custom Vehicle Entry' : 'Custom / Modified Vehicle'}
+        </button>
+      )}
+
+      {(manualEntryOpen || lookupError) && !loading && !vehicle && (
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.orange}50`, background: `${C.orange}08` }}>
+          <div className="text-xs font-semibold" style={{ color: C.orange }}>
+            {lookupError ? 'Automatic lookup unavailable' : 'Custom / Modified Vehicle'}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: C.textDim }}>
+            {lookupError
+              ? `${lookupError} Enter the vehicle details below to continue without a paid registration lookup.`
+              : 'Use this only for modified, imported, race, kit or engine-swapped vehicles that cannot be represented accurately by a standard registration lookup.'}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Field label="Year" value={manualVehicle.year} onChange={(value) => setManualVehicle(current => ({ ...current, year: value.replace(/\D/g, '').slice(0, 4) }))} mono />
+            <Field label="Make" value={manualVehicle.make} onChange={(value) => setManualVehicle(current => ({ ...current, make: value }))} />
+            <Field label="Model" value={manualVehicle.model} onChange={(value) => setManualVehicle(current => ({ ...current, model: value }))} />
+            <Field label="Series / Badge" value={manualVehicle.series} onChange={(value) => setManualVehicle(current => ({ ...current, series: value }))} />
+            <div className="sm:col-span-2">
+              <Field label="Engine (if known)" value={manualVehicle.engine} onChange={(value) => setManualVehicle(current => ({ ...current, engine: value }))} />
+            </div>
+            {!lookupError && (
+              <>
+                <Field label="Transmission" value={manualVehicle.transmission} onChange={(value) => setManualVehicle(current => ({ ...current, transmission: value }))} />
+                <Field label="Modifications / Engine Swap" value={manualVehicle.modifications} onChange={(value) => setManualVehicle(current => ({ ...current, modifications: value }))} />
+              </>
+            )}
+          </div>
+          <p className="mt-2 text-[11px]" style={{ color: C.textDimmer }}>
+            Manual details help rank results only. Fitment remains unverified until confirmed against the vehicle or supplier catalogue.
+          </p>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              if (!manualVehicle.make.trim() || !manualVehicle.model.trim()) return;
+              onManualVehicle?.({ ...manualVehicle, rego: plate.trim().toUpperCase(), customVehicle: !lookupError });
+              setManualEntryOpen(false);
+            }}
+            disabled={!manualVehicle.make.trim() || !manualVehicle.model.trim()}
+            className="mt-3 w-full rounded-lg px-3 py-2.5 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: C.orange }}
+          >
+            {lookupError ? 'Use Manual Vehicle Details' : 'Use Custom Vehicle Details'}
+          </button>
+        </div>
+      )}
       
               <button 
         onClick={(e) => {
@@ -558,8 +1071,11 @@ function ScannerPanel({ onRego, onVin, onPhoto, onCommit, loading, vehicle, scan
       </button>
       
       {vehicle && !scanning && (
-        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}05` }}>
-          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: C.emerald }}><BadgeCheck className="h-4 w-4" /> Vehicle Matched</div>
+        <div className="mt-3 rounded-lg border p-3" style={{ borderColor: vehicle.vehicleDataVerified === true ? `${C.emerald}30` : `${C.orange}40`, background: vehicle.vehicleDataVerified === true ? `${C.emerald}05` : `${C.orange}06` }}>
+          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: vehicle.vehicleDataVerified === true ? C.emerald : C.orange }}>
+            {vehicle.vehicleDataVerified === true ? <BadgeCheck className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+            {vehicle.source === 'custom' ? 'Custom Vehicle — Fitment Requires Verification' : vehicle.source === 'manual' ? 'Manual Vehicle — Unverified' : vehicle.vehicleDataVerified === true ? 'Vehicle Data Matched' : 'Vehicle Data Requires Verification'}
+          </div>
           <div className="mt-1.5 text-sm font-bold text-slate-100">
   {(vehicle.year || 'YEAR UNKNOWN')}{' '}
   {(vehicle.make || 'UNKNOWN MAKE').toUpperCase()}{' '}
@@ -1075,15 +1591,13 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
       </div>
 
       <div className="mt-1 text-xs font-bold">
-        {String(detailItem.fitmentNotes || '')
-          .toUpperCase()
-          .includes('DEVELOPMENT TEST') ? (
-          <span style={{ color: C.orange }}>
-            ⚠ DEVELOPMENT FITMENT TEST
-          </span>
-        ) : detailItem.fitmentScore >= 60 ? (
+        {detailItem.fitmentAuthoritative === true ? (
           <span style={{ color: C.emerald }}>
-            ✓ HIGH CONFIDENCE VEHICLE MATCH
+            ✓ AUTHORITATIVE CATALOGUE FITMENT
+          </span>
+        ) : detailItem.fitmentCandidate || detailItem.fitmentScore > 0 ? (
+          <span style={{ color: C.orange }}>
+            ⚠ DEVELOPMENT MATCH — VERIFY BEFORE ORDERING
           </span>
         ) : (
           <span style={{ color: C.textDim }}>
@@ -1093,8 +1607,16 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
       </div>
 
       <div className="mt-1 font-mono text-[10px]" style={{ color: C.textDim }}>
-        Fitment Score: {detailItem.fitmentScore ?? 0}
+        {detailItem.fitmentAuthoritative === true
+          ? 'Confirmed by the connected catalogue provider'
+          : `Development ranking score: ${detailItem.fitmentScore ?? 0}`}
       </div>
+
+      {detailItem.fitmentAuthoritative !== true && (
+        <div className="mt-2 text-[10px] leading-relaxed" style={{ color: C.textDim }}>
+          Seller-supplied vehicle fields are used only to rank possible matches. Confirm the part number and application with an authoritative catalogue or supplier before ordering or fitting.
+        </div>
+      )}
     </div>
 
     {detailItem.fitmentReasons?.length > 0 && (
@@ -1273,6 +1795,7 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
 
 // ─── Per-item shipping surcharge calculator ──────────────────────────────────
 function itemShipping(item, regionCode) {
+  if (item.deliveryFee != null) return Math.max(0, Number(item.deliveryFee) || 0);
   const tier = item.tier || 'local';
   const info = typeof SOURCING_TIERS !== 'undefined' ? SOURCING_TIERS[tier] : null;
   if (info && info.freightSurcharge > 0) return info.freightSurcharge;
@@ -1320,24 +1843,25 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [saveCard, setSaveCard] = useState(false);
-  const regionConfig = typeof region === 'string'
-    ? (REGIONS[region] || REGIONS.AU)
-    : (region || REGIONS.AU);
-  const r = regionConfig.code;
+  const r = region || 'VIC';
   if (!open) return null;
   const f = (n) => fmt(n, r);
   const partsTotal = cart.reduce((s, c) => s + c.unitPrice * c.qty, 0);
-  const individualShippingTotal = cart.reduce((s, c) => s + itemShipping(c, r) * c.qty, 0);
-  const consolidated = calcConsolidatedFreight(cart, regionConfig);
-  const shippingTotal = consolidationEnabled ? consolidated.fee : individualShippingTotal;
+  const deliveryBySeller = new Map();
+  cart.forEach((item) => {
+    const sellerKey = item.sellerId || item.shop || item.loc || item.offerId || item.id;
+    deliveryBySeller.set(sellerKey, Math.max(itemShipping(item, r), deliveryBySeller.get(sellerKey) || 0));
+  });
+  const individualShippingTotal = [...deliveryBySeller.values()].reduce((sum, fee) => sum + fee, 0);
+  const consolidated = calcConsolidatedFreight(cart, r);
+  const shippingTotal = individualShippingTotal;
   const subtotal = partsTotal + shippingTotal;
-  const taxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(regionConfig, usStateCode) : 0.10;
-  const tax = subtotal * taxRate;
-  const grand = subtotal + tax;
+  const tax = 0;
+  const grand = subtotal;
 
   // Aggregate courier dispatch legs
   const courierLegs = cart.length > 0 ? cart.map(item => {
-    const oc = getOptimalCourier(item, regionConfig);
+    const oc = getOptimalCourier(item, r);
     return { item, ...oc };
   }) : [];
   const activeCouriers = [...new Set(courierLegs.map(l => l.network?.name).filter(Boolean))];
@@ -1347,9 +1871,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
     if (!selectedPaymentMethod) return;
     setProcessing(true);
     try {
-      if (typeof onCheckout === 'function') {
-        await onCheckout(selectedPaymentMethod, { partsTotal, shippingTotal, tax, grand });
-      }
+      if (typeof onCheckout === 'function') await onCheckout(selectedPaymentMethod);
     } finally {
       setProcessing(false);
       setSelectedPaymentMethod(null);
@@ -1390,7 +1912,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                 {/* ── ZONE B: CENTRAL SCROLLABLE BODY FRAME ── */}
         <div className="scrollbar-thin flex-1 overflow-y-auto px-4 py-2 space-y-4 max-h-[calc(100vh-180px)]">
           {/* Multi-Supplier Freight Consolidation Toggle */}
-          {cart.length > 0 && (
+          {false && cart.length > 0 && (
             <div className="rounded-xl border p-3" style={{ borderColor: consolidationEnabled ? `${C.orange}50` : C.border, background: consolidationEnabled ? `${C.orange}08` : C.panel }}>
               <button onClick={onToggleConsolidation} className="flex w-full items-center gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: consolidationEnabled ? C.orange : C.border }}>
@@ -1460,7 +1982,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                         {!consolidationEnabled && ship > 0 && <div className="font-mono text-[10px]" style={{ color: C.textDim }}>+{f(ship)} freight</div>}
                       </div>
                     </div>
-                    {!consolidationEnabled && oc && oc.network && (
+                    {false && !consolidationEnabled && oc && oc.network && (
                       <div className="mt-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px]" style={{ borderColor: `${C.orange}25`, background: `${C.orange}06` }}>
                         <Truck className="h-2.5 w-2.5 shrink-0" style={{ color: C.orange }} />
                         <span className="font-bold" style={{ color: C.orange }}>{oc.network.name}</span>
@@ -1468,7 +1990,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                         <span className="ml-auto font-mono font-bold" style={{ color: C.emerald }}>{f(oc.fee * item.qty)}</span>
                       </div>
                     )}
-                    {consolidationEnabled && (
+                    {false && consolidationEnabled && (
                       <div className="mt-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px]" style={{ borderColor: `${C.emerald}25`, background: `${C.emerald}06` }}>
                         <Package className="h-2.5 w-2.5 shrink-0" style={{ color: C.emerald }} />
                         <span className="font-bold" style={{ color: C.emerald }}>Consolidated to Hub</span>
@@ -1482,7 +2004,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
           )}
 
                    {/* Global Freight Orchestration Tracking Card */}
-          {cart.length > 0 && !consolidationEnabled && (
+          {false && cart.length > 0 && !consolidationEnabled && (
             <div className="rounded-xl border p-3" style={{ borderColor: `${C.orange}30`, background: `${C.orange}04` }}>
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${C.orange}15` }}>
@@ -1525,7 +2047,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
           )}
 
           {/* Consolidation Hub Node Card */}
-          {cart.length > 0 && consolidationEnabled && (
+          {false && cart.length > 0 && consolidationEnabled && (
             <div className="rounded-xl border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}04` }}>
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${C.emerald}15` }}>
@@ -1605,12 +2127,8 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
         <div className="p-4 border-t border-slate-800 bg-[#101524] sticky bottom-0 shrink-0">
           <div className="space-y-1.5 text-xs">
             <Row label="Parts & Tools" value={f(partsTotal)} />
-            {consolidationEnabled ? (
-              <Row label="Consolidated Freight (single courier)" value={f(shippingTotal)} />
-            ) : (
-              <Row label="Courier Delivery (itemized)" value={f(shippingTotal)} />
-            )}
-            <Row label={`${r === 'US_CA' || r === 'US_NY' || r === 'US_TX' ? 'Sales Tax' : 'GST'}`} value={f(tax)} />
+            <Row label="Supplier delivery" value={f(shippingTotal)} />
+            <Row label="GST" value="Included in supplier prices" />
             <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: C.border }}>
               <span className="text-sm font-bold text-slate-100">Total</span>
               <span className="font-mono text-lg font-bold" style={{ color: C.emerald }}>{f(grand)}</span>
@@ -1646,6 +2164,40 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
 
 function Row({ label, value }) {
   return <div className="flex items-center justify-between"><span style={{ color: C.textDim }}>{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
+}
+
+function WorkshopDeliveries({ getAccessToken }) {
+  const [items, setItems] = useState([]);
+  const [tokens, setTokens] = useState({});
+  const [message, setMessage] = useState('');
+  const refresh = useCallback(async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+    const response = await fetch('/api/fulfilments', { headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json();
+    if (response.ok) setItems(result.fulfilments || []);
+  }, [getAccessToken]);
+  useEffect(() => { refresh().catch(() => {}); }, [refresh]);
+  const receive = async (id) => {
+    const token = await getAccessToken();
+    const response = await fetch('/api/fulfilment-handshake', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fulfilmentId: id, action: 'RECEIVE', qrToken: tokens[id] || '' }),
+    });
+    const result = await response.json();
+    setMessage(response.ok ? 'Delivery verified and received into the workshop.' : (result.error || 'Receipt could not be verified.'));
+    if (response.ok) { setTokens(prev => ({ ...prev, [id]: '' })); await refresh(); }
+  };
+  if (!items.length) return null;
+  return <section className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}><Truck className="h-4 w-4" /> Incoming deliveries</div>
+    {message && <p className="mt-2 text-xs" style={{ color: C.emerald }}>{message}</p>}
+    <div className="mt-3 space-y-2">{items.map(item => <div key={item.id} className="rounded-lg border p-3" style={{ background: C.panel2, borderColor: C.border }}>
+      <div className="flex justify-between gap-2"><span className="font-mono text-[10px]">{item.order_id}</span><span className="text-[10px] font-bold" style={{ color: C.emerald }}>{item.status}</span></div>
+      <div className="mt-1 text-[10px]" style={{ color: C.textDim }}>{item.method === 'DELIVERY' ? 'Supplier delivery' : 'Workshop pickup'}</div>
+      {item.status === 'IN_TRANSIT' && <div className="mt-2 flex gap-2"><input value={tokens[item.id] || ''} onChange={e => setTokens(prev => ({ ...prev, [item.id]: e.target.value.trim() }))} placeholder="Scan or paste secure handoff token" className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1 text-xs" style={{ borderColor: C.border }} /><button onClick={() => receive(item.id)} disabled={!tokens[item.id]} className="rounded px-2 py-1 text-xs font-bold text-black disabled:opacity-40" style={{ background: C.emerald }}>Confirm receipt</button></div>}
+    </div>)}</div>
+  </section>;
 }
 
 // ─── DIY Driver History Vault (permanent purchased items ledger) ────────────
@@ -3597,8 +4149,55 @@ function DataResidencyNode({ regionCode }) {
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
-// ─── Admin Console (3-column global infrastructure terminal) ─────────────────
-function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, paidInvoices, onSignOut }) {
+function AdminDemoBanner({ onExit }) {
+  return (
+    <div className="sticky top-0 z-[70] flex items-center justify-between gap-3 border-b border-amber-400/40 bg-amber-950/95 px-4 py-2 text-xs text-amber-100">
+      <span><strong>ADMIN DEMO MODE</strong> — live searches and pricing are enabled; purchases and production changes are blocked.</span>
+      <button type="button" onClick={onExit} className="shrink-0 rounded-md border border-amber-300/50 px-2.5 py-1 font-bold">Back to Admin</button>
+    </div>
+  );
+}
+
+// ─── Admin demo controller ───────────────────────────────────────────────────
+function AdminConsole({ session, onSignOut, onSelectDashboard }) {
+  const journeys = [
+    { id: 'WORKSHOP', title: 'Mechanical workshop', detail: 'Vehicle intake, parts sourcing, server-priced checkout and delivery receipt.' },
+    { id: 'COLLISION', title: 'Collision repairer', detail: 'Repair jobs and valuation workflow, isolated from mechanical workshops.' },
+    { id: 'SUPPLIER', title: 'Supplier', detail: 'Inventory publishing, paid-order acceptance, packing and secure dispatch.' },
+    { id: 'DIY', title: 'DIY customer', detail: 'Consumer-facing vehicle and parts discovery journey.' },
+  ];
+  const readiness = [
+    ['Authentication and role isolation', 'READY'],
+    ['Server-priced Stripe test checkout', 'READY'],
+    ['Stock reservation and payment verification', 'READY'],
+    ['Delivery fulfilment and QR custody', 'PREVIEW TEST'],
+    ['RedBook licensed vehicle data', 'PENDING PROVIDER'],
+    ['Production launch', 'NOT DEPLOYED'],
+  ];
+  return <div className="min-h-screen p-4 sm:p-8" style={{ background: C.bg, color: C.text }}>
+    <div className="mx-auto max-w-5xl">
+      <div className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between" style={{ background: C.panel, borderColor: C.border }}>
+        <div><div className="text-xs font-bold uppercase tracking-widest" style={{ color: C.orange }}>PartsForge admin demonstration</div><h1 className="mt-1 text-2xl font-bold text-white">Workshop-to-supplier workflow</h1><p className="mt-1 text-xs" style={{ color: C.textDim }}>Signed in as {session?.email}. Demo personas are read-only and cannot create payments or alter production data.</p></div>
+        <button onClick={onSignOut} className="rounded-lg border px-3 py-2 text-xs font-bold" style={{ borderColor: `${C.red}40`, color: C.red }}>Sign out</button>
+      </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <section className="rounded-2xl border p-5" style={{ background: C.panel, borderColor: C.border }}>
+          <h2 className="text-sm font-bold text-white">Choose a dashboard to demonstrate</h2><p className="mt-1 text-xs" style={{ color: C.textDim }}>Use these in order to explain how one order moves through PartsForge.</p>
+          <div className="mt-4 space-y-2">{journeys.map(item => <button key={item.id} onClick={() => onSelectDashboard(item.id)} className="w-full rounded-xl border p-3 text-left transition hover:border-orange-500" style={{ background: C.panel2, borderColor: C.border }}><div className="flex items-center justify-between"><span className="text-sm font-bold text-white">{item.title}</span><ChevronRight className="h-4 w-4" style={{ color: C.orange }} /></div><p className="mt-1 text-[11px]" style={{ color: C.textDim }}>{item.detail}</p></button>)}</div>
+        </section>
+        <section className="rounded-2xl border p-5" style={{ background: C.panel, borderColor: C.border }}>
+          <h2 className="text-sm font-bold text-white">Current demonstration status</h2><p className="mt-1 text-xs" style={{ color: C.textDim }}>Truthful release state—no simulated revenue, customers or integrations.</p>
+          <div className="mt-4 space-y-2">{readiness.map(([label, status]) => <div key={label} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5" style={{ background: C.panel2, borderColor: C.border }}><span className="text-xs">{label}</span><span className="shrink-0 text-[9px] font-bold" style={{ color: status === 'READY' ? C.emerald : status === 'PREVIEW TEST' ? C.orange : C.textDim }}>{status}</span></div>)}</div>
+        </section>
+      </div>
+      <div className="mt-4 rounded-xl border p-4 text-xs" style={{ background: `${C.orange}08`, borderColor: `${C.orange}35`, color: C.textDim }}><strong style={{ color: C.orange }}>Suggested walkthrough:</strong> Workshop searches for a candidate part → server confirms supplier price and stock → Stripe test payment → supplier accepts and dispatches → workshop confirms receipt with the secure QR handoff.</div>
+    </div>
+  </div>;
+}
+
+// Kept temporarily for reference while the truthful admin panels replace it.
+// eslint-disable-next-line no-unused-vars
+function LegacyAdminConsole({ session, region, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, paidInvoices, onSignOut, onSelectDashboard }) {
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const [patchText, setPatchText] = useState('');
   const [patchDeployed, setPatchDeployed] = useState(false);
@@ -3657,6 +4256,24 @@ function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode
             </div>
           </div>
           <div className="flex items-center gap-3">
+{session?.role === 'ADMIN' && session?.email?.trim().toLowerCase() === 'admin@partsforge.test' && onSelectDashboard && (
+  <select
+    defaultValue="ADMIN"
+    onChange={(e) => onSelectDashboard(e.target.value)}
+    className="rounded-lg border px-3 py-2 text-xs font-bold outline-none"
+    style={{
+      borderColor: `${C.orange}50`,
+      background: C.panel,
+      color: C.orange,
+    }}
+  >
+    <option value="ADMIN">Admin Dashboard</option>
+    <option value="DIY">DIY Dashboard</option>
+    <option value="WORKSHOP">Workshop Dashboard</option>
+    <option value="COLLISION">Collision Repair Dashboard</option>
+    <option value="SUPPLIER">Supplier Dashboard</option>
+  </select>
+)}
             <div className="hidden items-center gap-1.5 text-[10px] font-mono sm:flex" style={{ color: C.emerald }}>
               <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: C.emerald }} /> LIVE
             </div>
@@ -3900,11 +4517,39 @@ const DEFAULT_HOISTS = [
 
 export default function App() {
   const [accepted, setAccepted] = useState(() => { try { return localStorage.getItem('partsforge_safety_agreed') === 'true'; } catch { return false; } });
-  const [userSession, setUserSession] = useState(() => { try { const raw = localStorage.getItem('partsforge_session'); if (!raw || raw === 'undefined' || raw === 'null') return null; return JSON.parse(raw); } catch { return null; } });
+  const [userSession, setUserSession] = useState(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const [workshopStateHydrated, setWorkshopStateHydrated] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isEmployeeSubUser, setIsEmployeeSubUser] = useState(false);
   const [teamLinkCode, setTeamLinkCode] = useState(null);
-  const role = userSession?.role === 'MECHANIC' || userSession?.role === 'APPRENTICE' ? 'pro' : userSession?.role === 'SELLER' ? 'seller' : 'diy';
+  const isDemoAdmin =
+    userSession?.role === 'ADMIN' &&
+    userSession?.email?.trim().toLowerCase() === 'admin@partsforge.test';
+
+  const [qaPersona, setQaPersona] = useState(null);
+  const effectiveRole =
+    isDemoAdmin && qaPersona
+      ? qaPersona === 'WORKSHOP' || qaPersona === 'COLLISION'
+        ? 'MECHANIC'
+        : qaPersona === 'SUPPLIER'
+          ? 'SELLER'
+          : qaPersona === 'DIY'
+            ? 'DIY'
+            : 'ADMIN'
+      : userSession?.role;
+  const adminDemoMode = isDemoAdmin && effectiveRole !== 'ADMIN';
+  const effectiveWorkshopType = resolveEffectiveWorkshopType(
+    qaPersona,
+    userSession?.workshopType,
+  );
+
+  const role =
+    effectiveRole === 'MECHANIC' || effectiveRole === 'APPRENTICE'
+      ? 'pro'
+      : effectiveRole === 'SELLER'
+        ? 'seller'
+        : 'diy';
   const signedInTechnician = useMemo(() => ({
     id: userSession?.technicianId || userSession?.employeeCode || userSession?.email || 'unidentified-session',
     name: userSession?.name || userSession?.email?.split('@')[0] || 'Unidentified Technician',
@@ -3920,7 +4565,7 @@ export default function App() {
   const [usStateCode, setUsStateCode] = useState(() => { try { return localStorage.getItem('partsforge_us_state') || 'CA'; } catch { return 'CA'; } });
   
   const region = (typeof REGIONS !== 'undefined' && REGIONS[regionCode]) ? REGIONS[regionCode] : 'VIC';
-  const effectiveTaxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(region, usStateCode) : 0.10;
+  const effectiveTaxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(regionCode, usStateCode) : 0.10;
   
   const handleRegionChange = (code) => { setRegionCode(code); try { localStorage.setItem('partsforge_region', code); } catch {} };
   const handleUsStateChange = (code) => { setUsStateCode(code); try { localStorage.setItem('partsforge_us_state', code); } catch {} };
@@ -3938,6 +4583,7 @@ export default function App() {
     }
   });
   const [regoLoading, setRegoLoading] = useState(false);
+  const [regoLookupError, setRegoLookupError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [vehicle, setVehicle] = useState(() => readStored('partsforge_active_vehicle', null));
 
@@ -3989,6 +4635,132 @@ export default function App() {
   const [corpProfile, setCorpProfile] = useState({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
   const [bankFeedStatus, setBankFeedStatus] = useState(null);
   const matchedTradeAccount = useMemo(() => typeof resolveTradeAccount === 'function' ? resolveTradeAccount(corpProfile) : null, [corpProfile]);
+  const getAccessToken = useCallback(async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || '', []);
+
+  useEffect(() => {
+    let active = true;
+    restoreVerifiedUserSession(supabaseAuth)
+      .then((verifiedSession) => {
+        if (!active) return;
+        setUserSession(verifiedSession);
+        setIsEmployeeSubUser(Boolean(verifiedSession?.isEmployeeSubUser));
+        setTeamLinkCode(verifiedSession?.employeeCode || null);
+        try {
+          if (verifiedSession) localStorage.setItem('partsforge_session', JSON.stringify(verifiedSession));
+          else localStorage.removeItem('partsforge_session');
+        } catch {}
+      })
+      .catch(() => {
+        if (!active) return;
+        setUserSession(null);
+        try { localStorage.removeItem('partsforge_session'); } catch {}
+      })
+      .finally(() => {
+        if (active) setIsRestoringSession(false);
+      });
+
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const ownerId = userSession?.technicianId;
+    const mayUseWorkshopState = userSession?.role === 'MECHANIC' || userSession?.role === 'APPRENTICE';
+
+    if (!ownerId || !mayUseWorkshopState || !supabaseAuth) {
+      setWorkshopStateHydrated(false);
+      return () => { active = false; };
+    }
+
+    setWorkshopStateHydrated(false);
+    loadWorkshopState(supabaseAuth, ownerId)
+      .then((remote) => {
+        if (!active || !remote) return;
+        if (Array.isArray(remote.hoists)) setHoists(remote.hoists);
+        if (Array.isArray(remote.garageVehicles)) setGarageVehicles(remote.garageVehicles);
+        if (Array.isArray(remote.hoistJobs)) setHoistJobs(remote.hoistJobs);
+        if (Array.isArray(remote.vault)) setVault(remote.vault);
+        if (Array.isArray(remote.unpaidInvoices)) setUnpaidInvoices(remote.unpaidInvoices);
+        if (Array.isArray(remote.paidInvoices)) setPaidInvoices(remote.paidInvoices);
+        if (Array.isArray(remote.workshopExpenses)) setWorkshopExpenses(remote.workshopExpenses);
+        if (Array.isArray(remote.technicianHistory)) setTechnicianHistory(remote.technicianHistory);
+      })
+      .catch((error) => console.error('Workshop state restore failed', error))
+      .finally(() => {
+        if (active) setWorkshopStateHydrated(true);
+      });
+
+    return () => { active = false; };
+  }, [userSession?.technicianId, userSession?.role]);
+
+  useEffect(() => {
+    if (!workshopStateHydrated || adminDemoMode || !userSession?.technicianId || !supabaseAuth) return undefined;
+
+    const timer = setTimeout(() => {
+      saveWorkshopState(supabaseAuth, userSession.technicianId, {
+        hoists,
+        garageVehicles,
+        hoistJobs,
+        vault,
+        unpaidInvoices,
+        paidInvoices,
+        workshopExpenses,
+        technicianHistory,
+      }).catch((error) => console.error('Workshop state sync failed', error));
+    }, 750);
+
+    return () => clearTimeout(timer);
+  }, [
+    adminDemoMode,
+    garageVehicles,
+    hoistJobs,
+    hoists,
+    paidInvoices,
+    technicianHistory,
+    unpaidInvoices,
+    userSession?.technicianId,
+    vault,
+    workshopExpenses,
+    workshopStateHydrated,
+  ]);
+
+  useEffect(() => {
+    if (!userSession || !supabaseAuth) return undefined;
+    const params = new URLSearchParams(window.location.search);
+    const checkoutResult = params.get('checkout');
+    const sessionId = params.get('session_id');
+    if (checkoutResult !== 'success' || !sessionId) return undefined;
+
+    let active = true;
+    let attempts = 0;
+    const confirmPayment = async () => {
+      attempts += 1;
+      const accessToken = (await supabaseAuth.auth.getSession()).data.session?.access_token || '';
+      const response = await fetch(`/api/order-status?session_id=${encodeURIComponent(sessionId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await response.json();
+      if (!active) return;
+      if (response.ok && data?.order?.status === 'PAID') {
+        setPurchaseCart([]);
+        setIsCartOpen(false);
+        setSaveToast(`Payment verified. Order ${data.order.id} is confirmed.`);
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+      if (attempts < 6 && response.ok && data?.order?.status === 'PAYMENT_PENDING') {
+        setTimeout(confirmPayment, 1500);
+        return;
+      }
+      setSaveToast('Payment submitted. Confirmation is still pending; do not place the order again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    };
+
+    confirmPayment().catch(() => {
+      if (active) setSaveToast('Payment status could not be confirmed yet; do not place the order again.');
+    });
+    return () => { active = false; };
+  }, [userSession]);
 
   // ── Auth handlers ──
   const handleAuthenticate = (session) => {
@@ -4020,6 +4792,7 @@ const handleRego = async (plateStr, targetRegion) => {
 
   if (typeof setRegoLoading === 'function') setRegoLoading(true);
   if (typeof setVehicle === 'function') setVehicle(null);
+  setRegoLookupError('');
 
   const cleanPlate = plateStr.trim().toUpperCase();
 
@@ -4077,12 +4850,27 @@ const handleRego = async (plateStr, targetRegion) => {
     if (typeof setVehicle === 'function') {
       setVehicle(null);
     }
+    setRegoLookupError(error?.message || 'Automatic registration lookup is temporarily unavailable.');
 
   } finally {
     if (typeof setRegoLoading === 'function') setRegoLoading(false);
     if (typeof setScanning === 'function') setScanning(false);
   }
 };
+  const handleManualVehicle = (manualData) => {
+    setVehicle({
+      ...manualData,
+      year: manualData.year ? Number(manualData.year) : null,
+      make: manualData.make.trim().toUpperCase(),
+      model: manualData.model.trim().toUpperCase(),
+      series: manualData.series.trim().toUpperCase(),
+      engine: manualData.engine.trim().toUpperCase() || 'NOT SUPPLIED',
+      source: manualData.customVehicle ? 'custom' : 'manual',
+      vehicleDataVerified: false,
+      fitmentVerified: false,
+    });
+    setRegoLookupError('');
+  };
   const handleVin = async (vinStr, targetRegion) => {
     if (!vinStr || !vinStr.trim()) return;
 
@@ -4339,10 +5127,14 @@ const handleSearch = async (query) => {
   );
 
   try {
+    const accessToken = supabaseAuth
+      ? (await supabaseAuth.auth.getSession()).data.session?.access_token || ''
+      : '';
     const data = await processPartsQuery(
       cleanQuery,
       regionCode || 'AU_VIC',
-      vehicle
+      vehicle,
+      accessToken
     );
 
     setResults({
@@ -4364,7 +5156,10 @@ const handleSearch = async (query) => {
         data?.facebook || [],
 
       vehicleContext:
-        data?.vehicleContext || null
+        data?.vehicleContext || null,
+
+      catalogue:
+        data?.catalogue || null
     });
 
   } catch (err) {
@@ -4408,6 +5203,11 @@ const handleSearch = async (query) => {
   };
 
   const handleExportWorkshopExpense = (expense) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: accounting exports are blocked.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
     setWorkshopExpenses(prev => prev.map(e => e.id === expense.id ? { ...e, exported: true } : e));
     setSaveToast(`CSV/PDF statement emailed to ${userSession?.email || 'your registered email'} — check your PC inbox.`);
     setTimeout(() => setSaveToast(null), 4500);
@@ -4611,15 +5411,20 @@ const handleSearch = async (query) => {
     setTimeout(() => setSaveToast(null), 4000);
   };
 
-  // ── Master mechanic approves employee purchase → process Stripe payment ──
+  // ── Master mechanic approves employee purchase request (payment remains pending) ──
   const handleApproveEmployeePurchase = (approvalId) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: purchase approval cannot create payment, dispatch, stock, or ledger records.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const req = pendingApprovals.find(a => a.id === approvalId);
     if (!req) return;
 
-    // 1. Process Stripe payment telemetry logs safely into existing states
+    // Approval is not payment. Only a verified Stripe webhook may mark an order settled.
     const paymentDescription = `Employee purchase approved: ${req.employeeName} (${req.items.length} items)`;
-    setBankFeedEntries(prev => [{ id: uid(), description: paymentDescription, amount: req.total, channel: 'Stripe', status: 'SETTLED', timestamp: new Date().toISOString() }, ...prev]);
-    setLedgerEntries(prev => [{ id: uid(), ledgerId: `EMP-${approvalId}`, description: `Employee purchase: ${req.employeeName}`, amount: req.total, accountCode: '500-PURCH', status: 'POSTED', timestamp: new Date().toISOString() }, ...prev]);
+    setBankFeedEntries(prev => [{ id: uid(), description: paymentDescription, amount: req.total, channel: 'Stripe', status: 'PAYMENT_PENDING', timestamp: new Date().toISOString() }, ...prev]);
+    setLedgerEntries(prev => [{ id: uid(), ledgerId: `EMP-${approvalId}`, description: `Employee purchase: ${req.employeeName}`, amount: req.total, accountCode: '500-PURCH', status: 'PENDING', timestamp: new Date().toISOString() }, ...prev]);
 
     const employeeSource = `Purchased by Employee: ${req.employeeName} / ${req.employeeCode}`;
     const line2Items = req.items.filter(c => (typeof classifyItem === 'function' ? classifyItem(c) : 'LINE2_BAY_ALLOCATION') === 'LINE2_BAY_ALLOCATION');
@@ -4688,7 +5493,7 @@ const handleSearch = async (query) => {
 
     const line1Count = line1Items.length;
     const line2Count = line2Items.length;
-    let msg = `Approved ${req.employeeName}'s purchase. Stripe payment processed.`;
+    let msg = `Approved ${req.employeeName}'s purchase request. Payment is still pending.`;
     if (line2Count > 0 && line1Count > 0) {
       msg += ` ${line2Count} item(s) → Invoice Archive Ledger, ${line1Count} item(s) → Workshop Expense Ledger.`;
     } else if (line2Count > 0) {
@@ -4696,7 +5501,7 @@ const handleSearch = async (query) => {
     } else if (line1Count > 0) {
       msg += ` ${line1Count} item(s) pushed to Workshop Expense Ledger.`;
     }
-    msg += ' Courier dispatch pipeline opened.';
+    msg += ' Dispatch must wait for verified payment.';
     setSaveToast(msg);
     setTimeout(() => setSaveToast(null), 5000);
   };
@@ -4724,6 +5529,11 @@ const handleSearch = async (query) => {
 
   // ── Global Bank Feed + Accounting Ledger dispatch ──
   const dispatchToBankFeed = useCallback((summary) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: accounting and bank-feed writes are blocked.');
+      setTimeout(() => setSaveToast(null), 3500);
+      return;
+    }
     const entry = {
       id: uid(),
       timestamp: new Date().toISOString(),
@@ -4735,26 +5545,18 @@ const handleSearch = async (query) => {
     };
     setBankFeedEntries(prev => [entry, ...prev]);
     setLedgerEntries(prev => [{ ...entry, ledgerId: `XRO-${Math.floor(100000 + Math.random() * 900000)}`, accountCode: '500-PURCH', status: 'POSTED' }, ...prev]);
-  }, []);
+  }, [adminDemoMode]);
 
   // ── Checkout: dispatch courier, hold items pending handshake verification ──
-  const handleCheckout = async (_selectedPaymentMethod, checkoutSummary = {}) => {
+  const handleCheckout = async () => {
     const cartSnapshot = [...purchaseCart];
-    const checkoutItems = [
-      ...cartSnapshot,
-      ...(Number(checkoutSummary.shippingTotal) > 0 ? [{
-        id: `freight-${Date.now()}`,
-        title: 'Courier Delivery',
-        unitPrice: Number(checkoutSummary.shippingTotal),
-        qty: 1,
-      }] : []),
-      ...(Number(checkoutSummary.tax) > 0 ? [{
-        id: `tax-${Date.now()}`,
-        title: regionCode.startsWith('US') ? 'Sales Tax' : 'GST',
-        unitPrice: Number(checkoutSummary.tax),
-        qty: 1,
-      }] : []),
-    ];
+    const cartTotal = cartSnapshot.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
+
+    if (adminDemoMode) {
+      setSaveToast('DEMO MODE — no checkout, payment, order, or stock reservation was created.');
+      setTimeout(() => setSaveToast(null), 4500);
+      return;
+    }
 
     // Employee sub-user gating: block direct payment, route to master approval queue
     if (isEmployeeSubUser) {
@@ -4765,8 +5567,8 @@ const handleSearch = async (query) => {
       const orderId = `CART-${Date.now()}`;
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: checkoutItems, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
+        headers: { 'Content-Type': 'application/json', ...(supabaseAuth ? { Authorization: `Bearer ${(await supabaseAuth.auth.getSession()).data.session?.access_token || ''}` } : {}) },
+        body: JSON.stringify({ items: cartSnapshot, deliveryMethod: 'DELIVERY', orderId }),
       });
       const data = await response.json();
       if (!response.ok || !data.checkoutUrl) throw new Error(data?.error || 'CHECKOUT_CREATION_FAILED');
@@ -4778,6 +5580,11 @@ const handleSearch = async (query) => {
   };
 
   const handleSettleInvoice = async (invoiceNo, method) => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: invoice payment and settlement are blocked.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const result = await settleInvoiceViaCustomerPortal(invoiceNo, method);
     if (!result?.ok) {
       setSaveToast('Payment remains unpaid until a signed Stripe webhook confirms cleared funds.');
@@ -4845,6 +5652,11 @@ const handleSearch = async (query) => {
   };
 
     const handleCompileInvoice = async () => {
+    if (adminDemoMode) {
+      setSaveToast('Demo mode: invoice creation, payment requests, and accounting writes are blocked.');
+      setTimeout(() => setSaveToast(null), 4000);
+      return;
+    }
     const unallocatedParts = jobCart.filter(item => !item.fromVault || !item.vaultId);
     if (unallocatedParts.length > 0) {
       setSaveToast('Invoice blocked: every part must be delivered and allocated from stock first.');
@@ -5123,6 +5935,7 @@ const handleSearch = async (query) => {
   };
 
   const handleConnectBankFeed = async () => {
+    if (adminDemoMode) return demoMutationResult();
     const result = await connectOpenBankingFeed();
     setBankFeedStatus(result);
     return result;
@@ -5130,23 +5943,28 @@ const handleSearch = async (query) => {
 
   // ── Accounting export & accountant email ──
   const handleExportToAccounting = async (items) => {
+    if (adminDemoMode) return demoMutationResult();
     await streamInvoiceToLedger(items[0]);
   };
 
   const handleEmailAccountant = async (items) => {
+    if (adminDemoMode) return demoMutationResult();
     await triggerXeroAccountantSync(items[0], corpProfile.accountantEmail || 'accountant@tax.com');
   };
 
   // ── Bank feed (on-demand only) ──
-  const handleLinkAto = async () => linkAtoSbr();
-  const handleConnectLedger = async (provider) => connectAccountingSoftware(provider);
-  const handleInviteAccountant = async (email) => inviteAccountant(email);
+  const demoMutationResult = () => ({ ok: false, status: 'ADMIN_DEMO_MODE_MUTATION_BLOCKED', message: 'Demo mode blocks production changes.' });
+  const handleLinkAto = async () => adminDemoMode ? demoMutationResult() : linkAtoSbr();
+  const handleConnectLedger = async (provider) => adminDemoMode ? demoMutationResult() : connectAccountingSoftware(provider);
+  const handleInviteAccountant = async (email) => adminDemoMode ? demoMutationResult() : inviteAccountant(email);
 
   // ── Sign Out ──
   const handleSignOut = () => {
-    supabaseAuth?.auth.signOut().catch(() => {});
-    setUserSession(null);
-    setAccepted(false);
+  supabaseAuth?.auth.signOut().catch(() => {});
+  setUserSession(null);
+  setQaPersona(null);
+  setAccepted(false);
+  setWorkshopStateHydrated(false);
     setGarageVehicles([]);
     setActiveVehicleId(null);
     setVehicle(null);
@@ -5180,16 +5998,24 @@ const handleSearch = async (query) => {
     setCorpProfile({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
     setBankFeedEntries([]);
     setLedgerEntries([]);
-    try { localStorage.removeItem('partsforge_session'); localStorage.removeItem('partsforge_safety_agreed'); } catch {}
+    try {
+      localStorage.removeItem('partsforge_session');
+      localStorage.removeItem('partsforge_safety_agreed');
+      localStorage.removeItem('partsforge_seller_profile');
+    } catch {}
   };
 
   // ── Render gates (auth → waiver → app) ──
+  if (isRestoringSession) {
+    return <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-400">Verifying secure session…</div>;
+  }
+
   if (!userSession) {
     return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
   }
-  
+
   // ADMIN role bypasses safety shield → straight to enterprise monitoring terminal
-  if (userSession.role === 'ADMIN') {
+  if (effectiveRole === 'ADMIN') {
     return (
       <AppErrorBoundary>
         <AdminConsole
@@ -5203,6 +6029,7 @@ const handleSearch = async (query) => {
           ledgerEntries={ledgerEntries || []}
           paidInvoices={paidInvoices || []}
           onSignOut={handleSignOut}
+          onSelectDashboard={setQaPersona}
         />
       </AppErrorBoundary>
     );
@@ -5221,10 +6048,12 @@ const handleSearch = async (query) => {
   };
 
   // ── Seller role: exclusive B2B Industrial Transport & Logistics Command Terminal ──
-  if (userSession.role === 'SELLER') {
+  if (effectiveRole === 'SELLER') {
     return (
       <AppErrorBoundary>
         <SellerConsole
+          adminDemoMode={adminDemoMode}
+          onExitDemo={() => setQaPersona(null)}
           region={regionCode || 'VIC'}
           usStateCode={usStateCode}
           onDispatchToBankFeed={dispatchToBankFeed}
@@ -5234,10 +6063,24 @@ const handleSearch = async (query) => {
           regionCode={regionCode || 'AU_VIC'}
           onRegionChange={handleRegionChange}
           usStates={(typeof REGIONS !== 'undefined' && REGIONS?.US?.usStates) ? REGIONS.US.usStates : []}
-          onUtStateChange={handleUsStateChange}
+          onUsStateChange={handleUsStateChange}
           onConnectLedger={handleConnectLedger}
           onConnectBankFeed={handleConnectBankFeed}
           bankFeedStatus={bankFeedStatus}
+          getAccessToken={async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || ''}
+        />
+      </AppErrorBoundary>
+    );
+  }
+
+  if (effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION') {
+    return (
+      <AppErrorBoundary>
+        <CollisionRepairConsole
+          adminDemoMode={adminDemoMode}
+          onExitDemo={() => setQaPersona(null)}
+          onSignOut={handleSignOut}
+          getAccessToken={async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || ''}
         />
       </AppErrorBoundary>
     );
@@ -5246,6 +6089,7 @@ const handleSearch = async (query) => {
   return (
     <AppErrorBoundary>
       <div className="min-h-screen" style={{ background: C.bg, color: C.text }}>
+        {adminDemoMode && <AdminDemoBanner onExit={() => setQaPersona(null)} />}
         {/* Top HUD Nav */}
         <nav className="sticky top-0 z-50 border-b" style={{ borderColor: C.border, background: `${C.bg}f0` }}>
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
@@ -5255,7 +6099,7 @@ const handleSearch = async (query) => {
               </div>
               <div>
                 <div className="text-sm font-bold text-slate-50">PartsForge Garage</div>
-                <div className="text-[10px]" style={{ color: C.textDim }}>{TIER_LABELS[userSession.role]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>{TIER_LABELS[effectiveRole]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -5325,14 +6169,18 @@ const handleSearch = async (query) => {
             </div>
           )}
 
+          {role === 'pro' && <WorkshopDeliveries getAccessToken={getAccessToken} />}
+
           {/* Scanner */}
           <ScannerPanel
             onRego={handleRego}
             onVin={handleVin}
             onPhoto={handlePhoto}
+            onManualVehicle={handleManualVehicle}
             onCommit={handleCommitVehicle}
             loading={regoLoading}
             vehicle={vehicle}
+            lookupError={regoLookupError}
             scanning={scanning}
             hoists={hoists}
             selectedHoistId={intakeHoistId}

@@ -58,7 +58,7 @@ function tokenizePrisma(line: string): Token[] {
   const tokens: Token[] = [];
   if (leading) tokens.push({ text: leading, cls: '' });
 
-  const parts = trimmed.split(/(\s+|[(){}\[\],])/);
+  const parts = trimmed.split(/(\s+|[(){}[\],])/);
   let depth = 0;
 
   for (const part of parts) {
@@ -192,7 +192,7 @@ function tokenizeTs(line: string): Token[] {
   const tokens: Token[] = [];
   if (leading) tokens.push({ text: leading, cls: '' });
 
-  const parts = trimmed.split(/(\s+|[(){}\[\],;:.=<>])/);
+  const parts = trimmed.split(/(\s+|[(){}[\],;:.=<>])/);
   for (const part of parts) {
     if (!part) continue;
     if (/^\s+$/.test(part)) {

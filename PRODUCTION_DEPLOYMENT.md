@@ -2,11 +2,11 @@
 
 ## Current release status
 
-This repository can be deployed as a Vite application with Vercel serverless API routes. Authentication, vehicle/VIN lookup, parts search, OCR, Stripe Checkout, Stripe PaymentIntents, and verified Stripe webhooks now have production-oriented code paths.
+This repository can be deployed as a Vite application with Vercel serverless API routes. Authentication, vehicle/VIN lookup, parts search, OCR, server-priced Stripe Checkout, and verified Stripe webhooks now have production-oriented code paths. The legacy browser-priced PaymentIntent route is permanently retired with HTTP 410.
 
 A deployment is not operational until the required provider accounts, environment variables, database migration, webhook, domain, and legal settings below are completed. Basiq, Xero/MYOB, ATO SBR, email delivery, Uber Direct and consolidated freight remain explicit configuration placeholders; the UI no longer reports them as connected when they are not.
 
-Browser local storage still holds workshop operational state such as job cards, hoists, delivered inventory and invoices. That is suitable for a single browser but is not a shared multi-device production database. Before multiple mechanics use the same workshop, these records must be moved to authenticated Supabase tables with audit-safe server writes.
+Core workshop operational state—job cards, hoists, delivered inventory, invoices, expenses and technician history—now synchronizes to an owner-scoped Supabase record after sign-in, while browser storage remains an offline fallback. This supports one account across devices. Shared multi-user workshop tenancy, conflict resolution and immutable record-level audit events still require normalized server tables before several mechanics edit the same workshop concurrently.
 
 ## Required accounts
 
@@ -43,6 +43,8 @@ Also configure:
 - `OPENAI_API_KEY` and `OPENAI_MODEL` when diagnostics are enabled
 - `SOCIALCRAWL_API_KEY` only after licensing and privacy review
 
+For Vercel Preview deployments, use the isolated `PREVIEW_` alternatives when an existing variable is shared with Production: `PREVIEW_SUPABASE_URL`, `PREVIEW_SUPABASE_PUBLISHABLE_KEY`, `PREVIEW_SUPABASE_SECRET_KEY`, `PREVIEW_STRIPE_SECRET_KEY`, and `PREVIEW_STRIPE_WEBHOOK_SECRET`. The client build equivalents are `VITE_PREVIEW_SUPABASE_URL`, `VITE_PREVIEW_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PREVIEW_STRIPE_PUBLISHABLE_KEY`. Restrict these variables to Preview in Vercel. When present, they take precedence without modifying the Production values.
+
 After deployment, open `https://YOUR_DOMAIN/api/health`. A 200 response with `status: ready` means the required environment names are present. It does not prove provider credentials or billing are valid.
 
 ## Supabase setup
@@ -55,8 +57,9 @@ After deployment, open `https://YOUR_DOMAIN/api/health`. A 200 response with `st
 6. Configure custom SMTP before launch.
 7. Confirm Row Level Security is enabled on every exposed table.
 8. Never expose `SUPABASE_SECRET_KEY` in Vercel variables beginning with `VITE_`.
+9. Confirm `anon` has no privileges on `public.profiles` and `authenticated` has only table-level `SELECT` plus column-level `UPDATE` for `display_name` and `linked_account`.
 
-The supplied migration creates authenticated profiles and seller offers with ownership policies. Operational workshop state still needs normalized tables and migration from browser storage before shared multi-device launch.
+The supplied migrations create authenticated profiles and seller offers with ownership policies, force public signups to the DIY role, and revoke profile-table operations that could bypass or weaken Row Level Security. Apply `20260911000000_workshop_state.sql` before testing workshop synchronization. It permits only the authenticated mechanic or apprentice to read and update their own record and grants no delete access. Multi-user workshop sharing still requires a controlled tenant membership model.
 
 ## Stripe setup
 
@@ -85,8 +88,10 @@ Run locally:
 
 ```text
 npm ci
+npm test
 npm run typecheck
 npm run lint
+npm audit --offline
 npm run build
 npm run preview
 ```
@@ -123,11 +128,11 @@ Before accepting real customers or payments, obtain professional advice for Aust
 
 These are not solvable by adding an API key alone:
 
-- Job cards, hoists, delivered stock, invoices and technician history still use browser local storage rather than shared server persistence.
-- Stripe webhooks are verified but do not yet write an order/payment record or trigger idempotent fulfilment.
-- Checkout line prices originate from the browser. Production checkout must price server-side from immutable catalog/order records.
+- Workshop state synchronizes per authenticated account, but it is not yet a shared multi-user workshop model and simultaneous edits use last-write-wins behavior.
+- Stripe Checkout writes pending orders, reserves stock transactionally, verifies payment identity in the signed webhook, and finalises stock once. Refund operations and supplier payouts still require an operator workflow and a settled merchant-of-record design.
+- Workshop customer invoicing is not the same as marketplace offer checkout. It still needs server-persisted invoice line items and a dedicated server-priced payment-link route before it may be presented as sent or payable.
 - Basiq, Xero/MYOB, ATO SBR, email and courier adapters require provider-specific OAuth, webhooks, contracts and data models.
 - End-to-end tests and monitoring are not present.
 - The unused legacy component tree contains demo/mock screens, although the deployed entry point is `src/App.jsx`.
 
-Do not launch for real money or multiple mechanics until these blockers are closed.
+Do not launch for real money or multiple mechanics until these blockers are closed. A single-account, supervised Preview pilot may be used only with Stripe test mode and clearly labelled unverified fitment.

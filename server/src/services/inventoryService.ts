@@ -23,6 +23,28 @@ export interface VehicleInfo {
   model: string;
 }
 
+interface InventoryRow {
+  id: string;
+  seller_id: string;
+  price: number | string;
+  stock_quantity: number;
+  delivery_type: string;
+  latitude: number;
+  longitude: number;
+}
+
+interface FitmentPartRow {
+  id: string;
+  title: string;
+  brand: string;
+  part_number: string;
+  inventory?: InventoryRow[];
+}
+
+interface FitmentQueryRow {
+  parts?: FitmentPartRow | FitmentPartRow[] | null;
+}
+
 const LOCAL_RADIUS_KM = 25;
 
 /** Resolve a vehicle's year/make/model from the virtual garage. */
@@ -80,8 +102,9 @@ export async function searchInventoryByVehicle(
   if (error || !data) return { localParts: [], nationalParts: [] };
 
   const matches: InventoryMatch[] = [];
-  for (const row of data) {
-    const part = (row as any).parts;
+  for (const row of data as FitmentQueryRow[]) {
+    const relatedParts = row.parts;
+    const part = Array.isArray(relatedParts) ? relatedParts[0] : relatedParts;
     if (!part) continue;
     for (const inv of part.inventory ?? []) {
       const distance_km = haversineKm(userLocation, {

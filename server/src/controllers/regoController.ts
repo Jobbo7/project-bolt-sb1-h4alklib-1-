@@ -105,7 +105,7 @@ export async function lookupRego(req: Request, res: Response): Promise<void> {
       source: 'fallback',
       message: `Live DOM unavailable for ${region} — returned operational test profile for ${fallback.country}.`,
     });
-  } catch (err) {
+  } catch {
     // Network failure or DOM change — return fallback profile
     const fallback = REGO_FALLBACK_PROFILES[region] || REGO_FALLBACK_PROFILES['AU_VIC'];
     res.json({
@@ -198,7 +198,7 @@ export async function lookupVin(req: Request, res: Response): Promise<void> {
       source: 'fallback',
       message: `VIN decoded via worldwide spec sweep — ${vehicle.registeredCountry}.`,
     });
-  } catch (err) {
+  } catch {
     const fallback = REGO_FALLBACK_PROFILES[region] || REGO_FALLBACK_PROFILES['AU_VIC'];
     const vehicle = hydrateVehicleSpecs({ ...fallback, vin: cleanVin || fallback.vin, rego: fallback.rego }, region);
     res.json({

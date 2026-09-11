@@ -8,6 +8,19 @@ export interface YouTubeTutorial {
   thumbnail: string;
 }
 
+interface YouTubeSearchItem {
+  id?: { videoId?: string };
+  snippet?: {
+    title?: string;
+    channelTitle?: string;
+    thumbnails?: { medium?: { url?: string } };
+  };
+}
+
+interface YouTubeSearchResponse {
+  items?: YouTubeSearchItem[];
+}
+
 /**
  * Build the strict search query format:
  *   [Vehicle Year] [Vehicle Make] [Vehicle Model] [partQuery] repair replacement
@@ -40,8 +53,8 @@ export async function searchYouTubeTutorials(
   const res = await fetch(url, { method: 'GET' });
   if (!res.ok) return [];
 
-  const json = (await res.json()) as any;
-  return (json.items ?? []).map((item: any) => ({
+  const json = (await res.json()) as YouTubeSearchResponse;
+  return (json.items ?? []).map((item) => ({
     video_id: item.id?.videoId ?? '',
     title: item.snippet?.title ?? '',
     channel: item.snippet?.channelTitle ?? '',

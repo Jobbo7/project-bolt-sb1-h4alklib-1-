@@ -30,5 +30,14 @@ remove them entirely rather than replace them with a weaker predicate.
 - Idempotent: uses `DROP POLICY IF EXISTS`.
 */
 
-DROP POLICY IF EXISTS "anon_insert_parts" ON public.parts;
-DROP POLICY IF EXISTS "anon_insert_sellers" ON public.sellers;
+DO $$
+BEGIN
+  IF to_regclass('public.parts') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "anon_insert_parts" ON public.parts;
+  END IF;
+
+  IF to_regclass('public.sellers') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "anon_insert_sellers" ON public.sellers;
+  END IF;
+END;
+$$;
