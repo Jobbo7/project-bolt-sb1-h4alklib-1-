@@ -1795,6 +1795,7 @@ function PartsResults({ results, role, onAdd, onAddConsumable, cartIds, region }
 
 // ─── Per-item shipping surcharge calculator ──────────────────────────────────
 function itemShipping(item, regionCode) {
+  if (item.deliveryFee != null) return Math.max(0, Number(item.deliveryFee) || 0);
   const tier = item.tier || 'local';
   const info = typeof SOURCING_TIERS !== 'undefined' ? SOURCING_TIERS[tier] : null;
   if (info && info.freightSurcharge > 0) return info.freightSurcharge;
@@ -1846,13 +1847,17 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
   if (!open) return null;
   const f = (n) => fmt(n, r);
   const partsTotal = cart.reduce((s, c) => s + c.unitPrice * c.qty, 0);
-  const individualShippingTotal = cart.reduce((s, c) => s + itemShipping(c, r) * c.qty, 0);
+  const deliveryBySeller = new Map();
+  cart.forEach((item) => {
+    const sellerKey = item.sellerId || item.shop || item.loc || item.offerId || item.id;
+    deliveryBySeller.set(sellerKey, Math.max(itemShipping(item, r), deliveryBySeller.get(sellerKey) || 0));
+  });
+  const individualShippingTotal = [...deliveryBySeller.values()].reduce((sum, fee) => sum + fee, 0);
   const consolidated = calcConsolidatedFreight(cart, r);
-  const shippingTotal = consolidationEnabled ? consolidated.fee : individualShippingTotal;
+  const shippingTotal = individualShippingTotal;
   const subtotal = partsTotal + shippingTotal;
-  const taxRate = typeof getEffectiveTaxRate === 'function' ? getEffectiveTaxRate(r, usStateCode) : 0.10;
-  const tax = subtotal * taxRate;
-  const grand = subtotal + tax;
+  const tax = 0;
+  const grand = subtotal;
 
   // Aggregate courier dispatch legs
   const courierLegs = cart.length > 0 ? cart.map(item => {
@@ -1907,7 +1912,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                 {/* ── ZONE B: CENTRAL SCROLLABLE BODY FRAME ── */}
         <div className="scrollbar-thin flex-1 overflow-y-auto px-4 py-2 space-y-4 max-h-[calc(100vh-180px)]">
           {/* Multi-Supplier Freight Consolidation Toggle */}
-          {cart.length > 0 && (
+          {false && cart.length > 0 && (
             <div className="rounded-xl border p-3" style={{ borderColor: consolidationEnabled ? `${C.orange}50` : C.border, background: consolidationEnabled ? `${C.orange}08` : C.panel }}>
               <button onClick={onToggleConsolidation} className="flex w-full items-center gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: consolidationEnabled ? C.orange : C.border }}>
@@ -1977,7 +1982,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                         {!consolidationEnabled && ship > 0 && <div className="font-mono text-[10px]" style={{ color: C.textDim }}>+{f(ship)} freight</div>}
                       </div>
                     </div>
-                    {!consolidationEnabled && oc && oc.network && (
+                    {false && !consolidationEnabled && oc && oc.network && (
                       <div className="mt-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px]" style={{ borderColor: `${C.orange}25`, background: `${C.orange}06` }}>
                         <Truck className="h-2.5 w-2.5 shrink-0" style={{ color: C.orange }} />
                         <span className="font-bold" style={{ color: C.orange }}>{oc.network.name}</span>
@@ -1985,7 +1990,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
                         <span className="ml-auto font-mono font-bold" style={{ color: C.emerald }}>{f(oc.fee * item.qty)}</span>
                       </div>
                     )}
-                    {consolidationEnabled && (
+                    {false && consolidationEnabled && (
                       <div className="mt-2 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px]" style={{ borderColor: `${C.emerald}25`, background: `${C.emerald}06` }}>
                         <Package className="h-2.5 w-2.5 shrink-0" style={{ color: C.emerald }} />
                         <span className="font-bold" style={{ color: C.emerald }}>Consolidated to Hub</span>
@@ -1999,7 +2004,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
           )}
 
                    {/* Global Freight Orchestration Tracking Card */}
-          {cart.length > 0 && !consolidationEnabled && (
+          {false && cart.length > 0 && !consolidationEnabled && (
             <div className="rounded-xl border p-3" style={{ borderColor: `${C.orange}30`, background: `${C.orange}04` }}>
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${C.orange}15` }}>
@@ -2042,7 +2047,7 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
           )}
 
           {/* Consolidation Hub Node Card */}
-          {cart.length > 0 && consolidationEnabled && (
+          {false && cart.length > 0 && consolidationEnabled && (
             <div className="rounded-xl border p-3" style={{ borderColor: `${C.emerald}30`, background: `${C.emerald}04` }}>
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${C.emerald}15` }}>
@@ -2122,12 +2127,8 @@ function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove, onCheckout, r
         <div className="p-4 border-t border-slate-800 bg-[#101524] sticky bottom-0 shrink-0">
           <div className="space-y-1.5 text-xs">
             <Row label="Parts & Tools" value={f(partsTotal)} />
-            {consolidationEnabled ? (
-              <Row label="Consolidated Freight (single courier)" value={f(shippingTotal)} />
-            ) : (
-              <Row label="Courier Delivery (itemized)" value={f(shippingTotal)} />
-            )}
-            <Row label={`${r === 'US_CA' || r === 'US_NY' || r === 'US_TX' ? 'Sales Tax' : 'GST'}`} value={f(tax)} />
+            <Row label="Supplier delivery" value={f(shippingTotal)} />
+            <Row label="GST" value="Included in supplier prices" />
             <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: C.border }}>
               <span className="text-sm font-bold text-slate-100">Total</span>
               <span className="font-mono text-lg font-bold" style={{ color: C.emerald }}>{f(grand)}</span>
@@ -5494,7 +5495,7 @@ const handleSearch = async (query) => {
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(supabaseAuth ? { Authorization: `Bearer ${(await supabaseAuth.auth.getSession()).data.session?.access_token || ''}` } : {}) },
-        body: JSON.stringify({ items: cartSnapshot, currency: regionCode.startsWith('US') ? 'usd' : regionCode === 'UK' ? 'gbp' : 'aud', orderId }),
+        body: JSON.stringify({ items: cartSnapshot, deliveryMethod: 'DELIVERY', orderId }),
       });
       const data = await response.json();
       if (!response.ok || !data.checkoutUrl) throw new Error(data?.error || 'CHECKOUT_CREATION_FAILED');

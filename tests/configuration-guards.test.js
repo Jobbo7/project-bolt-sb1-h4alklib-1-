@@ -5,6 +5,7 @@ import healthHandler from '../api/health.js';
 import checkoutHandler, { normaliseCheckoutItems } from '../api/create-checkout-session.js';
 import legacyPaymentHandler from '../api/create-payment-intent.js';
 import orderStatusHandler from '../api/order-status.js';
+import fulfilmentHandshakeHandler from '../api/fulfilment-handshake.js';
 import webhookHandler from '../api/stripe-webhook.js';
 import valuationHandler from '../api/collision.js';
 import { environmentValue } from '../api/_lib/environment.js';
@@ -116,6 +117,11 @@ test('sensitive endpoints reject unsupported methods', async () => {
   await orderStatusHandler({ method: 'POST', headers: {} }, orderStatusRes);
   assert.equal(orderStatusRes.statusCode, 405);
   assert.equal(orderStatusRes.headers.Allow, 'GET');
+
+  const fulfilmentRes = responseRecorder();
+  await fulfilmentHandshakeHandler({ method: 'GET', headers: {} }, fulfilmentRes);
+  assert.equal(fulfilmentRes.statusCode, 405);
+  assert.equal(fulfilmentRes.headers.Allow, 'POST');
 });
 
 test('collision repair signup keeps MECHANIC authorization while recording its workshop subtype', async () => {
@@ -132,6 +138,28 @@ test('parts search requires authentication and never advertises an invented trad
   assert.match(apiSource, /trade:\s*parsedPrice != null\s*\? parsedPrice/s);
   assert.doesNotMatch(apiSource, /parsedPrice \* 0\.85/);
   assert.match(clientSource, /Authorization: `Bearer \$\{accessToken\}`/);
+});
+
+test('delivery is server priced and paid orders create persistent fulfilments', async () => {
+  const checkoutSource = await readFile(new URL('../api/create-checkout-session.js', import.meta.url), 'utf8');
+  const webhookSource = await readFile(new URL('../api/stripe-webhook.js', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/20260911010000_delivery_fulfilment.sql', import.meta.url), 'utf8');
+  assert.match(checkoutSource, /deliveryMethod = String\(req\.body\?\.deliveryMethod \|\| 'DELIVERY'\)/);
+  assert.match(checkoutSource, /shipping_address_collection/);
+  assert.match(checkoutSource, /delivery_amount: deliveryAmount/);
+  assert.match(webhookSource, /from\('order_fulfilments'\)/);
+  assert.match(webhookSource, /status: 'AWAITING_SUPPLIER'/);
+  assert.match(migration, /fulfilments_participant_read/);
+  assert.match(migration, /buyer_id = \(select auth\.uid\(\)\) or seller_id = \(select auth\.uid\(\)\)/);
+});
+
+test('QR custody handoff uses random single-purpose tokens and authenticated participants', async () => {
+  const source = await readFile(new URL('../api/fulfilment-handshake.js', import.meta.url), 'utf8');
+  assert.match(source, /crypto\.randomBytes\(32\)/);
+  assert.match(source, /tokenHash\(suppliedToken\) === fulfilment\.handoff_token_hash/);
+  assert.match(source, /const isSeller =/);
+  assert.match(source, /const isBuyer =/);
+  assert.doesNotMatch(source, /Math\.random/);
 });
 
 test('collision repair jobs are owner-scoped and preserve an audit history', async () => {

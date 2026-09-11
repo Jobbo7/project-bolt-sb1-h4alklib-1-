@@ -90,7 +90,7 @@ export default async function handler(req, res) {
         const { data: order, error: orderLookupError } = await admin
           .from('orders')
           .select(
-            'id,buyer_id,status,currency,amount_total,stripe_checkout_session_id',
+            'id,buyer_id,status,currency,amount_total,stripe_checkout_session_id,items,delivery_method',
           )
           .eq('id', session.metadata.orderId)
           .single();
@@ -114,17 +114,12 @@ export default async function handler(req, res) {
   String(order.buyer_id) ===
     String(session.metadata?.buyerId || '');
 
-if (order.status === 'PAID' && paymentIdentityMatches) {
-  return res.status(200).json({
-    received: true,
-    duplicate: true,
-  });
-}
+const alreadyPaid = order.status === 'PAID' && paymentIdentityMatches;
 
 const orderMatchesPayment =
   order.status === 'PAYMENT_PENDING' &&
   paymentIdentityMatches;
-        if (!orderMatchesPayment) {
+        if (!alreadyPaid && !orderMatchesPayment) {
           console.error('Stripe order reconciliation mismatch', {
             orderId: order.id,
             sessionId: session.id,
@@ -133,7 +128,14 @@ const orderMatchesPayment =
 
           throw new Error('STRIPE_ORDER_MISMATCH');
         }
-const { error: finalizeError } = await admin.rpc(
+const sellerIds = [...new Set((order.items || []).map(item => String(item.sellerId || '')).filter(Boolean))];
+const deliveryAddress = session.shipping_details?.address || session.customer_details?.address || null;
+if (order.delivery_method === 'DELIVERY' && !deliveryAddress) {
+  throw new Error('DELIVERY_ADDRESS_MISSING');
+}
+
+if (!alreadyPaid) {
+  const { error: finalizeError } = await admin.rpc(
   'finalize_paid_order',
   {
     p_order_id: order.id,
@@ -145,10 +147,25 @@ const { error: finalizeError } = await admin.rpc(
       event.created * 1000,
     ).toISOString(),
   },
-);
+  );
 
-if (finalizeError) {
-  throw finalizeError;
+  if (finalizeError) {
+    throw finalizeError;
+  }
+}
+
+if (sellerIds.length) {
+  const { error: fulfilmentError } = await admin
+    .from('order_fulfilments')
+    .upsert(sellerIds.map(sellerId => ({
+      order_id: order.id,
+      buyer_id: order.buyer_id,
+      seller_id: sellerId,
+      method: order.delivery_method || 'DELIVERY',
+      status: 'AWAITING_SUPPLIER',
+      delivery_address: deliveryAddress,
+    })), { onConflict: 'order_id,seller_id', ignoreDuplicates: true });
+  if (fulfilmentError) throw fulfilmentError;
 }
 
         break;

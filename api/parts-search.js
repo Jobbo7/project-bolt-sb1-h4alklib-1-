@@ -221,6 +221,10 @@ export default async function handler(req, res) {
           // Keep the database identity separate from the display identity so
           // checkout can re-price the exact seller offer server-side.
           offerId: item.id ? String(item.id) : null,
+          sellerId: item.owner_id ? String(item.owner_id) : null,
+          deliveryAvailable: item.delivery_available !== false,
+          pickupAvailable: item.pickup_available === true,
+          deliveryFee: item.delivery_fee != null ? Number(item.delivery_fee) : 0,
 
           title:
             item.part

@@ -44,12 +44,16 @@ export default async function handler(req, res) {
     const requested = normaliseCheckoutItems(items);
     if (!requested.length) return res.status(422).json({ error: 'CATALOGUE_ITEM_ID_REQUIRED' });
     const admin = createClient(supabaseUrl, supabaseSecretKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data: offers, error: offerError } = await admin.from('seller_offers').select('id,part,brand,price,stock,owner_id').in('id', requested.map(item => item.id));
+    const { data: offers, error: offerError } = await admin.from('seller_offers').select('id,part,brand,price,stock,owner_id,delivery_available,pickup_available,delivery_fee').in('id', requested.map(item => item.id));
     if (offerError) throw offerError;
     const offerMap = new Map((offers || []).map(offer => [String(offer.id), offer]));
     if (offerMap.size !== requested.length) return res.status(409).json({ error: 'CATALOGUE_CHANGED' });
     const pricedItems = requested.map(item => ({ ...item, offer: offerMap.get(item.id) }));
     if (pricedItems.some(item => item.quantity > Number(item.offer.stock))) return res.status(409).json({ error: 'INSUFFICIENT_STOCK' });
+    const deliveryMethod = String(req.body?.deliveryMethod || 'DELIVERY').toUpperCase();
+    if (!['DELIVERY', 'PICKUP'].includes(deliveryMethod)) return res.status(422).json({ error: 'INVALID_DELIVERY_METHOD' });
+    if (deliveryMethod === 'DELIVERY' && pricedItems.some(item => !item.offer.delivery_available)) return res.status(409).json({ error: 'DELIVERY_UNAVAILABLE' });
+    if (deliveryMethod === 'PICKUP' && pricedItems.some(item => !item.offer.pickup_available)) return res.status(409).json({ error: 'PICKUP_UNAVAILABLE' });
    
 const currency = 'aud';
 
@@ -74,10 +78,22 @@ const lineItems = pricedItems.map(item => {
   };
 });
 
+const sellerDeliveryFees = new Map();
+if (deliveryMethod === 'DELIVERY') {
+  for (const item of pricedItems) {
+    const fee = Math.round(Number(item.offer.delivery_fee || 0) * 100);
+    sellerDeliveryFees.set(String(item.offer.owner_id), Math.max(fee, sellerDeliveryFees.get(String(item.offer.owner_id)) || 0));
+  }
+}
+const deliveryAmount = [...sellerDeliveryFees.values()].reduce((sum, fee) => sum + fee, 0);
+if (deliveryAmount > 0) {
+  lineItems.push({ quantity: 1, price_data: { currency, unit_amount: deliveryAmount, product_data: { name: 'PartsForge supplier delivery' } } });
+}
+
 const stripe = new Stripe(stripeSecretKey);
 const orderId = crypto.randomUUID();
-    const amountTotal = pricedItems.reduce((sum, item) => sum + Math.round(Number(item.offer.price) * 100) * item.quantity, 0);
-    const { error: orderError } = await admin.from('orders').insert({ id: orderId, buyer_id: auth.user.id, status: 'PAYMENT_PENDING', currency, amount_total: amountTotal, items: pricedItems.map(item => ({ offerId: item.id, sellerId: item.offer.owner_id, title: item.offer.part, unitAmount: Math.round(Number(item.offer.price) * 100), quantity: item.quantity })) });
+    const amountTotal = pricedItems.reduce((sum, item) => sum + Math.round(Number(item.offer.price) * 100) * item.quantity, 0) + deliveryAmount;
+    const { error: orderError } = await admin.from('orders').insert({ id: orderId, buyer_id: auth.user.id, status: 'PAYMENT_PENDING', currency, amount_total: amountTotal, delivery_method: deliveryMethod, delivery_amount: deliveryAmount, items: pricedItems.map(item => ({ offerId: item.id, sellerId: item.offer.owner_id, title: item.offer.part, unitAmount: Math.round(Number(item.offer.price) * 100), quantity: item.quantity })) });
     if (orderError) throw orderError;
 const reservationItems = pricedItems.map(item => ({
   offerId: item.id,
@@ -128,6 +144,7 @@ try {
     success_url: `${process.env.PUBLIC_APP_URL}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.PUBLIC_APP_URL}/?checkout=cancelled`,
     metadata: { orderId, buyerId: auth.user.id },
+    ...(deliveryMethod === 'DELIVERY' ? { shipping_address_collection: { allowed_countries: ['AU'] }, phone_number_collection: { enabled: true } } : {}),
   }, {
     idempotencyKey: `partsforge-checkout-${orderId}`,
   });
