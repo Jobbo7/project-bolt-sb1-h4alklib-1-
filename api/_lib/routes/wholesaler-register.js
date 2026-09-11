@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { requireUser } from './_lib/auth.js';
-import { rejectAdminDemoMutation } from './_lib/admin-demo.js';
+import { requireUser } from '../auth.js';
+import { rejectAdminDemoMutation } from '../admin-demo.js';
 
 const MAX_ITEMS = 500;
 const cleanText = (value, max = 240) => String(value ?? '').trim().slice(0, max);

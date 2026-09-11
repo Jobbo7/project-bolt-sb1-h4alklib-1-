@@ -26,4 +26,4 @@ export default function handler(req, res) {
     timestamp: new Date().toISOString(),
   });
 }
-import { environmentValue } from './_lib/environment.js';
+import { environmentValue } from '../environment.js';

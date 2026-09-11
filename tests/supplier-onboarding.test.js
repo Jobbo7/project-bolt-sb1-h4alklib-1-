@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareInventoryRecords } from '../api/wholesaler-register.js';
+import { prepareInventoryRecords } from '../api/_lib/routes/wholesaler-register.js';
 import { mergeCatalogueMatches } from '../api/parts-search.js';
 
 const ownerId = '11111111-1111-4111-8111-111111111111';

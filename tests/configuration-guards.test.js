@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import healthHandler from '../api/health.js';
+import healthHandler from '../api/_lib/routes/health.js';
 import checkoutHandler, { normaliseCheckoutItems } from '../api/create-checkout-session.js';
 import legacyPaymentHandler from '../api/create-payment-intent.js';
 import orderStatusHandler from '../api/order-status.js';

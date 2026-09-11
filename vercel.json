@@ -16,6 +16,26 @@
   ],
   "rewrites": [
     {
+      "source": "/api/automotive-qa",
+      "destination": "/api/utility.js?route=automotive-qa"
+    },
+    {
+      "source": "/api/ocr-scan",
+      "destination": "/api/utility.js?route=ocr-scan"
+    },
+    {
+      "source": "/api/vin-lookup",
+      "destination": "/api/utility.js?route=vin-lookup"
+    },
+    {
+      "source": "/api/wholesaler-register",
+      "destination": "/api/utility.js?route=wholesaler-register"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/utility.js?route=health"
+    },
+    {
       "source": "/api/vehicle-lookup",
       "destination": "/api/vehicle-lookup.js"
     },
