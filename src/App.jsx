@@ -36,6 +36,7 @@ import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } 
 import SellerConsole from './components/SellerConsole';
 import CollisionRepairConsole from './components/CollisionRepairConsole';
 import { resolveEffectiveWorkshopType } from './dashboard-role.js';
+import { restoreVerifiedUserSession } from './auth-session.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_PREVIEW_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
@@ -4442,7 +4443,8 @@ const DEFAULT_HOISTS = [
 
 export default function App() {
   const [accepted, setAccepted] = useState(() => { try { return localStorage.getItem('partsforge_safety_agreed') === 'true'; } catch { return false; } });
-  const [userSession, setUserSession] = useState(() => { try { const raw = localStorage.getItem('partsforge_session'); if (!raw || raw === 'undefined' || raw === 'null') return null; return JSON.parse(raw); } catch { return null; } });
+  const [userSession, setUserSession] = useState(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isEmployeeSubUser, setIsEmployeeSubUser] = useState(false);
   const [teamLinkCode, setTeamLinkCode] = useState(null);
@@ -4558,6 +4560,31 @@ export default function App() {
   const [corpProfile, setCorpProfile] = useState({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
   const [bankFeedStatus, setBankFeedStatus] = useState(null);
   const matchedTradeAccount = useMemo(() => typeof resolveTradeAccount === 'function' ? resolveTradeAccount(corpProfile) : null, [corpProfile]);
+
+  useEffect(() => {
+    let active = true;
+    restoreVerifiedUserSession(supabaseAuth)
+      .then((verifiedSession) => {
+        if (!active) return;
+        setUserSession(verifiedSession);
+        setIsEmployeeSubUser(Boolean(verifiedSession?.isEmployeeSubUser));
+        setTeamLinkCode(verifiedSession?.employeeCode || null);
+        try {
+          if (verifiedSession) localStorage.setItem('partsforge_session', JSON.stringify(verifiedSession));
+          else localStorage.removeItem('partsforge_session');
+        } catch {}
+      })
+      .catch(() => {
+        if (!active) return;
+        setUserSession(null);
+        try { localStorage.removeItem('partsforge_session'); } catch {}
+      })
+      .finally(() => {
+        if (active) setIsRestoringSession(false);
+      });
+
+    return () => { active = false; };
+  }, []);
 
   // ── Auth handlers ──
   const handleAuthenticate = (session) => {
@@ -5798,6 +5825,10 @@ const handleSearch = async (query) => {
   };
 
   // ── Render gates (auth → waiver → app) ──
+  if (isRestoringSession) {
+    return <div className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-400">Verifying secure session…</div>;
+  }
+
   if (!userSession) {
     return <AuthGate onAuthenticate={handleAuthenticate} isAuthenticating={isAuthenticating} />;
   }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import healthHandler from '../api/health.js';
 import checkoutHandler from '../api/create-checkout-session.js';
+import legacyPaymentHandler from '../api/create-payment-intent.js';
 import webhookHandler from '../api/stripe-webhook.js';
 import valuationHandler from '../api/collision.js';
 import { environmentValue } from '../api/_lib/environment.js';
@@ -47,6 +48,19 @@ test('checkout fails closed before authentication when Stripe is not configured'
     await checkoutHandler({ method: 'POST', headers: {}, body: { items: [{ id: 'offer-1', qty: 1 }] } }, res);
     assert.equal(res.statusCode, 503);
     assert.deepEqual(res.body, { error: 'CHECKOUT_NOT_CONFIGURED' });
+  });
+});
+
+test('legacy browser-priced payment intents are permanently retired', async () => {
+  const res = responseRecorder();
+  await legacyPaymentHandler({
+    method: 'POST',
+    body: { amount: 50, currency: 'aud', orderId: 'caller-controlled' },
+  }, res);
+  assert.equal(res.statusCode, 410);
+  assert.deepEqual(res.body, {
+    error: 'PAYMENT_ROUTE_RETIRED',
+    replacement: '/api/create-checkout-session',
   });
 });
 

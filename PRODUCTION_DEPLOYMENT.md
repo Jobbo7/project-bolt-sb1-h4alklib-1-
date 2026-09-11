@@ -2,7 +2,7 @@
 
 ## Current release status
 
-This repository can be deployed as a Vite application with Vercel serverless API routes. Authentication, vehicle/VIN lookup, parts search, OCR, Stripe Checkout, Stripe PaymentIntents, and verified Stripe webhooks now have production-oriented code paths.
+This repository can be deployed as a Vite application with Vercel serverless API routes. Authentication, vehicle/VIN lookup, parts search, OCR, server-priced Stripe Checkout, and verified Stripe webhooks now have production-oriented code paths. The legacy browser-priced PaymentIntent route is permanently retired with HTTP 410.
 
 A deployment is not operational until the required provider accounts, environment variables, database migration, webhook, domain, and legal settings below are completed. Basiq, Xero/MYOB, ATO SBR, email delivery, Uber Direct and consolidated freight remain explicit configuration placeholders; the UI no longer reports them as connected when they are not.
 
@@ -129,10 +129,10 @@ Before accepting real customers or payments, obtain professional advice for Aust
 These are not solvable by adding an API key alone:
 
 - Job cards, hoists, delivered stock, invoices and technician history still use browser local storage rather than shared server persistence.
-- Stripe webhooks are verified but do not yet write an order/payment record or trigger idempotent fulfilment.
-- Checkout line prices originate from the browser. Production checkout must price server-side from immutable catalog/order records.
+- Stripe Checkout writes pending orders, reserves stock transactionally, verifies payment identity in the signed webhook, and finalises stock once. Refund operations and supplier payouts still require an operator workflow and a settled merchant-of-record design.
+- Workshop customer invoicing is not the same as marketplace offer checkout. It still needs server-persisted invoice line items and a dedicated server-priced payment-link route before it may be presented as sent or payable.
 - Basiq, Xero/MYOB, ATO SBR, email and courier adapters require provider-specific OAuth, webhooks, contracts and data models.
 - End-to-end tests and monitoring are not present.
 - The unused legacy component tree contains demo/mock screens, although the deployed entry point is `src/App.jsx`.
 
-Do not launch for real money or multiple mechanics until these blockers are closed.
+Do not launch for real money or multiple mechanics until these blockers are closed. A single-account, supervised Preview pilot may be used only with Stripe test mode and clearly labelled unverified fitment.

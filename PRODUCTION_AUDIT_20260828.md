@@ -48,6 +48,17 @@ No credentials were present in the audited package, so none of these integration
 12. The dependency lock pins `ws` to patched version `8.21.3` and the local audit reports zero known vulnerabilities. CI or the Vercel Preview build should still verify a clean `npm ci` from the registry.
 13. Browser compatibility metadata is outdated. Refresh it in a network-enabled maintenance pass and review the resulting lockfile diff before commit.
 
+## Readiness update — 11 September 2026
+
+- The Preview Supabase project was restored and reported its core services available.
+- Stripe test webhook delivery returned HTTP 200 with a verified response on the existing Preview deployment.
+- Marketplace Checkout now uses only server catalogue prices, persistent orders, expiring stock reservations and signed-webhook finalisation. The old caller-priced PaymentIntent endpoint returns HTTP 410 and cannot create a charge.
+- Reloaded dashboard access no longer trusts `partsforge_session` from local storage. Supabase must have a valid session and the effective role is re-read from the protected `profiles` table; failure restores no dashboard access.
+- The collision valuation table is shown only for the collision-repair workshop subtype, including during admin demo switching.
+- Local verification passes 20 tests, TypeScript checks and lint. A config-free production Vite build passes with 1,547 modules transformed; the normal build command is blocked only in this restricted workspace because the build helper cannot enumerate a parent directory.
+- The latest fixes exist only in the local readiness branch. They have not been pushed to GitHub or deployed to Preview, so the currently published Preview does not include them.
+- Production remains a no-go while workshop jobs/invoices remain browser-local, the customer-invoice payment workflow is incomplete, RedBook/vehicle data licensing is pending, provider-backed lookups are not exercised end to end, and operational monitoring/backups/support processes are not proven.
+
 ## Production activation sequence
 
 1. Move these changes into the real Git repository and review the diff.

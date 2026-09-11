@@ -32,7 +32,6 @@ test('admin demo workshop personas cannot inherit the collision dashboard', () =
 test('every customer-facing production mutation endpoint applies the server demo guard', async () => {
   const files = [
     '../api/create-checkout-session.js',
-    '../api/create-payment-intent.js',
     '../api/wholesaler-register.js',
     '../api/collision.js',
   ];
