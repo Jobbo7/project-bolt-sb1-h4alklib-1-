@@ -10,7 +10,8 @@ const getOrigin = () => typeof window !== 'undefined' ? window.location.origin :
 export async function processPartsQuery(
   query,
   regionCode = 'AU_VIC',
-  vehicle = null
+  vehicle = null,
+  accessToken = ''
 ) {
   if (!query || !query.trim()) {
     return {
@@ -69,7 +70,10 @@ export async function processPartsQuery(
     );
 
     const response = await fetch(
-      `${getOrigin()}/api/parts-search?${params.toString()}`
+      `${getOrigin()}/api/parts-search?${params.toString()}`,
+      {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      }
     );
 
     const data = await response.json();

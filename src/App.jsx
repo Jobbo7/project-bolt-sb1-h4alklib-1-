@@ -4650,6 +4650,44 @@ export default function App() {
     workshopStateHydrated,
   ]);
 
+  useEffect(() => {
+    if (!userSession || !supabaseAuth) return undefined;
+    const params = new URLSearchParams(window.location.search);
+    const checkoutResult = params.get('checkout');
+    const sessionId = params.get('session_id');
+    if (checkoutResult !== 'success' || !sessionId) return undefined;
+
+    let active = true;
+    let attempts = 0;
+    const confirmPayment = async () => {
+      attempts += 1;
+      const accessToken = (await supabaseAuth.auth.getSession()).data.session?.access_token || '';
+      const response = await fetch(`/api/order-status?session_id=${encodeURIComponent(sessionId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await response.json();
+      if (!active) return;
+      if (response.ok && data?.order?.status === 'PAID') {
+        setPurchaseCart([]);
+        setIsCartOpen(false);
+        setSaveToast(`Payment verified. Order ${data.order.id} is confirmed.`);
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
+      if (attempts < 6 && response.ok && data?.order?.status === 'PAYMENT_PENDING') {
+        setTimeout(confirmPayment, 1500);
+        return;
+      }
+      setSaveToast('Payment submitted. Confirmation is still pending; do not place the order again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    };
+
+    confirmPayment().catch(() => {
+      if (active) setSaveToast('Payment status could not be confirmed yet; do not place the order again.');
+    });
+    return () => { active = false; };
+  }, [userSession]);
+
   // ── Auth handlers ──
   const handleAuthenticate = (session) => {
     setIsAuthenticating(true);
@@ -5015,10 +5053,14 @@ const handleSearch = async (query) => {
   );
 
   try {
+    const accessToken = supabaseAuth
+      ? (await supabaseAuth.auth.getSession()).data.session?.access_token || ''
+      : '';
     const data = await processPartsQuery(
       cleanQuery,
       regionCode || 'AU_VIC',
-      vehicle
+      vehicle,
+      accessToken
     );
 
     setResults({

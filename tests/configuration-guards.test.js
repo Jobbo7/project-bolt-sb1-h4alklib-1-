@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import healthHandler from '../api/health.js';
-import checkoutHandler from '../api/create-checkout-session.js';
+import checkoutHandler, { normaliseCheckoutItems } from '../api/create-checkout-session.js';
 import legacyPaymentHandler from '../api/create-payment-intent.js';
+import orderStatusHandler from '../api/order-status.js';
 import webhookHandler from '../api/stripe-webhook.js';
 import valuationHandler from '../api/collision.js';
 import { environmentValue } from '../api/_lib/environment.js';
@@ -49,6 +50,17 @@ test('checkout fails closed before authentication when Stripe is not configured'
     assert.equal(res.statusCode, 503);
     assert.deepEqual(res.body, { error: 'CHECKOUT_NOT_CONFIGURED' });
   });
+});
+
+test('checkout uses immutable seller offer IDs and consolidates duplicate cart lines', () => {
+  assert.deepEqual(normaliseCheckoutItems([
+    { id: 'SKU-DB-display-1', offerId: 'offer-1', qty: 2, unitPrice: 0.01 },
+    { id: 'another-display-id', offerId: 'offer-1', qty: 3, unitPrice: 999999 },
+    { id: 'offer-2', qty: 1 },
+  ]), [
+    { id: 'offer-1', quantity: 5 },
+    { id: 'offer-2', quantity: 1 },
+  ]);
 });
 
 test('legacy browser-priced payment intents are permanently retired', async () => {
@@ -99,6 +111,11 @@ test('sensitive endpoints reject unsupported methods', async () => {
   await valuationHandler({ method: 'GET', query: { action: 'valuation' }, headers: {} }, valuationRes);
   assert.equal(valuationRes.statusCode, 405);
   assert.equal(valuationRes.headers.Allow, 'POST');
+
+  const orderStatusRes = responseRecorder();
+  await orderStatusHandler({ method: 'POST', headers: {} }, orderStatusRes);
+  assert.equal(orderStatusRes.statusCode, 405);
+  assert.equal(orderStatusRes.headers.Allow, 'GET');
 });
 
 test('collision repair signup keeps MECHANIC authorization while recording its workshop subtype', async () => {
@@ -106,6 +123,15 @@ test('collision repair signup keeps MECHANIC authorization while recording its w
   assert.match(source, /requestedAccountType:\s*accountType === 'COLLISION' \? 'WORKSHOP'/);
   assert.match(source, /workshopType:\s*accountType === 'COLLISION' \? 'COLLISION'/);
   assert.match(source, /effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION'/);
+});
+
+test('parts search requires authentication and never advertises an invented trade discount', async () => {
+  const apiSource = await readFile(new URL('../api/parts-search.js', import.meta.url), 'utf8');
+  const clientSource = await readFile(new URL('../src/mockBackend.js', import.meta.url), 'utf8');
+  assert.match(apiSource, /requireUser\(req, res, \['DIY', 'MECHANIC', 'APPRENTICE', 'SELLER', 'ADMIN'\]\)/);
+  assert.match(apiSource, /trade:\s*parsedPrice != null\s*\? parsedPrice/s);
+  assert.doesNotMatch(apiSource, /parsedPrice \* 0\.85/);
+  assert.match(clientSource, /Authorization: `Bearer \$\{accessToken\}`/);
 });
 
 test('collision repair jobs are owner-scoped and preserve an audit history', async () => {

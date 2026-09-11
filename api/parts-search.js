@@ -3,6 +3,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { environmentValue } from './_lib/environment.js';
+import { requireUser } from './_lib/auth.js';
+import { enforceRateLimit } from './_lib/http.js';
 
 export const mergeCatalogueMatches = (results) =>
   [...new Map(results.flatMap(result => result.data || []).map(item => [item.id, item])).values()];
@@ -21,6 +23,9 @@ export default async function handler(req, res) {
     if (!supabaseUrl || !supabaseKey) {
       return res.status(503).json({ error: 'PARTS_DATABASE_NOT_CONFIGURED', local: [], national: [], trans_tasman: [], global_direct: [], facebook: [] });
     }
+    if (!enforceRateLimit(req, res, { scope: 'parts-search', limit: 60 })) return;
+    const auth = await requireUser(req, res, ['DIY', 'MECHANIC', 'APPRENTICE', 'SELLER', 'ADMIN']);
+    if (!auth) return;
     const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const query = req.query || {};
     const body = req.body || {};
@@ -213,6 +218,10 @@ export default async function handler(req, res) {
               ? `SKU-DB-${item.id}`
               : `SKU-DB-${idx}`,
 
+          // Keep the database identity separate from the display identity so
+          // checkout can re-price the exact seller offer server-side.
+          offerId: item.id ? String(item.id) : null,
+
           title:
             item.part
               ? String(item.part).toUpperCase()
@@ -236,7 +245,7 @@ export default async function handler(req, res) {
 
           trade:
             parsedPrice != null
-              ? +(parsedPrice * 0.85).toFixed(2)
+              ? parsedPrice
               : null,
 
           retail: parsedPrice,

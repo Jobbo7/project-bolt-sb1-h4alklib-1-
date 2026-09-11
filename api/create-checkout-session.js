@@ -6,6 +6,20 @@ import { enforceRateLimit } from './_lib/http.js';
 import { environmentValue } from './_lib/environment.js';
 import { rejectAdminDemoMutation } from './_lib/admin-demo.js';
 
+export function normaliseCheckoutItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  const quantities = new Map();
+  for (const item of items.slice(0, 100)) {
+    const id = String(item?.offerId || item?.id || '').trim();
+    if (!id) return [];
+    const quantity = Math.max(1, Math.min(99, Math.trunc(Number(item?.qty) || 1)));
+    quantities.set(id, Math.min(99, (quantities.get(id) || 0) + quantity));
+  }
+
+  return [...quantities].map(([id, quantity]) => ({ id, quantity }));
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
@@ -27,8 +41,8 @@ export default async function handler(req, res) {
   if (!items.length) return res.status(422).json({ error: 'EMPTY_CART' });
 
   try {
-    const requested = items.map(item => ({ id: String(item.id || ''), quantity: Math.max(1, Math.min(99, Number(item.qty) || 1)) }));
-    if (requested.some(item => !item.id)) return res.status(422).json({ error: 'CATALOGUE_ITEM_ID_REQUIRED' });
+    const requested = normaliseCheckoutItems(items);
+    if (!requested.length) return res.status(422).json({ error: 'CATALOGUE_ITEM_ID_REQUIRED' });
     const admin = createClient(supabaseUrl, supabaseSecretKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: offers, error: offerError } = await admin.from('seller_offers').select('id,part,brand,price,stock,owner_id').in('id', requested.map(item => item.id));
     if (offerError) throw offerError;
