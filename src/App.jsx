@@ -2166,6 +2166,40 @@ function Row({ label, value }) {
   return <div className="flex items-center justify-between"><span style={{ color: C.textDim }}>{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
 }
 
+function WorkshopDeliveries({ getAccessToken }) {
+  const [items, setItems] = useState([]);
+  const [tokens, setTokens] = useState({});
+  const [message, setMessage] = useState('');
+  const refresh = useCallback(async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+    const response = await fetch('/api/fulfilments', { headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json();
+    if (response.ok) setItems(result.fulfilments || []);
+  }, [getAccessToken]);
+  useEffect(() => { refresh().catch(() => {}); }, [refresh]);
+  const receive = async (id) => {
+    const token = await getAccessToken();
+    const response = await fetch('/api/fulfilment-handshake', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fulfilmentId: id, action: 'RECEIVE', qrToken: tokens[id] || '' }),
+    });
+    const result = await response.json();
+    setMessage(response.ok ? 'Delivery verified and received into the workshop.' : (result.error || 'Receipt could not be verified.'));
+    if (response.ok) { setTokens(prev => ({ ...prev, [id]: '' })); await refresh(); }
+  };
+  if (!items.length) return null;
+  return <section className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
+    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}><Truck className="h-4 w-4" /> Incoming deliveries</div>
+    {message && <p className="mt-2 text-xs" style={{ color: C.emerald }}>{message}</p>}
+    <div className="mt-3 space-y-2">{items.map(item => <div key={item.id} className="rounded-lg border p-3" style={{ background: C.panel2, borderColor: C.border }}>
+      <div className="flex justify-between gap-2"><span className="font-mono text-[10px]">{item.order_id}</span><span className="text-[10px] font-bold" style={{ color: C.emerald }}>{item.status}</span></div>
+      <div className="mt-1 text-[10px]" style={{ color: C.textDim }}>{item.method === 'DELIVERY' ? 'Supplier delivery' : 'Workshop pickup'}</div>
+      {item.status === 'IN_TRANSIT' && <div className="mt-2 flex gap-2"><input value={tokens[item.id] || ''} onChange={e => setTokens(prev => ({ ...prev, [item.id]: e.target.value.trim() }))} placeholder="Scan or paste secure handoff token" className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1 text-xs" style={{ borderColor: C.border }} /><button onClick={() => receive(item.id)} disabled={!tokens[item.id]} className="rounded px-2 py-1 text-xs font-bold text-black disabled:opacity-40" style={{ background: C.emerald }}>Confirm receipt</button></div>}
+    </div>)}</div>
+  </section>;
+}
+
 // ─── DIY Driver History Vault (permanent purchased items ledger) ────────────
 function HistoryVault({ vault, region }) {
   const r = region || 'VIC';
@@ -4563,6 +4597,7 @@ export default function App() {
   const [corpProfile, setCorpProfile] = useState({ phone: '', abn: '', ein: '', companyHouse: '', vatNumber: '' });
   const [bankFeedStatus, setBankFeedStatus] = useState(null);
   const matchedTradeAccount = useMemo(() => typeof resolveTradeAccount === 'function' ? resolveTradeAccount(corpProfile) : null, [corpProfile]);
+  const getAccessToken = useCallback(async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || '', []);
 
   useEffect(() => {
     let active = true;
@@ -6095,6 +6130,8 @@ const handleSearch = async (query) => {
               <CheckCircle2 className="h-4 w-4 shrink-0" /> {saveToast}
             </div>
           )}
+
+          {role === 'pro' && <WorkshopDeliveries getAccessToken={getAccessToken} />}
 
           {/* Scanner */}
           <ScannerPanel

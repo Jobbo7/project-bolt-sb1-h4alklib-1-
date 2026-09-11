@@ -6,6 +6,7 @@ import checkoutHandler, { normaliseCheckoutItems } from '../api/create-checkout-
 import legacyPaymentHandler from '../api/create-payment-intent.js';
 import orderStatusHandler from '../api/order-status.js';
 import fulfilmentHandshakeHandler from '../api/fulfilment-handshake.js';
+import fulfilmentsHandler from '../api/fulfilments.js';
 import webhookHandler from '../api/stripe-webhook.js';
 import valuationHandler from '../api/collision.js';
 import { environmentValue } from '../api/_lib/environment.js';
@@ -122,6 +123,11 @@ test('sensitive endpoints reject unsupported methods', async () => {
   await fulfilmentHandshakeHandler({ method: 'GET', headers: {} }, fulfilmentRes);
   assert.equal(fulfilmentRes.statusCode, 405);
   assert.equal(fulfilmentRes.headers.Allow, 'POST');
+
+  const fulfilmentsRes = responseRecorder();
+  await fulfilmentsHandler({ method: 'POST', headers: {} }, fulfilmentsRes);
+  assert.equal(fulfilmentsRes.statusCode, 405);
+  assert.equal(fulfilmentsRes.headers.Allow, 'GET');
 });
 
 test('collision repair signup keeps MECHANIC authorization while recording its workshop subtype', async () => {

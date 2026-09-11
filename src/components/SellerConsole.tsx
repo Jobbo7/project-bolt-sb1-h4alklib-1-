@@ -442,6 +442,7 @@ export default function SellerConsole({
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(true);
+  const [liveFulfilments, setLiveFulfilments] = useState<any[]>([]);
   const [alertFlash, setAlertFlash] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const triggerBeep = useAlertBeep();
@@ -465,6 +466,40 @@ export default function SellerConsole({
   useEffect(() => {
     try { localStorage.setItem('partsforge_seller_profile', JSON.stringify(profile)); } catch { /* storage is optional */ }
   }, [profile]);
+
+  const refreshFulfilments = useCallback(async () => {
+    const token = await getAccessTokenRef.current();
+    if (!token) return;
+    const response = await fetch('/api/fulfilments', { headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json();
+    if (response.ok) setLiveFulfilments(result.fulfilments || []);
+  }, []);
+
+  useEffect(() => {
+    refreshFulfilments().catch(() => {});
+    const timer = window.setInterval(() => refreshFulfilments().catch(() => {}), 30000);
+    return () => window.clearInterval(timer);
+  }, [refreshFulfilments]);
+
+  const transitionFulfilment = async (fulfilmentId: string, action: string) => {
+    if (adminDemoMode) return;
+    const token = await getAccessTokenRef.current();
+    const response = await fetch('/api/fulfilment-handshake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fulfilmentId, action }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setSyncError(result.error || 'Fulfilment update failed.');
+      return;
+    }
+    if (result.qrToken) {
+      setSyncToast(`Secure handoff token: ${result.qrToken}`);
+      await navigator.clipboard?.writeText(result.qrToken).catch(() => {});
+    } else setSyncToast(`Order updated: ${result.status}.`);
+    await refreshFulfilments();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -731,6 +766,25 @@ export default function SellerConsole({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span><strong>Inventory needs attention:</strong> {syncError}</span>
           </div>
         )}
+
+        <section className="rounded-xl border p-4" style={{ borderColor: C.border, background: C.panel }}>
+          <div className="flex items-center justify-between">
+            <div><div className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orange }}>Paid orders awaiting fulfilment</div><p className="mt-1 text-[10px]" style={{ color: C.textDim }}>These records come from verified Stripe payments.</p></div>
+            <button onClick={() => refreshFulfilments()} className="rounded border px-2 py-1 text-[10px]" style={{ borderColor: C.border }}>Refresh</button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {liveFulfilments.length === 0 && <p className="text-xs" style={{ color: C.textDim }}>No paid orders awaiting action.</p>}
+            {liveFulfilments.map(f => <div key={f.id} className="rounded-lg border p-3" style={{ borderColor: C.border, background: C.panel2 }}>
+              <div className="flex items-center justify-between gap-2"><span className="font-mono text-[10px]">{f.order_id}</span><span className="text-[10px] font-bold" style={{ color: C.emerald }}>{f.status}</span></div>
+              <div className="mt-1 text-[10px]" style={{ color: C.textDim }}>{f.method === 'DELIVERY' ? 'Delivery to the verified checkout address' : 'Workshop pickup'}</div>
+              <div className="mt-2 flex gap-2">
+                {f.status === 'AWAITING_SUPPLIER' && <button onClick={() => transitionFulfilment(f.id, 'ACCEPT')} className="rounded px-2 py-1 text-[10px] font-bold text-black" style={{ background: C.orange }}>Accept order</button>}
+                {f.status === 'ACCEPTED' && <button onClick={() => transitionFulfilment(f.id, 'READY')} className="rounded px-2 py-1 text-[10px] font-bold text-black" style={{ background: C.emerald }}>Packed and ready</button>}
+                {['ACCEPTED','READY_FOR_COLLECTION'].includes(f.status) && <button onClick={() => transitionFulfilment(f.id, 'DISPATCH')} className="rounded border px-2 py-1 text-[10px] font-bold" style={{ borderColor: C.orange, color: C.orange }}>Release to driver</button>}
+              </div>
+            </div>)}
+          </div>
+        </section>
 
         <section className="rounded-xl border p-4" style={{ borderColor: `${C.orange}40`, background: `${C.orange}08` }}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
