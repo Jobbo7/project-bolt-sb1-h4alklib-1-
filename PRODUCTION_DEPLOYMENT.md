@@ -6,7 +6,7 @@ This repository can be deployed as a Vite application with Vercel serverless API
 
 A deployment is not operational until the required provider accounts, environment variables, database migration, webhook, domain, and legal settings below are completed. Basiq, Xero/MYOB, ATO SBR, email delivery, Uber Direct and consolidated freight remain explicit configuration placeholders; the UI no longer reports them as connected when they are not.
 
-Browser local storage still holds workshop operational state such as job cards, hoists, delivered inventory and invoices. That is suitable for a single browser but is not a shared multi-device production database. Before multiple mechanics use the same workshop, these records must be moved to authenticated Supabase tables with audit-safe server writes.
+Core workshop operational state—job cards, hoists, delivered inventory, invoices, expenses and technician history—now synchronizes to an owner-scoped Supabase record after sign-in, while browser storage remains an offline fallback. This supports one account across devices. Shared multi-user workshop tenancy, conflict resolution and immutable record-level audit events still require normalized server tables before several mechanics edit the same workshop concurrently.
 
 ## Required accounts
 
@@ -59,7 +59,7 @@ After deployment, open `https://YOUR_DOMAIN/api/health`. A 200 response with `st
 8. Never expose `SUPABASE_SECRET_KEY` in Vercel variables beginning with `VITE_`.
 9. Confirm `anon` has no privileges on `public.profiles` and `authenticated` has only table-level `SELECT` plus column-level `UPDATE` for `display_name` and `linked_account`.
 
-The supplied migrations create authenticated profiles and seller offers with ownership policies, force public signups to the DIY role, and revoke profile-table operations that could bypass or weaken Row Level Security. Operational workshop state still needs normalized tables and migration from browser storage before shared multi-device launch.
+The supplied migrations create authenticated profiles and seller offers with ownership policies, force public signups to the DIY role, and revoke profile-table operations that could bypass or weaken Row Level Security. Apply `20260911000000_workshop_state.sql` before testing workshop synchronization. It permits only the authenticated mechanic or apprentice to read and update their own record and grants no delete access. Multi-user workshop sharing still requires a controlled tenant membership model.
 
 ## Stripe setup
 
@@ -128,7 +128,7 @@ Before accepting real customers or payments, obtain professional advice for Aust
 
 These are not solvable by adding an API key alone:
 
-- Job cards, hoists, delivered stock, invoices and technician history still use browser local storage rather than shared server persistence.
+- Workshop state synchronizes per authenticated account, but it is not yet a shared multi-user workshop model and simultaneous edits use last-write-wins behavior.
 - Stripe Checkout writes pending orders, reserves stock transactionally, verifies payment identity in the signed webhook, and finalises stock once. Refund operations and supplier payouts still require an operator workflow and a settled merchant-of-record design.
 - Workshop customer invoicing is not the same as marketplace offer checkout. It still needs server-persisted invoice line items and a dedicated server-priced payment-link route before it may be presented as sent or payable.
 - Basiq, Xero/MYOB, ATO SBR, email and courier adapters require provider-specific OAuth, webhooks, contracts and data models.

@@ -37,6 +37,7 @@ import SellerConsole from './components/SellerConsole';
 import CollisionRepairConsole from './components/CollisionRepairConsole';
 import { resolveEffectiveWorkshopType } from './dashboard-role.js';
 import { restoreVerifiedUserSession } from './auth-session.js';
+import { loadWorkshopState, saveWorkshopState } from './workshop-state.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_PREVIEW_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
@@ -4445,6 +4446,7 @@ export default function App() {
   const [accepted, setAccepted] = useState(() => { try { return localStorage.getItem('partsforge_safety_agreed') === 'true'; } catch { return false; } });
   const [userSession, setUserSession] = useState(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const [workshopStateHydrated, setWorkshopStateHydrated] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isEmployeeSubUser, setIsEmployeeSubUser] = useState(false);
   const [teamLinkCode, setTeamLinkCode] = useState(null);
@@ -4585,6 +4587,68 @@ export default function App() {
 
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const ownerId = userSession?.technicianId;
+    const mayUseWorkshopState = userSession?.role === 'MECHANIC' || userSession?.role === 'APPRENTICE';
+
+    if (!ownerId || !mayUseWorkshopState || !supabaseAuth) {
+      setWorkshopStateHydrated(false);
+      return () => { active = false; };
+    }
+
+    setWorkshopStateHydrated(false);
+    loadWorkshopState(supabaseAuth, ownerId)
+      .then((remote) => {
+        if (!active || !remote) return;
+        if (Array.isArray(remote.hoists)) setHoists(remote.hoists);
+        if (Array.isArray(remote.garageVehicles)) setGarageVehicles(remote.garageVehicles);
+        if (Array.isArray(remote.hoistJobs)) setHoistJobs(remote.hoistJobs);
+        if (Array.isArray(remote.vault)) setVault(remote.vault);
+        if (Array.isArray(remote.unpaidInvoices)) setUnpaidInvoices(remote.unpaidInvoices);
+        if (Array.isArray(remote.paidInvoices)) setPaidInvoices(remote.paidInvoices);
+        if (Array.isArray(remote.workshopExpenses)) setWorkshopExpenses(remote.workshopExpenses);
+        if (Array.isArray(remote.technicianHistory)) setTechnicianHistory(remote.technicianHistory);
+      })
+      .catch((error) => console.error('Workshop state restore failed', error))
+      .finally(() => {
+        if (active) setWorkshopStateHydrated(true);
+      });
+
+    return () => { active = false; };
+  }, [userSession?.technicianId, userSession?.role]);
+
+  useEffect(() => {
+    if (!workshopStateHydrated || adminDemoMode || !userSession?.technicianId || !supabaseAuth) return undefined;
+
+    const timer = setTimeout(() => {
+      saveWorkshopState(supabaseAuth, userSession.technicianId, {
+        hoists,
+        garageVehicles,
+        hoistJobs,
+        vault,
+        unpaidInvoices,
+        paidInvoices,
+        workshopExpenses,
+        technicianHistory,
+      }).catch((error) => console.error('Workshop state sync failed', error));
+    }, 750);
+
+    return () => clearTimeout(timer);
+  }, [
+    adminDemoMode,
+    garageVehicles,
+    hoistJobs,
+    hoists,
+    paidInvoices,
+    technicianHistory,
+    unpaidInvoices,
+    userSession?.technicianId,
+    vault,
+    workshopExpenses,
+    workshopStateHydrated,
+  ]);
 
   // ── Auth handlers ──
   const handleAuthenticate = (session) => {
@@ -5784,6 +5848,7 @@ const handleSearch = async (query) => {
   setUserSession(null);
   setQaPersona(null);
   setAccepted(false);
+  setWorkshopStateHydrated(false);
     setGarageVehicles([]);
     setActiveVehicleId(null);
     setVehicle(null);
