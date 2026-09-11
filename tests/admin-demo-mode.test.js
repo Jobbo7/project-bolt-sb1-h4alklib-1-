@@ -40,3 +40,11 @@ test('every customer-facing production mutation endpoint applies the server demo
     assert.match(source, /rejectAdminDemoMutation\(auth, res\)/, `${file} must reject the demo admin server-side`);
   }
 });
+
+test('visible admin demo contains no simulated operational or revenue claims', async () => {
+  const source = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const visibleAdmin = source.split('// ─── Admin demo controller')[1].split('// Kept temporarily for reference')[0];
+  assert.match(visibleAdmin, /Truthful release state/);
+  assert.match(visibleAdmin, /Demo personas are read-only/);
+  assert.doesNotMatch(visibleAdmin, /Consolidated Platform Revenue|REAL-TIME|OTA patch|FORCE OVERRIDE|Sydney Center/);
+});

@@ -4158,8 +4158,46 @@ function AdminDemoBanner({ onExit }) {
   );
 }
 
-// ─── Admin Console (3-column global infrastructure terminal) ─────────────────
-function AdminConsole({ session, region, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, paidInvoices, onSignOut, onSelectDashboard }) {
+// ─── Admin demo controller ───────────────────────────────────────────────────
+function AdminConsole({ session, onSignOut, onSelectDashboard }) {
+  const journeys = [
+    { id: 'WORKSHOP', title: 'Mechanical workshop', detail: 'Vehicle intake, parts sourcing, server-priced checkout and delivery receipt.' },
+    { id: 'COLLISION', title: 'Collision repairer', detail: 'Repair jobs and valuation workflow, isolated from mechanical workshops.' },
+    { id: 'SUPPLIER', title: 'Supplier', detail: 'Inventory publishing, paid-order acceptance, packing and secure dispatch.' },
+    { id: 'DIY', title: 'DIY customer', detail: 'Consumer-facing vehicle and parts discovery journey.' },
+  ];
+  const readiness = [
+    ['Authentication and role isolation', 'READY'],
+    ['Server-priced Stripe test checkout', 'READY'],
+    ['Stock reservation and payment verification', 'READY'],
+    ['Delivery fulfilment and QR custody', 'PREVIEW TEST'],
+    ['RedBook licensed vehicle data', 'PENDING PROVIDER'],
+    ['Production launch', 'NOT DEPLOYED'],
+  ];
+  return <div className="min-h-screen p-4 sm:p-8" style={{ background: C.bg, color: C.text }}>
+    <div className="mx-auto max-w-5xl">
+      <div className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between" style={{ background: C.panel, borderColor: C.border }}>
+        <div><div className="text-xs font-bold uppercase tracking-widest" style={{ color: C.orange }}>PartsForge admin demonstration</div><h1 className="mt-1 text-2xl font-bold text-white">Workshop-to-supplier workflow</h1><p className="mt-1 text-xs" style={{ color: C.textDim }}>Signed in as {session?.email}. Demo personas are read-only and cannot create payments or alter production data.</p></div>
+        <button onClick={onSignOut} className="rounded-lg border px-3 py-2 text-xs font-bold" style={{ borderColor: `${C.red}40`, color: C.red }}>Sign out</button>
+      </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <section className="rounded-2xl border p-5" style={{ background: C.panel, borderColor: C.border }}>
+          <h2 className="text-sm font-bold text-white">Choose a dashboard to demonstrate</h2><p className="mt-1 text-xs" style={{ color: C.textDim }}>Use these in order to explain how one order moves through PartsForge.</p>
+          <div className="mt-4 space-y-2">{journeys.map(item => <button key={item.id} onClick={() => onSelectDashboard(item.id)} className="w-full rounded-xl border p-3 text-left transition hover:border-orange-500" style={{ background: C.panel2, borderColor: C.border }}><div className="flex items-center justify-between"><span className="text-sm font-bold text-white">{item.title}</span><ChevronRight className="h-4 w-4" style={{ color: C.orange }} /></div><p className="mt-1 text-[11px]" style={{ color: C.textDim }}>{item.detail}</p></button>)}</div>
+        </section>
+        <section className="rounded-2xl border p-5" style={{ background: C.panel, borderColor: C.border }}>
+          <h2 className="text-sm font-bold text-white">Current demonstration status</h2><p className="mt-1 text-xs" style={{ color: C.textDim }}>Truthful release state—no simulated revenue, customers or integrations.</p>
+          <div className="mt-4 space-y-2">{readiness.map(([label, status]) => <div key={label} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5" style={{ background: C.panel2, borderColor: C.border }}><span className="text-xs">{label}</span><span className="shrink-0 text-[9px] font-bold" style={{ color: status === 'READY' ? C.emerald : status === 'PREVIEW TEST' ? C.orange : C.textDim }}>{status}</span></div>)}</div>
+        </section>
+      </div>
+      <div className="mt-4 rounded-xl border p-4 text-xs" style={{ background: `${C.orange}08`, borderColor: `${C.orange}35`, color: C.textDim }}><strong style={{ color: C.orange }}>Suggested walkthrough:</strong> Workshop searches for a candidate part → server confirms supplier price and stock → Stripe test payment → supplier accepts and dispatches → workshop confirms receipt with the secure QR handoff.</div>
+    </div>
+  </div>;
+}
+
+// Kept temporarily for reference while the truthful admin panels replace it.
+// eslint-disable-next-line no-unused-vars
+function LegacyAdminConsole({ session, region, regionCode, onRegionChange, usStateCode, onUsStateChange, bankFeedEntries, ledgerEntries, paidInvoices, onSignOut, onSelectDashboard }) {
   const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const [patchText, setPatchText] = useState('');
   const [patchDeployed, setPatchDeployed] = useState(false);
