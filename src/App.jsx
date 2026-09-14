@@ -34,6 +34,7 @@ const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, prov
 
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
+import AutoPartsCatalogPanel from './components/AutoPartsCatalogPanel';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -4095,14 +4096,27 @@ const handleRego = async (plateStr, targetRegion) => {
 
       console.log(`📡 PartsForge VIN lookup requested: ${cleanVin}`);
 
+      const data = await processVinLookup(cleanVin);
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'VIN could not be decoded.');
+      }
+
+      const engineDescription = [
+        data.engineModel,
+        data.displacementL ? `${data.displacementL}L` : null,
+        data.engineCylinders ? `${data.engineCylinders} CYL` : null
+      ].filter(Boolean).join(' · ');
+
       if (typeof setVehicle === 'function') {
         setVehicle({
-          make: "VIN LOOKUP",
-          model: "READY",
-          year: null,
-          engine: "VIN SPECIFICATION LOOKUP PENDING",
-          vin: cleanVin,
-          rego: ""
+          ...data,
+          make: data.make || 'UNKNOWN MAKE',
+          model: data.model || 'UNKNOWN MODEL',
+          year: data.year || null,
+          engine: engineDescription || 'SPECIFICATION NOT AVAILABLE',
+          vin: data.vin || cleanVin,
+          rego: ''
         });
       }
     } catch (error) {
@@ -5437,6 +5451,7 @@ const handleSearch = async (query) => {
               </div>
             </div>
             <div className="mx-auto max-w-5xl space-y-4 px-4 py-4">
+              <AutoPartsCatalogPanel vehicle={vehicle} colors={C} />
               <PartsSearch onSearch={handleSearch} loading={partsLoading} />
               <PartsResults results={results} role={role} onAdd={handleAddToCart} onAddConsumable={handleAddConsumable} cartIds={cartIds} region={regionCode} />
             </div>
