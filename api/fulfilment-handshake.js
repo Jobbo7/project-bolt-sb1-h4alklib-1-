@@ -48,5 +48,45 @@ export default async function handler(req, res) {
   const { error: updateError } = await admin.from('order_fulfilments').update(changes).eq('id', fulfilmentId).eq('status', fulfilment.status);
   if (updateError) return res.status(409).json({ error: 'FULFILMENT_UPDATE_CONFLICT' });
   await admin.from('fulfilment_events').insert({ fulfilment_id: fulfilmentId, actor_id: auth.user.id, event_type: nextStatus });
-  return res.status(200).json({ fulfilmentId, status: nextStatus, ...(qrToken ? { qrToken } : {}) });
+
+  let deliveredItems;
+  if (nextStatus === 'DELIVERED') {
+    const { data: order } = await admin
+      .from('orders')
+      .select('items,paid_at')
+      .eq('id', fulfilment.order_id)
+      .eq('buyer_id', auth.user.id)
+      .single();
+    const orderItems = Array.isArray(order?.items) ? order.items : [];
+    const offerIds = [...new Set(orderItems.map(item => String(item.offerId || '')).filter(Boolean))];
+    const { data: offers } = offerIds.length
+      ? await admin
+        .from('seller_offers')
+        .select('id,part,brand,part_number,location,wholesaler_business_name')
+        .in('id', offerIds)
+      : { data: [] };
+    const offersById = new Map((offers || []).map(offer => [String(offer.id), offer]));
+    deliveredItems = orderItems.map(item => {
+      const offer = offersById.get(String(item.offerId)) || {};
+      return {
+        offerId: item.offerId,
+        title: item.title || offer.part || 'PartsForge item',
+        brand: offer.brand || '',
+        sku: offer.part_number || item.offerId,
+        seller: offer.wholesaler_business_name || 'PartsForge supplier',
+        location: offer.location || '',
+        unitAmount: Number(item.unitAmount) || 0,
+        quantity: Math.max(1, Number(item.quantity) || 1),
+        paidAt: order?.paid_at || null,
+      };
+    });
+  }
+
+  return res.status(200).json({
+    fulfilmentId,
+    orderId: fulfilment.order_id,
+    status: nextStatus,
+    ...(qrToken ? { qrToken } : {}),
+    ...(deliveredItems ? { deliveredItems } : {}),
+  });
 }

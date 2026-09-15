@@ -161,10 +161,19 @@ test('delivery is server priced and paid orders create persistent fulfilments', 
 
 test('QR custody handoff uses random single-purpose tokens and authenticated participants', async () => {
   const source = await readFile(new URL('../api/fulfilment-handshake.js', import.meta.url), 'utf8');
+  const fulfilmentsSource = await readFile(new URL('../api/fulfilments.js', import.meta.url), 'utf8');
+  const workshopSource = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
   assert.match(source, /crypto\.randomBytes\(32\)/);
   assert.match(source, /tokenHash\(suppliedToken\) === fulfilment\.handoff_token_hash/);
   assert.match(source, /const isSeller =/);
   assert.match(source, /const isBuyer =/);
+  assert.match(source, /deliveredItems/);
+  assert.match(source, /\.eq\('buyer_id', auth\.user\.id\)/);
+  assert.match(fulfilmentsSource, /auth\.role !== 'SELLER'/);
+  assert.match(fulfilmentsSource, /fulfilment\.deliveredItems/);
+  assert.match(fulfilmentsSource, /\.eq\('buyer_id', auth\.user\.id\)/);
+  assert.match(workshopSource, /handleWorkshopDeliveryReceived/);
+  assert.match(workshopSource, /received\.filter\(item => !existing\.has\(item\.vaultId\)\)/);
   assert.doesNotMatch(source, /Math\.random/);
 });
 

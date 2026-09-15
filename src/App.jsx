@@ -2166,7 +2166,7 @@ function Row({ label, value }) {
   return <div className="flex items-center justify-between"><span style={{ color: C.textDim }}>{label}</span><span className="font-mono text-slate-100">{value}</span></div>;
 }
 
-function WorkshopDeliveries({ getAccessToken }) {
+function WorkshopDeliveries({ getAccessToken, onReceived }) {
   const [items, setItems] = useState([]);
   const [tokens, setTokens] = useState({});
   const [message, setMessage] = useState('');
@@ -2175,8 +2175,20 @@ function WorkshopDeliveries({ getAccessToken }) {
     if (!token) return;
     const response = await fetch('/api/fulfilments', { headers: { Authorization: `Bearer ${token}` } });
     const result = await response.json();
-    if (response.ok) setItems(result.fulfilments || []);
-  }, [getAccessToken]);
+    if (response.ok) {
+      const fulfilments = result.fulfilments || [];
+      setItems(fulfilments);
+      if (typeof onReceived === 'function') {
+        fulfilments
+          .filter(item => item.status === 'DELIVERED' && item.deliveredItems?.length)
+          .forEach(item => onReceived(item.deliveredItems, {
+            orderId: item.order_id,
+            fulfilmentId: item.id,
+            status: item.status,
+          }));
+      }
+    }
+  }, [getAccessToken, onReceived]);
   useEffect(() => { refresh().catch(() => {}); }, [refresh]);
   const receive = async (id) => {
     const token = await getAccessToken();
@@ -2186,7 +2198,13 @@ function WorkshopDeliveries({ getAccessToken }) {
     });
     const result = await response.json();
     setMessage(response.ok ? 'Delivery verified and received into the workshop.' : (result.error || 'Receipt could not be verified.'));
-    if (response.ok) { setTokens(prev => ({ ...prev, [id]: '' })); await refresh(); }
+    if (response.ok) {
+      setTokens(prev => ({ ...prev, [id]: '' }));
+      if (result.status === 'DELIVERED' && typeof onReceived === 'function') {
+        onReceived(result.deliveredItems || [], result);
+      }
+      await refresh();
+    }
   };
   if (!items.length) return null;
   return <section className="rounded-xl border p-4" style={{ background: C.panel, borderColor: C.border }}>
@@ -4636,6 +4654,36 @@ export default function App() {
   const [bankFeedStatus, setBankFeedStatus] = useState(null);
   const matchedTradeAccount = useMemo(() => typeof resolveTradeAccount === 'function' ? resolveTradeAccount(corpProfile) : null, [corpProfile]);
   const getAccessToken = useCallback(async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || '', []);
+  const handleWorkshopDeliveryReceived = useCallback((items, delivery) => {
+    const deliveredAt = new Date().toISOString();
+    const orderId = String(delivery?.orderId || delivery?.fulfilmentId || 'delivery');
+    const received = (Array.isArray(items) ? items : []).flatMap(item =>
+      Array.from({ length: Math.max(1, Number(item.quantity) || 1) }, (_, unitIndex) => ({
+        id: item.offerId,
+        vaultId: `${orderId}-${item.offerId}-${unitIndex + 1}`,
+        sku: item.sku || item.offerId,
+        title: item.title || 'PartsForge item',
+        brand: item.brand || '',
+        seller: item.seller || 'PartsForge supplier',
+        loc: item.location || '',
+        unitPrice: (Number(item.unitAmount) || 0) / 100,
+        qty: 1,
+        quantityOnHand: 1,
+        purchasedAt: item.paidAt || deliveredAt,
+        deliveredAt,
+        status: 'DELIVERED & APPROVED',
+        consignmentNote: orderId,
+        source: 'part',
+      }))
+    );
+    if (!received.length) return;
+    setVault(previous => {
+      const existing = new Set(previous.map(item => item.vaultId));
+      return [...previous, ...received.filter(item => !existing.has(item.vaultId))];
+    });
+    setSaveToast(`Delivery received: ${received.length} item${received.length === 1 ? '' : 's'} added to the stock vault.`);
+    setTimeout(() => setSaveToast(null), 4000);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -6169,7 +6217,7 @@ const handleSearch = async (query) => {
             </div>
           )}
 
-          {role === 'pro' && <WorkshopDeliveries getAccessToken={getAccessToken} />}
+          {role === 'pro' && <WorkshopDeliveries getAccessToken={getAccessToken} onReceived={handleWorkshopDeliveryReceived} />}
 
           {/* Scanner */}
           <ScannerPanel
