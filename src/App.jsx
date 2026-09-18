@@ -6125,19 +6125,6 @@ const handleSearch = async (query) => {
     );
   }
 
-  if (effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION') {
-    return (
-      <AppErrorBoundary>
-        <CollisionRepairConsole
-          adminDemoMode={adminDemoMode}
-          onExitDemo={() => setQaPersona(null)}
-          onSignOut={handleSignOut}
-          getAccessToken={async () => (await supabaseAuth?.auth.getSession()).data.session?.access_token || ''}
-        />
-      </AppErrorBoundary>
-    );
-  }
-
   return (
     <AppErrorBoundary>
       <div className="min-h-screen" style={{ background: C.bg, color: C.text }}>
@@ -6150,8 +6137,8 @@ const handleSearch = async (query) => {
                 <Wrench className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-bold text-slate-50">PartsForge Garage</div>
-                <div className="text-[10px]" style={{ color: C.textDim }}>{TIER_LABELS[effectiveRole]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
+                <div className="text-sm font-bold text-slate-50">{effectiveWorkshopType === 'COLLISION' ? 'PartsForge Collision Repair' : 'PartsForge Garage'}</div>
+                <div className="text-[10px]" style={{ color: C.textDim }}>{effectiveWorkshopType === 'COLLISION' ? 'Panel shop workspace' : TIER_LABELS[effectiveRole]} · {role === 'pro' ? 'Trade pricing active' : role === 'seller' ? 'Seller portal' : 'Retail pricing'}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -6238,6 +6225,17 @@ const handleSearch = async (query) => {
             selectedHoistId={intakeHoistId}
             onHoistChange={setIntakeHoistId}
           />
+
+          {role === 'pro' && effectiveWorkshopType === 'COLLISION' && (
+            <CollisionRepairConsole
+              embedded
+              initialVehicle={vehicle}
+              adminDemoMode={adminDemoMode}
+              onExitDemo={() => setQaPersona(null)}
+              onSignOut={handleSignOut}
+              getAccessToken={getAccessToken}
+            />
+          )}
 
           {role === 'pro' && (
             <WorkshopStorePanel

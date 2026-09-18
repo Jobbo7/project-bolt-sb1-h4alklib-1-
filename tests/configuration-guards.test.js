@@ -134,7 +134,19 @@ test('collision repair signup keeps MECHANIC authorization while recording its w
   const source = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
   assert.match(source, /requestedAccountType:\s*accountType === 'COLLISION' \? 'WORKSHOP'/);
   assert.match(source, /workshopType:\s*accountType === 'COLLISION' \? 'COLLISION'/);
-  assert.match(source, /effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION'/);
+  assert.match(source, /role === 'pro' && effectiveWorkshopType === 'COLLISION'/);
+});
+
+test('collision repairers retain the shared workshop sourcing, hoist and job-card workspace', async () => {
+  const source = await readFile(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const collisionSource = await readFile(new URL('../src/components/CollisionRepairConsole.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /if \(effectiveRole === 'MECHANIC' && effectiveWorkshopType === 'COLLISION'\) \{\s*return/);
+  assert.match(source, /effectiveWorkshopType === 'COLLISION'/);
+  assert.match(source, /<WorkshopStorePanel/);
+  assert.match(source, /<JobCard/);
+  assert.match(source, /hoists=\{hoists\}/);
+  assert.match(source, /<CollisionRepairConsole\s+embedded/);
+  assert.match(collisionSource, /initialVehicle/);
 });
 
 test('parts search requires authentication and never advertises an invented trade discount', async () => {

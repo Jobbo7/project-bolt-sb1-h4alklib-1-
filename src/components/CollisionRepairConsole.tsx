@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type JobType = 'INSURANCE' | 'PRIVATE';
 type AuditEntry = { at: string; action: string; repairTotal: number; supportedValue: number; reason: string };
@@ -6,6 +6,8 @@ type VehicleRecord = { year?: number | string; make?: string; model?: string; se
 
 interface Props {
   adminDemoMode?: boolean;
+  embedded?: boolean;
+  initialVehicle?: VehicleRecord | null;
   onExitDemo?: () => void;
   onSignOut: () => void;
   getAccessToken: () => Promise<string>;
@@ -14,13 +16,13 @@ interface Props {
 const money = (value: number) => new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(value || 0);
 const numberValue = (value: string) => Math.max(0, Number(value) || 0);
 
-export default function CollisionRepairConsole({ adminDemoMode = false, onExitDemo, onSignOut, getAccessToken }: Props) {
+export default function CollisionRepairConsole({ adminDemoMode = false, embedded = false, initialVehicle = null, onExitDemo, onSignOut, getAccessToken }: Props) {
   const [jobId, setJobId] = useState('');
   const [jobType, setJobType] = useState<JobType>('INSURANCE');
   const [identifierMode, setIdentifierMode] = useState<'REGO' | 'VIN'>('REGO');
   const [identifier, setIdentifier] = useState('');
   const [stateCode, setStateCode] = useState('VIC');
-  const [vehicle, setVehicle] = useState<VehicleRecord | null>(null);
+  const [vehicle, setVehicle] = useState<VehicleRecord | null>(initialVehicle);
   const [odometer, setOdometer] = useState('');
   const [condition, setCondition] = useState('AVERAGE');
   const [customerName, setCustomerName] = useState('');
@@ -44,6 +46,10 @@ export default function CollisionRepairConsole({ adminDemoMode = false, onExitDe
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+
+  useEffect(() => {
+    if (initialVehicle) setVehicle(initialVehicle);
+  }, [initialVehicle]);
 
   const repairTotal = useMemo(() => [parts, paintMaterials, labour, sublet, overheadProfit, contingency].reduce((sum, value) => sum + numberValue(value), 0), [parts, paintMaterials, labour, sublet, overheadProfit, contingency]);
   const comparisonValue = numberValue(supportedValue) || ((numberValue(marketLow) + numberValue(marketHigh)) / 2);
@@ -126,12 +132,13 @@ export default function CollisionRepairConsole({ adminDemoMode = false, onExitDe
   const cardClass = 'rounded-xl border border-slate-800 bg-slate-900/70 p-4';
 
   return (
-    <div className="min-h-screen bg-[#070A12] text-slate-200">
-      {adminDemoMode && <div className="sticky top-0 z-50 flex items-center justify-between border-b border-amber-400/40 bg-amber-950/95 px-4 py-2 text-xs text-amber-100"><strong>ADMIN DEMO MODE — submission and production changes are blocked.</strong><button onClick={onExitDemo} className="rounded border border-amber-300/50 px-2 py-1">Back to Admin</button></div>}
-      <header className="border-b border-slate-800 bg-slate-950/90 px-4 py-3">
+    <div className={embedded ? 'text-slate-200' : 'min-h-screen bg-[#070A12] text-slate-200'}>
+      {adminDemoMode && !embedded && <div className="sticky top-0 z-50 flex items-center justify-between border-b border-amber-400/40 bg-amber-950/95 px-4 py-2 text-xs text-amber-100"><strong>ADMIN DEMO MODE — submission and production changes are blocked.</strong><button onClick={onExitDemo} className="rounded border border-amber-300/50 px-2 py-1">Back to Admin</button></div>}
+      {!embedded && <header className="border-b border-slate-800 bg-slate-950/90 px-4 py-3">
         <div className="mx-auto flex max-w-6xl items-center justify-between"><div><h1 className="font-bold text-white">PartsForge Collision Repair</h1><p className="text-xs text-slate-400">Insurance assessments and private repairs · Australia</p></div><button onClick={onSignOut} className="rounded-lg border border-red-500/30 px-3 py-2 text-xs text-red-300">Sign out</button></div>
-      </header>
-      <main className="mx-auto max-w-6xl space-y-4 p-4">
+      </header>}
+      <div className={embedded ? 'space-y-4' : 'mx-auto max-w-6xl space-y-4 p-4'}>
+        {embedded && <section className={`${cardClass} border-orange-500/30`}><h2 className="font-bold text-white">Collision assessment and repair quote</h2><p className="mt-1 text-xs text-slate-400">The selected workshop vehicle flows into this assessment. Parts, consumables, tools, hoists and job cards remain available in the shared workspace below.</p></section>}
         <section className={cardClass}>
           <div className="flex gap-2"><button onClick={() => setJobType('INSURANCE')} className={`rounded-lg px-4 py-2 text-sm font-bold ${jobType === 'INSURANCE' ? 'bg-orange-500 text-black' : 'bg-slate-800'}`}>Insurance Claim</button><button onClick={() => setJobType('PRIVATE')} className={`rounded-lg px-4 py-2 text-sm font-bold ${jobType === 'PRIVATE' ? 'bg-orange-500 text-black' : 'bg-slate-800'}`}>Private Repair</button></div>
           <div className="mt-4 grid gap-3 md:grid-cols-3"><label className="text-xs">Customer name<input className={fieldClass} value={customerName} onChange={e => setCustomerName(e.target.value)} /></label><label className="text-xs">Customer email<input type="email" className={fieldClass} value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} /></label>{jobType === 'INSURANCE' && <><label className="text-xs">Insurer<input className={fieldClass} value={insurer} onChange={e => setInsurer(e.target.value)} /></label><label className="text-xs">Claim number<input className={fieldClass} value={claimNumber} onChange={e => setClaimNumber(e.target.value)} /></label><label className="text-xs">Assessor email<input type="email" className={fieldClass} value={assessorEmail} onChange={e => setAssessorEmail(e.target.value)} /></label></>}</div>
@@ -167,7 +174,7 @@ export default function CollisionRepairConsole({ adminDemoMode = false, onExitDe
         </section>
 
         <section className={cardClass}><h2 className="font-bold text-white">Revision history</h2>{audit.length === 0 ? <p className="mt-2 text-xs text-slate-500">No saved revisions yet.</p> : <div className="mt-2 space-y-2">{audit.map((entry, index) => <div key={`${entry.at}-${index}`} className="rounded-lg border border-slate-800 p-3 text-xs"><strong>{entry.action}</strong> · {new Date(entry.at).toLocaleString('en-AU')} · Quote {money(entry.repairTotal)} · Supported value {money(entry.supportedValue)}<p className="mt-1 text-slate-400">{entry.reason || 'No valuation adjustment.'}</p></div>)}</div>}</section>
-      </main>
+      </div>
     </div>
   );
 }
