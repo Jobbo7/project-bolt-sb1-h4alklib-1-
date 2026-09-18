@@ -4679,7 +4679,11 @@ export default function App() {
     if (!received.length) return;
     setVault(previous => {
       const existing = new Set(previous.map(item => item.vaultId));
-      return [...previous, ...received.filter(item => !existing.has(item.vaultId))];
+      const refreshed = new Map(received.map(item => [item.vaultId, item]));
+      return [
+        ...previous.map(item => refreshed.has(item.vaultId) ? { ...item, ...refreshed.get(item.vaultId) } : item),
+        ...received.filter(item => !existing.has(item.vaultId)),
+      ];
     });
     setSaveToast(`Delivery received: ${received.length} item${received.length === 1 ? '' : 's'} added to the stock vault.`);
     setTimeout(() => setSaveToast(null), 4000);
