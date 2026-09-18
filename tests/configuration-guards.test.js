@@ -172,6 +172,7 @@ test('QR custody handoff uses random single-purpose tokens and authenticated par
   assert.match(fulfilmentsSource, /auth\.role !== 'SELLER'/);
   assert.match(fulfilmentsSource, /fulfilment\.deliveredItems/);
   assert.match(fulfilmentsSource, /\.eq\('buyer_id', auth\.user\.id\)/);
+  assert.match(fulfilmentsSource, /unitAmount: Number\(item\.unitAmount\)/);
   assert.match(workshopSource, /handleWorkshopDeliveryReceived/);
   assert.match(workshopSource, /received\.filter\(item => !existing\.has\(item\.vaultId\)\)/);
   assert.doesNotMatch(source, /Math\.random/);

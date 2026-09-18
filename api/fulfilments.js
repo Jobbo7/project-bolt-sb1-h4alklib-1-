@@ -60,7 +60,7 @@ export default async function handler(req, res) {
             seller: offer.wholesaler_business_name || 'PartsForge supplier',
             location: offer.location || '',
             quantity: Number(item.quantity) || 1,
-            unitPriceCents: Number(item.unitPriceCents) || 0,
+            unitAmount: Number(item.unitAmount) || 0,
             paidAt: order.paid_at,
           };
         });
