@@ -2,6 +2,11 @@ name: Phase 1 PostgREST Preview Security Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - partsforge-production-readiness-20260828
+    paths:
+      - .github/workflows/phase1-postgrest-preview.yml
 
 permissions:
   contents: read
