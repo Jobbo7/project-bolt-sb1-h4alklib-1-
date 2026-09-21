@@ -1,0 +1,85 @@
+name: Phase 1 PostgREST Preview Security Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgrest-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PF_CFG: ${{ secrets.PARTSFORGE_PHASE1_TEST_CONFIG }}
+    steps:
+      - name: Run authenticated Preview isolation assertions
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const cfg = JSON.parse(process.env.PF_CFG || '{}');
+          assert(cfg.url?.includes('kliwrfqriwxgnyvordkq.supabase.co'), 'Refusing non-Preview Supabase target');
+
+          async function signIn(email, password) {
+            const response = await fetch(`${cfg.url}/auth/v1/token?grant_type=password`, {
+              method: 'POST',
+              headers: { apikey: cfg.anonKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            });
+            const body = await response.json();
+            assert(response.ok && body.access_token, `Authentication failed (${response.status})`);
+            return body.access_token;
+          }
+
+          async function rest(token, path, init = {}) {
+            const response = await fetch(`${cfg.url}/rest/v1/${path}`, {
+              ...init,
+              headers: {
+                apikey: cfg.anonKey,
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Prefer: 'return=representation',
+                ...(init.headers || {}),
+              },
+            });
+            const text = await response.text();
+            let body = text;
+            try { body = text ? JSON.parse(text) : null; } catch {}
+            return { status: response.status, ok: response.ok, body };
+          }
+
+          function expectDenied(result, label) {
+            const empty = Array.isArray(result.body) && result.body.length === 0;
+            assert(!result.ok || empty, `${label}: mutation unexpectedly succeeded (${result.status})`);
+          }
+
+          const a = await signIn(cfg.emailA, cfg.passwordA);
+          const b = await signIn(cfg.emailB, cfg.passwordB);
+
+          const ownA = await rest(a, `customers?id=eq.${cfg.customerA}&select=id,workshop_id`);
+          assert(ownA.ok && ownA.body.length === 1, 'Owner A could not SELECT Workshop A data');
+          const ownB = await rest(b, `customers?id=eq.${cfg.customerB}&select=id,workshop_id`);
+          assert(ownB.ok && ownB.body.length === 1, 'Owner B could not SELECT Workshop B data');
+          const crossA = await rest(a, `customers?id=eq.${cfg.customerB}&select=id`);
+          assert(crossA.ok && crossA.body.length === 0, 'Owner A could SELECT Workshop B data');
+          const crossB = await rest(b, `customers?id=eq.${cfg.customerA}&select=id`);
+          assert(crossB.ok && crossB.body.length === 0, 'Owner B could SELECT Workshop A data');
+
+          expectDenied(await rest(a, 'customers', { method: 'POST', body: JSON.stringify({ workshop_id: cfg.workshopB, display_name: 'ILLEGAL', created_by: cfg.userA }) }), 'Cross-workshop INSERT');
+          expectDenied(await rest(a, `customers?id=eq.${cfg.customerB}`, { method: 'PATCH', body: JSON.stringify({ display_name: 'ILLEGAL' }) }), 'Cross-workshop UPDATE');
+          expectDenied(await rest(a, `customers?id=eq.${cfg.customerB}`, { method: 'DELETE' }), 'Cross-workshop DELETE');
+          expectDenied(await rest(a, `customers?id=eq.${cfg.customerA}`, { method: 'PATCH', body: JSON.stringify({ workshop_id: cfg.workshopB }) }), 'Manipulated workshop_id UPDATE');
+          expectDenied(await rest(a, 'vehicles', { method: 'POST', body: JSON.stringify({ workshop_id: cfg.workshopA, customer_id: cfg.customerB, registration: 'RLS-FAIL', created_by: cfg.userA }) }), 'Cross-workshop parent/child INSERT');
+          expectDenied(await rest(a, 'workshop_members', { method: 'POST', body: JSON.stringify({ workshop_id: cfg.workshopB, user_id: cfg.userA, role: 'OWNER', status: 'ACTIVE' }) }), 'Cross-workshop membership INSERT');
+          expectDenied(await rest(b, `workshop_members?workshop_id=eq.${cfg.workshopB}&user_id=eq.${cfg.userB}`, { method: 'PATCH', body: JSON.stringify({ role: 'OWNER' }) }), 'Ordinary member role escalation');
+
+          expectDenied(await rest(a, 'subscriptions', { method: 'POST', body: JSON.stringify({ workshop_id: cfg.workshopA, plan_code: 'WORKSHOP_PRO', status: 'ACTIVE' }) }), 'Subscription self-create');
+          expectDenied(await rest(a, `subscriptions?workshop_id=eq.${cfg.workshopA}`, { method: 'PATCH', body: JSON.stringify({ plan_code: 'WORKSHOP_PRO', status: 'ACTIVE' }) }), 'Subscription self-update');
+          expectDenied(await rest(a, 'subscription_events', { method: 'POST', body: JSON.stringify({ workshop_id: cfg.workshopA, provider_event_id: `illegal-${Date.now()}`, event_type: 'checkout.session.completed' }) }), 'Subscription event self-create');
+          expectDenied(await rest(a, `subscription_events?workshop_id=eq.${cfg.workshopA}`, { method: 'PATCH', body: JSON.stringify({ event_type: 'ILLEGAL' }) }), 'Subscription event self-update');
+          expectDenied(await rest(a, 'workshop_entitlements', { method: 'POST', body: JSON.stringify({ workshop_id: cfg.workshopA, feature_code: 'WORKSHOP_PRO', enabled: true, source: 'SUBSCRIPTION' }) }), 'Entitlement self-create');
+          expectDenied(await rest(a, `workshop_entitlements?workshop_id=eq.${cfg.workshopA}`, { method: 'PATCH', body: JSON.stringify({ enabled: true, source: 'SUBSCRIPTION' }) }), 'Entitlement self-update');
+
+          console.log('PASS: 15 authenticated PostgREST isolation and privilege assertions');
+          NODE
