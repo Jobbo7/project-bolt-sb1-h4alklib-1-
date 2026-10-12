@@ -34,6 +34,7 @@ const createLiveCourierQuote = async () => ({ price: 25.00, etaMinutes: 35, prov
 
 import { REGIONS, REGION_LIST, US_STATES, getEffectiveTaxRate, formatCurrency } from './regionConfig';
 import SellerConsole from './components/SellerConsole';
+import AutoPartsCatalogPanel from './components/AutoPartsCatalogPanel';
 import CollisionRepairConsole from './components/CollisionRepairConsole';
 import { resolveEffectiveWorkshopType } from './dashboard-role.js';
 import { restoreVerifiedUserSession } from './auth-session.js';
@@ -6335,6 +6336,7 @@ const handleSearch = async (query) => {
               </div>
             </div>
             <div className="mx-auto max-w-5xl space-y-4 px-4 py-4">
+              <AutoPartsCatalogPanel vehicle={vehicle} colors={C} getAccessToken={getAccessToken} />
               <PartsSearch onSearch={handleSearch} loading={partsLoading} />
               <PartsResults results={results} role={role} onAdd={handleAddToCart} onAddConsumable={handleAddConsumable} cartIds={cartIds} region={regionCode} />
             </div>
